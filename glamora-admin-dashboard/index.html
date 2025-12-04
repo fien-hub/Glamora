@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glamora Admin Dashboard - Custom Service Review</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="logo">
+            <h1>✨ Glamora</h1>
+            <p>Admin Dashboard</p>
+        </div>
+        
+        <nav class="nav">
+            <a href="#" class="nav-item active">
+                <span class="icon">📊</span>
+                <span>Dashboard</span>
+            </a>
+            <a href="#" class="nav-item">
+                <span class="icon">⏳</span>
+                <span>Pending Services</span>
+                <span class="badge">5</span>
+            </a>
+            <a href="#" class="nav-item">
+                <span class="icon">📈</span>
+                <span>Analytics</span>
+            </a>
+            <a href="#" class="nav-item">
+                <span class="icon">✅</span>
+                <span>Approved</span>
+            </a>
+            <a href="#" class="nav-item">
+                <span class="icon">❌</span>
+                <span>Rejected</span>
+            </a>
+            <a href="#" class="nav-item">
+                <span class="icon">💡</span>
+                <span>Services to Add</span>
+            </a>
+            <a href="#" class="nav-item">
+                <span class="icon">👥</span>
+                <span>Providers</span>
+            </a>
+            <a href="#" class="nav-item">
+                <span class="icon">⚙️</span>
+                <span>Settings</span>
+            </a>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h2>Custom Service Review</h2>
+                <p class="subtitle">Review and approve custom services from providers</p>
+            </div>
+            <div class="header-right">
+                <button class="btn-secondary">
+                    <span>🔔</span>
+                    <span class="notification-dot"></span>
+                </button>
+                <div class="user-profile">
+                    <img src="https://ui-avatars.com/api/?name=Admin&background=F4B5A4&color=fff" alt="Admin">
+                    <span>Admin</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon pending">⏳</div>
+                <div class="stat-content">
+                    <h3>5</h3>
+                    <p>Pending Review</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon success">✅</div>
+                <div class="stat-content">
+                    <h3>120</h3>
+                    <p>Approved (80%)</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon error">❌</div>
+                <div class="stat-content">
+                    <h3>30</h3>
+                    <p>Rejected (20%)</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon info">⏱️</div>
+                <div class="stat-content">
+                    <h3>4.5h</h3>
+                    <p>Avg Review Time</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pending Services -->
+        <div class="section">
+            <div class="section-header">
+                <h3>Pending Custom Services</h3>
+                <div class="filters">
+                    <select class="filter-select">
+                        <option>All Categories</option>
+                        <option>Hair</option>
+                        <option>Nails</option>
+                        <option>Makeup</option>
+                        <option>Skincare</option>
+                    </select>
+                    <select class="filter-select">
+                        <option>Sort by: Newest</option>
+                        <option>Sort by: Oldest</option>
+                        <option>Sort by: Price</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Service Cards -->
+            <div class="services-grid">
+                <!-- Service Card 1 -->
+                <div class="service-card">
+                    <div class="service-header">
+                        <div>
+                            <h4>Lash Lift & Tint</h4>
+                            <p class="service-date">Submitted 2 hours ago</p>
+                        </div>
+                        <span class="status-badge pending">Pending</span>
+                    </div>
+                    
+                    <div class="provider-info">
+                        <img src="https://ui-avatars.com/api/?name=Sophia+Beauty&background=D4C5E8&color=fff" alt="Provider">
+                        <div>
+                            <p class="provider-name">Sophia Beauty Studio</p>
+                            <p class="provider-email">sophia@beautystu</p>
+                        </div>
+                    </div>
+
+                    <p class="service-description">
+                        "Professional lash lift and tint service for natural-looking, lifted lashes that last 6-8 weeks"
+                    </p>
+
+                    <div class="service-details">
+                        <div class="detail-item">
+                            <span class="detail-label">Price:</span>
+                            <span class="detail-value">$45.00</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Duration:</span>
+                            <span class="detail-value">60 min</span>
+                        </div>
+                    </div>
+
+                    <div class="service-actions">
+                        <button class="btn-approve">✓ Approve</button>
+                        <button class="btn-reject">✕ Reject</button>
+                    </div>
+                </div>
+
+                <!-- Service Card 2 -->
+                <div class="service-card">
+                    <div class="service-header">
+                        <div>
+                            <h4>Brow Lamination</h4>
+                            <p class="service-date">Submitted 5 hours ago</p>
+                        </div>
+                        <span class="status-badge pending">Pending</span>
+                    </div>
+                    
+                    <div class="provider-info">
+                        <img src="https://ui-avatars.com/api/?name=Emma+Brows&background=D4C5E8&color=fff" alt="Provider">
+                        <div>
+                            <p class="provider-name">Emma's Brow Bar</p>
+                            <p class="provider-email">emma@browbar.com</p>
+                        </div>
+                    </div>
+
+                    <p class="service-description">
+                        "Eyebrow lamination treatment to create fuller, fluffier brows with a natural lifted look"
+                    </p>
+
+                    <div class="service-details">
+                        <div class="detail-item">
+                            <span class="detail-label">Price:</span>
+                            <span class="detail-value">$35.00</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Duration:</span>
+                            <span class="detail-value">45 min</span>
+                        </div>
+                    </div>
+
+                    <div class="service-actions">
+                        <button class="btn-approve">✓ Approve</button>
+                        <button class="btn-reject">✕ Reject</button>
+                    </div>
+                </div>
+
+                <!-- Service Card 3 - Example with rejection -->
+                <div class="service-card">
+                    <div class="service-header">
+                        <div>
+                            <h4>Car Detailing</h4>
+                            <p class="service-date">Submitted 1 day ago</p>
+                        </div>
+                        <span class="status-badge pending">Pending</span>
+                    </div>
+                    
+                    <div class="provider-info">
+                        <img src="https://ui-avatars.com/api/?name=John+Auto&background=D4C5E8&color=fff" alt="Provider">
+                        <div>
+                            <p class="provider-name">John's Auto Care</p>
+                            <p class="provider-email">john@autocare.com</p>
+                        </div>
+                    </div>
+
+                    <p class="service-description">
+                        "Professional car detailing and cleaning services"
+                    </p>
+
+                    <div class="service-details">
+                        <div class="detail-item">
+                            <span class="detail-label">Price:</span>
+                            <span class="detail-value">$150.00</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">Duration:</span>
+                            <span class="detail-value">120 min</span>
+                        </div>
+                    </div>
+
+                    <div class="service-actions">
+                        <button class="btn-approve">✓ Approve</button>
+                        <button class="btn-reject">✕ Reject</button>
+                    </div>
+                    
+                    <div class="rejection-note">
+                        ⚠️ This doesn't appear to be a beauty service
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
