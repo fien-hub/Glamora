@@ -1,0 +1,23 @@
+appId: host.exp.Exponent
+---
+# ========================================
+# Helper: Logout
+# ========================================
+# This helper flow logs out the current user
+# Can be reused in other test flows
+# ========================================
+
+# Navigate to profile
+- tapOn: "My Profile"
+- waitForAnimationToEnd
+
+# Scroll to logout button
+- scroll
+
+# Tap logout
+- tapOn: "Logout"
+- waitForAnimationToEnd
+
+# Verify logout successful
+- assertVisible: "Welcome"
+

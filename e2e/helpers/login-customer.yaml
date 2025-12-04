@@ -1,0 +1,34 @@
+appId: host.exp.Exponent
+---
+# ========================================
+# Helper: Login as Customer
+# ========================================
+# This helper flow logs in as a test customer
+# Can be reused in other test flows
+# ========================================
+
+# Skip onboarding if shown
+- tapOn: "Skip"
+  optional: true
+- waitForAnimationToEnd
+
+# Navigate to login
+- tapOn: "Sign In"
+  optional: true
+- waitForAnimationToEnd
+
+# Enter credentials
+- tapOn: "Email"
+- inputText: "customer@test.com"
+
+- tapOn: "Password"
+- inputText: "TestPassword123!"
+
+# Submit login
+- tapOn: "Sign In"
+- waitForAnimationToEnd:
+    timeout: 10000
+
+# Verify successful login
+- assertVisible: "Glamora"
+

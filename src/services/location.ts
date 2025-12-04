@@ -1,0 +1,203 @@
+import * as Location from 'expo-location';
+import { Alert } from 'react-native';
+
+export interface LocationCoords {
+  latitude: number;
+  longitude: number;
+}
+
+export interface Address {
+  street: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+}
+
+/**
+ * Request location permissions from the user
+ */
+export async function requestLocationPermission(): Promise<boolean> {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert(
+        'Permission Denied',
+        'Location permission is required to find beauty professionals near you.'
+      );
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error requesting location permission:', error);
+    return false;
+  }
+}
+
+/**
+ * Get the user's current location
+ */
+export async function getCurrentLocation(): Promise<LocationCoords | null> {
+  try {
+    const hasPermission = await requestLocationPermission();
+    if (!hasPermission) return null;
+
+    const location = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+
+    return {
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude,
+    };
+  } catch (error) {
+    console.error('Error getting current location:', error);
+    Alert.alert('Error', 'Failed to get your location');
+    return null;
+  }
+}
+
+/**
+ * Geocode an address to coordinates
+ */
+export async function geocodeAddress(address: string): Promise<LocationCoords | null> {
+  try {
+    const results = await Location.geocodeAsync(address);
+    
+    if (results.length === 0) {
+      return null;
+    }
+
+    return {
+      latitude: results[0].latitude,
+      longitude: results[0].longitude,
+    };
+  } catch (error) {
+    console.error('Error geocoding address:', error);
+    return null;
+  }
+}
+
+/**
+ * Reverse geocode coordinates to an address
+ */
+export async function reverseGeocode(coords: LocationCoords): Promise<Address | null> {
+  try {
+    const results = await Location.reverseGeocodeAsync(coords);
+    
+    if (results.length === 0) {
+      return null;
+    }
+
+    const result = results[0];
+    return {
+      street: result.street || '',
+      city: result.city || '',
+      state: result.region || '',
+      zipCode: result.postalCode || '',
+      country: result.country || '',
+    };
+  } catch (error) {
+    console.error('Error reverse geocoding:', error);
+    return null;
+  }
+}
+
+/**
+ * Calculate distance between two coordinates in kilometers
+ * Uses the Haversine formula
+ */
+export function calculateDistance(
+  coord1: LocationCoords,
+  coord2: LocationCoords
+): number {
+  const R = 6371; // Earth's radius in kilometers
+  const dLat = toRadians(coord2.latitude - coord1.latitude);
+  const dLon = toRadians(coord2.longitude - coord1.longitude);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(coord1.latitude)) *
+      Math.cos(toRadians(coord2.latitude)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c;
+
+  return distance;
+}
+
+/**
+ * Convert degrees to radians
+ */
+function toRadians(degrees: number): number {
+  return degrees * (Math.PI / 180);
+}
+
+/**
+ * Format distance for display
+ */
+export function formatDistance(distanceKm: number): string {
+  if (distanceKm < 1) {
+    return `${Math.round(distanceKm * 1000)}m away`;
+  } else if (distanceKm < 10) {
+    return `${distanceKm.toFixed(1)}km away`;
+  } else {
+    return `${Math.round(distanceKm)}km away`;
+  }
+}
+
+/**
+ * Check if a location is within a service radius
+ */
+export function isWithinServiceRadius(
+  customerLocation: LocationCoords,
+  providerLocation: LocationCoords,
+  serviceRadiusKm: number
+): boolean {
+  const distance = calculateDistance(customerLocation, providerLocation);
+  return distance <= serviceRadiusKm;
+}
+
+/**
+ * Get providers within service radius
+ */
+export function filterProvidersByDistance(
+  customerLocation: LocationCoords,
+  providers: Array<{
+    id: string;
+    latitude: number | null;
+    longitude: number | null;
+    service_radius_km: number;
+  }>
+): Array<{ id: string; distance: number }> {
+  return providers
+    .filter((provider) => {
+      if (!provider.latitude || !provider.longitude) {
+        return false;
+      }
+
+      const providerLocation = {
+        latitude: provider.latitude,
+        longitude: provider.longitude,
+      };
+
+      return isWithinServiceRadius(
+        customerLocation,
+        providerLocation,
+        provider.service_radius_km
+      );
+    })
+    .map((provider) => ({
+      id: provider.id,
+      distance: calculateDistance(customerLocation, {
+        latitude: provider.latitude!,
+        longitude: provider.longitude!,
+      }),
+    }))
+    .sort((a, b) => a.distance - b.distance);
+}
+

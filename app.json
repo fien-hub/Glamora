@@ -1,0 +1,85 @@
+{
+  "expo": {
+    "name": "Glamora",
+    "slug": "glamora-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#FFFFFF"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.glamora.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We need your location to find beauty professionals near you.",
+        "NSCameraUsageDescription": "We need access to your camera to upload photos to your profile.",
+        "NSPhotoLibraryUsageDescription": "We need access to your photo library to upload images.",
+        "NSCalendarsUsageDescription": "We need access to your calendar to add booking reminders."
+      }
+    },
+    "android": {
+      "package": "com.glamora.app",
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Glamora to use your location to find beauty professionals near you."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Glamora to access your photos to upload images."
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow Glamora to access your calendar to add booking reminders."
+        }
+      ],
+      [
+        "expo-apple-authentication"
+      ],
+      [
+        "@react-native-google-signin/google-signin"
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Glamora to use Face ID for secure authentication."
+        }
+      ],
+      [
+        "@sentry/react-native/expo"
+      ]
+    ],
+    "scheme": "glamora",
+    "extra": {
+      "eas": {
+        "projectId": "981368a6-0d58-422e-976b-8caf8e7e6683"
+      }
+    }
+  }
+}

@@ -1,0 +1,159 @@
+appId: host.exp.Exponent
+---
+# ========================================
+# Authentication Flow E2E Test
+# ========================================
+# This test covers:
+# 1. App launch and onboarding
+# 2. Customer signup
+# 3. Login
+# 4. Logout
+# ========================================
+
+- launchApp:
+    clearState: true
+
+# Wait for splash screen to complete
+- waitForAnimationToEnd
+
+# ========================================
+# Test 1: Skip Onboarding
+# ========================================
+- assertVisible: "Welcome to Glamora"
+- tapOn: "Skip"
+- waitForAnimationToEnd
+
+# ========================================
+# Test 2: Navigate to Signup
+# ========================================
+- assertVisible: "Welcome"
+- tapOn: "Create Account"
+- waitForAnimationToEnd
+
+# ========================================
+# Test 3: Customer Signup
+# ========================================
+- assertVisible: "Create Account"
+
+# Select customer role
+- tapOn: "Customer"
+- waitForAnimationToEnd
+
+# Fill in signup form
+- tapOn: "First Name"
+- inputText: "Test"
+
+- tapOn: "Last Name"
+- inputText: "Customer"
+
+- tapOn: "Email"
+- inputText: "testcustomer${random}@example.com"
+
+- tapOn: "Phone"
+- inputText: "+1234567890"
+
+- tapOn: "Password"
+- inputText: "TestPassword123!"
+
+- tapOn: "Confirm Password"
+- inputText: "TestPassword123!"
+
+# Submit signup
+- tapOn: "Create Account"
+- waitForAnimationToEnd:
+    timeout: 10000
+
+# ========================================
+# Test 4: Complete Personalization (Customer)
+# ========================================
+- assertVisible: "Personalize Your Experience"
+
+# Step 1: Select favorite services
+- tapOn: "Haircut"
+- tapOn: "Manicure"
+- tapOn: "Next"
+- waitForAnimationToEnd
+
+# Step 2: Select preferred location
+- tapOn: "Use Current Location"
+- waitForAnimationToEnd
+- tapOn: "Next"
+- waitForAnimationToEnd
+
+# Step 3: Set budget
+- tapOn: "Next"
+- waitForAnimationToEnd
+
+# Step 4: Notification preferences
+- tapOn: "Finish"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# ========================================
+# Test 5: Verify Home Screen
+# ========================================
+- assertVisible: "Glamora"
+- assertVisible: "Find Services"
+
+# ========================================
+# Test 6: Logout
+# ========================================
+- tapOn: "My Profile"
+- waitForAnimationToEnd
+- scroll
+- tapOn: "Logout"
+- waitForAnimationToEnd
+
+# Confirm logout
+- assertVisible: "Welcome"
+
+# ========================================
+# Test 7: Login with Created Account
+# ========================================
+- tapOn: "Sign In"
+- waitForAnimationToEnd
+
+- assertVisible: "Welcome Back"
+
+- tapOn: "Email"
+- inputText: "testcustomer${random}@example.com"
+
+- tapOn: "Password"
+- inputText: "TestPassword123!"
+
+- tapOn: "Sign In"
+- waitForAnimationToEnd:
+    timeout: 10000
+
+# Verify successful login
+- assertVisible: "Glamora"
+
+# ========================================
+# Test 8: Invalid Login
+# ========================================
+- tapOn: "My Profile"
+- waitForAnimationToEnd
+- scroll
+- tapOn: "Logout"
+- waitForAnimationToEnd
+
+- tapOn: "Sign In"
+- waitForAnimationToEnd
+
+- tapOn: "Email"
+- inputText: "invalid@example.com"
+
+- tapOn: "Password"
+- inputText: "wrongpassword"
+
+- tapOn: "Sign In"
+- waitForAnimationToEnd
+
+# Verify error message
+- assertVisible: "Login Failed"
+- tapOn: "OK"
+
+# ========================================
+# Test Complete
+# ========================================
+

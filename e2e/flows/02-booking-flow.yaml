@@ -1,0 +1,175 @@
+appId: host.exp.Exponent
+---
+# ========================================
+# Booking Flow E2E Test
+# ========================================
+# This test covers:
+# 1. Search for services
+# 2. View provider details
+# 3. Book a service
+# 4. Complete payment
+# 5. View booking confirmation
+# ========================================
+
+- launchApp:
+    clearState: true
+
+# Wait for app to load
+- waitForAnimationToEnd
+
+# ========================================
+# Pre-requisite: Login as Customer
+# ========================================
+- runFlow: ../helpers/login-customer.yaml
+
+# ========================================
+# Test 1: Search for Services
+# ========================================
+- tapOn: "Find Services"
+- waitForAnimationToEnd
+
+- assertVisible: "Search Services"
+
+# Search for haircut
+- tapOn: "Search"
+- inputText: "Haircut"
+- waitForAnimationToEnd
+
+# Verify search results
+- assertVisible: "Haircut"
+
+# ========================================
+# Test 2: View Provider Details
+# ========================================
+# Tap on first provider
+- tapOn:
+    text: "View Profile"
+    index: 0
+- waitForAnimationToEnd
+
+# Verify provider details are shown
+- assertVisible: "About"
+- assertVisible: "Services"
+- assertVisible: "Reviews"
+- assertVisible: "Book Now"
+
+# ========================================
+# Test 3: Start Booking
+# ========================================
+- tapOn: "Book Now"
+- waitForAnimationToEnd
+
+- assertVisible: "Book Service"
+
+# ========================================
+# Test 4: Select Date and Time
+# ========================================
+# Select date (tomorrow)
+- tapOn: "YYYY-MM-DD"
+- inputText: "2025-12-25"
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# Wait for time slots to load
+- assertVisible: "9:00 AM"
+
+# Select time slot
+- tapOn: "9:00 AM"
+- waitForAnimationToEnd
+
+# ========================================
+# Test 5: Enter Address
+# ========================================
+- tapOn: "Street address"
+- inputText: "123 Main Street"
+
+- tapOn: "City"
+- inputText: "New York"
+
+- tapOn: "State"
+- inputText: "NY"
+
+- tapOn: "ZIP Code"
+- inputText: "10001"
+
+# Optional: Add notes
+- tapOn: "Special requests"
+- inputText: "Please arrive on time"
+
+# ========================================
+# Test 6: Continue to Payment
+# ========================================
+- tapOn: "Continue to Payment"
+- waitForAnimationToEnd
+
+- assertVisible: "Payment Information"
+
+# ========================================
+# Test 7: Enter Payment Details
+# ========================================
+# Note: Stripe test card number
+- tapOn: "Card number"
+- inputText: "4242424242424242"
+
+- tapOn: "MM/YY"
+- inputText: "12/25"
+
+- tapOn: "CVC"
+- inputText: "123"
+
+# ========================================
+# Test 8: Complete Booking
+# ========================================
+- tapOn: "Confirm Booking"
+- waitForAnimationToEnd:
+    timeout: 15000
+
+# ========================================
+# Test 9: Verify Booking Confirmation
+# ========================================
+- assertVisible: "Booking Confirmed"
+- assertVisible: "View Booking"
+
+# ========================================
+# Test 10: View Booking Details
+# ========================================
+- tapOn: "View Booking"
+- waitForAnimationToEnd
+
+# Verify booking appears in bookings list
+- assertVisible: "My Bookings"
+- assertVisible: "Pending"
+
+# ========================================
+# Test 11: View Booking Details
+# ========================================
+- tapOn:
+    text: "View Details"
+    index: 0
+- waitForAnimationToEnd
+
+# Verify booking details
+- assertVisible: "Booking Details"
+- assertVisible: "123 Main Street"
+- assertVisible: "New York"
+- assertVisible: "Pending"
+
+# ========================================
+# Test 12: Cancel Booking
+# ========================================
+- scroll
+- tapOn: "Cancel Booking"
+- waitForAnimationToEnd
+
+# Confirm cancellation
+- assertVisible: "Cancel Booking"
+- tapOn: "Yes, Cancel"
+- waitForAnimationToEnd
+
+# Verify cancellation
+- assertVisible: "Cancelled"
+
+# ========================================
+# Test Complete
+# ========================================
+

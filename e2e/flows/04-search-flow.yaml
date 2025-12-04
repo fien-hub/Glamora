@@ -1,0 +1,168 @@
+appId: host.exp.Exponent
+---
+# ========================================
+# Search & Filter Flow E2E Test
+# ========================================
+# This test covers:
+# 1. Basic search
+# 2. Advanced filters
+# 3. Sort options
+# 4. Location-based search
+# ========================================
+
+- launchApp:
+    clearState: true
+
+# Wait for app to load
+- waitForAnimationToEnd
+
+# ========================================
+# Pre-requisite: Login as Customer
+# ========================================
+- runFlow: ../helpers/login-customer.yaml
+
+# ========================================
+# Test 1: Basic Search
+# ========================================
+- tapOn: "Find Services"
+- waitForAnimationToEnd
+
+- assertVisible: "Search Services"
+
+# Search for different services
+- tapOn: "Search"
+- inputText: "Haircut"
+- waitForAnimationToEnd
+
+- assertVisible: "Haircut"
+
+# Clear search
+- tapOn: "Clear"
+- waitForAnimationToEnd
+
+# Search for another service
+- tapOn: "Search"
+- inputText: "Manicure"
+- waitForAnimationToEnd
+
+- assertVisible: "Manicure"
+
+# ========================================
+# Test 2: Open Advanced Filters
+# ========================================
+- tapOn: "Filters"
+- waitForAnimationToEnd
+
+- assertVisible: "Advanced Filters"
+
+# ========================================
+# Test 3: Filter by Price Range
+# ========================================
+- assertVisible: "Price Range"
+
+# Set minimum price
+- tapOn: "Min Price"
+- inputText: "20"
+
+# Set maximum price
+- tapOn: "Max Price"
+- inputText: "100"
+
+# ========================================
+# Test 4: Filter by Rating
+# ========================================
+- scroll
+
+- assertVisible: "Minimum Rating"
+
+# Select 4+ stars
+- tapOn: "4+ Stars"
+
+# ========================================
+# Test 5: Filter by Distance
+# ========================================
+- scroll
+
+- assertVisible: "Distance"
+
+# Select within 10 miles
+- tapOn: "Within 10 miles"
+
+# ========================================
+# Test 6: Filter by Availability
+# ========================================
+- scroll
+
+- assertVisible: "Availability"
+
+# Select available today
+- tapOn: "Available Today"
+
+# ========================================
+# Test 7: Apply Filters
+# ========================================
+- tapOn: "Apply Filters"
+- waitForAnimationToEnd
+
+# Verify filtered results
+- assertVisible: "Search Services"
+
+# ========================================
+# Test 8: Sort Results
+# ========================================
+- tapOn: "Sort"
+- waitForAnimationToEnd
+
+- assertVisible: "Sort By"
+
+# Sort by price (low to high)
+- tapOn: "Price: Low to High"
+- waitForAnimationToEnd
+
+# Verify sort applied
+- assertVisible: "Search Services"
+
+# ========================================
+# Test 9: Sort by Rating
+# ========================================
+- tapOn: "Sort"
+- waitForAnimationToEnd
+
+- tapOn: "Rating: High to Low"
+- waitForAnimationToEnd
+
+# ========================================
+# Test 10: Sort by Distance
+# ========================================
+- tapOn: "Sort"
+- waitForAnimationToEnd
+
+- tapOn: "Distance: Nearest First"
+- waitForAnimationToEnd
+
+# ========================================
+# Test 11: Clear All Filters
+# ========================================
+- tapOn: "Filters"
+- waitForAnimationToEnd
+
+- scroll
+- tapOn: "Clear All"
+- waitForAnimationToEnd
+
+# Verify filters cleared
+- assertVisible: "Search Services"
+
+# ========================================
+# Test 12: Location-Based Search
+# ========================================
+- tapOn: "Near Me"
+- waitForAnimationToEnd
+
+# Verify location permission or results
+- assertVisible: "Search Services"
+
+# ========================================
+# Test Complete
+# ========================================
+

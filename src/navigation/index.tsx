@@ -1,0 +1,491 @@
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
+import { ActivityIndicator, View } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
+import { animation, colors } from '../constants/theme';
+
+// Onboarding Screens
+import SplashScreen from '../screens/onboarding/SplashScreen';
+import OnboardingScreen from '../screens/auth/OnboardingScreen';
+import PersonalizationScreen from '../screens/onboarding/PersonalizationScreen';
+
+// Auth Screens
+import WelcomeScreen from '../screens/auth/WelcomeScreen';
+import RoleSelectionScreen from '../screens/auth/RoleSelectionScreen';
+import LoginScreen from '../screens/auth/LoginScreen';
+import SignupScreen from '../screens/auth/SignupScreen';
+import TwoFactorVerificationScreen from '../screens/auth/TwoFactorVerificationScreen';
+import AccountVerificationScreen from '../screens/auth/AccountVerificationScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
+import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
+
+// Main App Screens
+import CustomerTabNavigator from './CustomerTabNavigator';
+import ProviderTabNavigator from './ProviderTabNavigator';
+import AdminTabNavigator from './AdminTabNavigator';
+
+// Additional Screens
+import ChatScreen from '../screens/shared/ChatScreen';
+import ChangePasswordScreen from '../screens/shared/ChangePasswordScreen';
+import PhoneVerificationScreen from '../screens/shared/PhoneVerificationScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
+import LoyaltyScreen from '../screens/customer/LoyaltyScreen';
+import FavoritesScreen from '../screens/customer/FavoritesScreen';
+import SavedPostsScreen from '../screens/customer/SavedPostsScreen';
+import PaymentHistoryScreen from '../screens/customer/PaymentHistoryScreen';
+import PaymentMethodsScreen from '../screens/customer/PaymentMethodsScreen';
+import CustomerNotificationSettingsScreen from '../screens/customer/NotificationSettingsScreen';
+import HelpSupportScreen from '../screens/customer/HelpSupportScreen';
+import ProviderPortfolioScreen from '../screens/customer/ProviderPortfolioScreen';
+import PostDetailScreen from '../screens/customer/PostDetailScreen';
+import BookingScreen from '../screens/customer/BookingScreen';
+import BookingFlowScreen from '../screens/customer/BookingFlowScreen';
+import ServiceProvidersScreen from '../screens/customer/ServiceProvidersScreen';
+import PortfolioScreen from '../screens/provider/PortfolioScreen';
+import SearchScreen from '../screens/customer/SearchScreen';
+import ProviderOnboardingScreen from '../screens/provider/ProviderOnboardingScreen';
+import EditProfileScreen from '../screens/provider/EditProfileScreen';
+import CustomerEditProfileScreen from '../screens/customer/EditProfileScreen';
+import AvailabilityScreen from '../screens/provider/AvailabilityScreen';
+import EarningsScreen from '../screens/provider/EarningsScreen';
+import ReviewsScreen from '../screens/provider/ReviewsScreen';
+import AnalyticsScreen from '../screens/provider/AnalyticsScreen';
+import CustomersScreen from '../screens/provider/CustomersScreen';
+import LocationScreen from '../screens/provider/LocationScreen';
+import AddEditServiceScreen from '../screens/provider/AddEditServiceScreen';
+import ServiceSelectionScreen from '../screens/provider/ServiceSelectionScreen';
+import NotificationSettingsScreen from '../screens/provider/NotificationSettingsScreen';
+import BusinessSettingsScreen from '../screens/provider/BusinessSettingsScreen';
+import TravelSettingsScreen from '../screens/provider/TravelSettingsScreen';
+import VerificationScreen from '../screens/provider/VerificationScreen';
+import KYCVerificationScreen from '../screens/provider/KYCVerificationScreen';
+import MyCustomerBookingsScreen from '../screens/provider/MyCustomerBookingsScreen';
+import SecuritySettingsScreen from '../screens/SecuritySettingsScreen';
+import CreatePostScreen from '../screens/provider/CreatePostScreen';
+
+const Stack = createStackNavigator();
+
+export default function Navigation() {
+  const { user, userRole, needsOnboarding, needsVerification, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+
+
+  const linking = {
+    prefixes: ['glamora://', 'https://glamora.app'],
+    config: {
+      screens: {
+        ResetPassword: 'reset-password',
+        Login: 'login',
+        Signup: 'signup',
+      },
+    },
+  };
+
+  return (
+    <NavigationContainer linking={linking}>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          ...TransitionPresets.SlideFromRightIOS,
+          transitionSpec: {
+            open: {
+              animation: 'spring',
+              config: {
+                stiffness: 300,
+                damping: 30,
+                mass: 0.8,
+              },
+            },
+            close: {
+              animation: 'spring',
+              config: {
+                stiffness: 300,
+                damping: 30,
+                mass: 0.8,
+              },
+            },
+          },
+          cardStyleInterpolator: ({ current, layouts }) => {
+            return {
+              cardStyle: {
+                transform: [
+                  {
+                    translateX: current.progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [layouts.screen.width, 0],
+                    }),
+                  },
+                ],
+                opacity: current.progress.interpolate({
+                  inputRange: [0, 0.5, 1],
+                  outputRange: [0, 0.5, 1],
+                }),
+              },
+            };
+          },
+        }}
+      >
+        {!user ? (
+          // Not logged in - show onboarding and auth
+          <>
+            <Stack.Screen name="Splash" component={SplashScreen} />
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Signup" component={SignupScreen} />
+            <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+            <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
+            <Stack.Screen name="Personalization" component={PersonalizationScreen} />
+            <Stack.Screen
+              name="TwoFactorVerification"
+              component={TwoFactorVerificationScreen}
+              options={{ headerShown: true, title: 'Verify Identity' }}
+            />
+          </>
+        ) : user && needsVerification ? (
+          // User needs to verify email or phone
+          <>
+            <Stack.Screen
+              name="AccountVerification"
+              component={AccountVerificationScreen}
+              options={{ headerShown: true, title: 'Verify Your Account', headerBackVisible: false }}
+            />
+          </>
+        ) : user && needsOnboarding && userRole === 'customer' ? (
+          // Customer needs onboarding
+          <>
+            <Stack.Screen
+              name="Personalization"
+              component={PersonalizationScreen}
+              options={{ headerShown: true, title: 'Complete Your Profile' }}
+            />
+          </>
+        ) : user && needsOnboarding && userRole === 'provider' ? (
+          // Provider needs onboarding
+          <>
+            <Stack.Screen
+              name="ProviderOnboarding"
+              component={ProviderOnboardingScreen}
+              options={{ headerShown: true, title: 'Complete Your Profile' }}
+            />
+            <Stack.Screen
+              name="KYCVerification"
+              component={KYCVerificationScreen}
+              options={{ headerShown: true, title: 'Identity Verification' }}
+            />
+          </>
+        ) : userRole === 'customer' ? (
+          // Customer screens
+          <>
+            <Stack.Screen name="CustomerMain" component={CustomerTabNavigator} />
+            <Stack.Screen name="Personalization" component={PersonalizationScreen} />
+            <Stack.Screen
+              name="Chat"
+              component={ChatScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Notifications"
+              component={NotificationsScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Loyalty"
+              component={LoyaltyScreen}
+              options={{ headerShown: true, title: 'Rewards & Promos' }}
+            />
+            <Stack.Screen
+              name="Favorites"
+              component={FavoritesScreen}
+              options={{ headerShown: true, title: 'My Favorites' }}
+            />
+            <Stack.Screen
+              name="SavedPosts"
+              component={SavedPostsScreen}
+              options={{
+                headerShown: true,
+                title: 'Saved Posts',
+                ...TransitionPresets.SlideFromRightIOS,
+              }}
+            />
+            <Stack.Screen
+              name="ProviderPortfolio"
+              component={ProviderPortfolioScreen}
+              options={{
+                headerShown: true,
+                title: 'Portfolio',
+                ...TransitionPresets.ModalSlideFromBottomIOS,
+              }}
+            />
+            <Stack.Screen
+              name="PostDetail"
+              component={PostDetailScreen}
+              options={{
+                headerShown: false,
+                ...TransitionPresets.ModalSlideFromBottomIOS,
+              }}
+            />
+            <Stack.Screen
+              name="Booking"
+              component={BookingFlowScreen}
+              options={{
+                headerShown: false,
+                ...TransitionPresets.ModalSlideFromBottomIOS,
+              }}
+            />
+            <Stack.Screen
+              name="BookingLegacy"
+              component={BookingScreen}
+              options={{
+                headerShown: true,
+                title: 'Book Service',
+                ...TransitionPresets.ModalSlideFromBottomIOS,
+              }}
+            />
+            <Stack.Screen
+              name="ServiceProviders"
+              component={ServiceProvidersScreen}
+              options={{
+                headerShown: true,
+                title: 'Choose Provider',
+                ...TransitionPresets.SlideFromRightIOS,
+              }}
+            />
+            <Stack.Screen
+              name="SecuritySettings"
+              component={SecuritySettingsScreen}
+              options={{ headerShown: true, title: 'Security Settings' }}
+            />
+            <Stack.Screen
+              name="ChangePassword"
+              component={ChangePasswordScreen}
+              options={{ headerShown: true, title: 'Change Password' }}
+            />
+            <Stack.Screen
+              name="PhoneVerification"
+              component={PhoneVerificationScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="EditProfile"
+              component={CustomerEditProfileScreen}
+              options={{ headerShown: true, title: 'Edit Profile' }}
+            />
+            <Stack.Screen
+              name="PaymentHistory"
+              component={PaymentHistoryScreen}
+              options={{ headerShown: true, title: 'Payment History' }}
+            />
+            <Stack.Screen
+              name="PaymentMethods"
+              component={PaymentMethodsScreen}
+              options={{ headerShown: true, title: 'Payment Methods' }}
+            />
+            <Stack.Screen
+              name="NotificationSettings"
+              component={CustomerNotificationSettingsScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="HelpSupport"
+              component={HelpSupportScreen}
+              options={{ headerShown: false }}
+            />
+          </>
+        ) : userRole === 'provider' ? (
+          // Provider screens
+          <>
+            <Stack.Screen name="ProviderMain" component={ProviderTabNavigator} />
+            <Stack.Screen
+              name="Chat"
+              component={ChatScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Notifications"
+              component={NotificationsScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="Portfolio"
+              component={PortfolioScreen}
+              options={{ headerShown: true, title: 'My Portfolio' }}
+            />
+            <Stack.Screen
+              name="EditProfile"
+              component={EditProfileScreen}
+              options={{ headerShown: true, title: 'Edit Profile' }}
+            />
+            <Stack.Screen
+              name="Availability"
+              component={AvailabilityScreen}
+              options={{ headerShown: true, title: 'Manage Availability' }}
+            />
+            <Stack.Screen
+              name="Earnings"
+              component={EarningsScreen}
+              options={{ headerShown: true, title: 'Earnings & Payouts' }}
+            />
+            <Stack.Screen
+              name="Reviews"
+              component={ReviewsScreen}
+              options={{ headerShown: true, title: 'Reviews' }}
+            />
+            <Stack.Screen
+              name="Analytics"
+              component={AnalyticsScreen}
+              options={{ headerShown: true, title: 'Analytics' }}
+            />
+            <Stack.Screen
+              name="Customers"
+              component={CustomersScreen}
+              options={{ headerShown: true, title: 'Customers' }}
+            />
+            <Stack.Screen
+              name="Location"
+              component={LocationScreen}
+              options={{ headerShown: true, title: 'Location & Service Area' }}
+            />
+            <Stack.Screen
+              name="NotificationSettings"
+              component={NotificationSettingsScreen}
+              options={{ headerShown: true, title: 'Notification Settings' }}
+            />
+            <Stack.Screen
+              name="BusinessSettings"
+              component={BusinessSettingsScreen}
+              options={{ headerShown: true, title: 'Business Settings' }}
+            />
+            <Stack.Screen
+              name="TravelSettings"
+              component={TravelSettingsScreen}
+              options={{ headerShown: true, title: 'Travel & Distance Settings' }}
+            />
+            <Stack.Screen
+              name="Verification"
+              component={VerificationScreen}
+              options={{ headerShown: true, title: 'Identity Verification' }}
+            />
+            <Stack.Screen
+              name="KYCVerification"
+              component={KYCVerificationScreen}
+              options={{ headerShown: true, title: 'Identity Verification' }}
+            />
+            <Stack.Screen
+              name="ProviderOnboarding"
+              component={ProviderOnboardingScreen}
+              options={{ headerShown: true, title: 'Complete Your Profile' }}
+            />
+            <Stack.Screen
+              name="SecuritySettings"
+              component={SecuritySettingsScreen}
+              options={{ headerShown: true, title: 'Security Settings' }}
+            />
+            <Stack.Screen
+              name="ChangePassword"
+              component={ChangePasswordScreen}
+              options={{ headerShown: true, title: 'Change Password' }}
+            />
+            <Stack.Screen
+              name="PhoneVerification"
+              component={PhoneVerificationScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="ServiceSelection"
+              component={ServiceSelectionScreen}
+              options={{
+                headerShown: true,
+                title: 'Choose a Service',
+                ...TransitionPresets.SlideFromRightIOS,
+              }}
+            />
+            <Stack.Screen
+              name="AddEditService"
+              component={AddEditServiceScreen}
+              options={{
+                headerShown: true,
+                title: 'Add Service',
+                ...TransitionPresets.SlideFromRightIOS,
+              }}
+            />
+            {/* Add shared screens that providers can access from feed */}
+            <Stack.Screen
+              name="ProviderPortfolio"
+              component={ProviderPortfolioScreen}
+              options={{
+                headerShown: true,
+                title: 'Portfolio',
+                ...TransitionPresets.ModalSlideFromBottomIOS,
+              }}
+            />
+            <Stack.Screen
+              name="PostDetail"
+              component={PostDetailScreen}
+              options={{
+                headerShown: false,
+                ...TransitionPresets.ModalSlideFromBottomIOS,
+              }}
+            />
+            <Stack.Screen
+              name="Booking"
+              component={BookingFlowScreen}
+              options={{
+                headerShown: false,
+                ...TransitionPresets.ModalSlideFromBottomIOS,
+              }}
+            />
+            <Stack.Screen
+              name="Search"
+              component={SearchScreen}
+              options={{
+                headerShown: true,
+                title: 'Find Services',
+                ...TransitionPresets.SlideFromRightIOS,
+              }}
+            />
+            <Stack.Screen
+              name="MyCustomerBookings"
+              component={MyCustomerBookingsScreen}
+              options={{
+                headerShown: false,
+                ...TransitionPresets.SlideFromRightIOS,
+              }}
+            />
+            <Stack.Screen
+              name="CreatePost"
+              component={CreatePostScreen}
+              options={{
+                headerShown: false,
+                ...TransitionPresets.ModalSlideFromBottomIOS,
+              }}
+            />
+          </>
+        ) : userRole === 'admin' ? (
+          // Admin screens
+          <>
+            <Stack.Screen name="AdminMain" component={AdminTabNavigator} />
+          </>
+        ) : (
+          // Fallback - show welcome if role is not set
+          <>
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Signup" component={SignupScreen} />
+          </>
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
