@@ -6,7 +6,7 @@ Get up and running with Glamora in 10 minutes!
 
 - **Node.js 18+** installed ([Download](https://nodejs.org/))
 - A **Supabase** account ([Sign up](https://supabase.com))
-- A **Stripe** account ([Sign up](https://stripe.com))
+- A **RevenueCat** account ([Sign up](https://www.revenuecat.com))
 
 ## 1. Install Node.js (if not installed)
 
@@ -64,14 +64,12 @@ npm install
    - `anon` public key
    - `service_role` key
 
-## 4. Set Up Stripe
+## 4. Set Up RevenueCat
 
-1. Go to [stripe.com](https://stripe.com)
+1. Go to [revenuecat.com](https://www.revenuecat.com)
 2. Sign up/login
-3. Go to **Developers** → **API keys**
-4. Copy:
-   - Publishable key (pk_test_...)
-   - Secret key (sk_test_...)
+3. Go to **Project Settings** → **API Keys**
+4. Copy your public and secret API keys
 
 ## 5. Configure Environment
 
@@ -80,7 +78,7 @@ Create `glamora-app/.env`:
 ```env
 EXPO_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJxxx...
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_xxx...
+EXPO_PUBLIC_REVENUECAT_API_KEY=your_revenuecat_public_key
 EXPO_PUBLIC_API_URL=http://localhost:3000
 ```
 
@@ -91,8 +89,7 @@ PORT=3000
 SUPABASE_URL=https://xxxxx.supabase.co
 SUPABASE_ANON_KEY=eyJxxx...
 SUPABASE_SERVICE_KEY=eyJxxx...
-STRIPE_SECRET_KEY=sk_test_xxx...
-STRIPE_WEBHOOK_SECRET=whsec_xxx...
+REVENUECAT_SECRET_KEY=your_revenuecat_secret_key
 ALLOWED_ORIGINS=http://localhost:8081,http://localhost:19006
 ```
 

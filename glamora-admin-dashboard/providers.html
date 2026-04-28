@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Glamora Admin - Providers</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="logo"><h1>✨ Glamora</h1><p>Admin Dashboard</p></div>
+    <nav class="nav">
+      <a href="index.html" class="nav-item"><span class="icon">🏠</span><span>Home</span></a>
+      <a href="pending-services.html" class="nav-item"><span class="icon">⏳</span><span>Pending Services</span></a>
+      <a href="approved-services.html" class="nav-item"><span class="icon">✅</span><span>Approved</span></a>
+      <a href="rejected-services.html" class="nav-item"><span class="icon">❌</span><span>Rejected</span></a>
+      <a href="providers.html" class="nav-item active"><span class="icon">👥</span><span>Providers</span></a>
+      <a href="services-to-add.html" class="nav-item"><span class="icon">💡</span><span>Services to Add</span></a>
+      <a href="read-flips.html" class="nav-item"><span class="icon">📬</span><span>Read Flips</span></a>
+      <a href="settings.html" class="nav-item"><span class="icon">⚙️</span><span>Settings</span></a>
+    </nav>
+  </aside>
+
+  <main class="main-content">
+    <header class="header">
+      <div class="header-left">
+        <h2>Providers</h2>
+        <p class="subtitle">Search, verify, or suspend providers</p>
+      </div>
+    </header>
+
+    <div class="section">
+      <div class="section-header"><h3>Admin Access</h3></div>
+      <div class="form-grid">
+        <div>
+          <label>Backend Base URL</label>
+          <input id="backendUrl" class="input" placeholder="http://localhost:3000" />
+        </div>
+        <div>
+          <label>Supabase URL</label>
+          <input id="spUrl" class="input" placeholder="https://YOUR_PROJECT.supabase.co" />
+        </div>
+        <div>
+          <label>Supabase anon key</label>
+          <input id="spAnon" class="input mono" placeholder="public anon key" />
+        </div>
+        <div>
+          <label>Admin email</label>
+          <input id="email" class="input" placeholder="admin@example.com" />
+        </div>
+        <div>
+          <label>Password</label>
+          <input id="password" type="password" class="input" placeholder="••••••••" />
+        </div>
+        <div class="full">
+          <label>Admin Bearer Token</label>
+          <input id="adminToken" class="input mono" placeholder="auto-filled after login or paste manually" />
+          <div id="loginStatus" class="subtitle"></div>
+        </div>
+        <div>
+          <button id="loginBtn" class="btn" type="button">Login</button>
+        </div>
+        <div>
+          <button id="logoutBtn" class="btn" type="button" style="background:#6B7280">Logout</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header"><h3>Search</h3></div>
+      <div class="form-grid">
+        <div>
+          <label>Query</label>
+          <input id="q" class="input" placeholder="name, business, or email" />
+        </div>
+        <div>
+          <label>Verified</label>
+          <select id="verified" class="input">
+            <option value="">Any</option>
+            <option value="true">Verified</option>
+            <option value="false">Unverified</option>
+          </select>
+        </div>
+        <div>
+          <button id="searchBtn" class="btn" type="button">Search</button>
+        </div>
+        <div id="status" class="subtitle"></div>
+      </div>
+      <div style="overflow:auto;margin-top:8px;">
+        <table class="table" id="results">
+          <thead>
+            <tr>
+              <th>Provider</th>
+              <th>Email</th>
+              <th>Business</th>
+              <th>Verified</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="providers.js"></script>
+</body>
+</html>

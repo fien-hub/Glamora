@@ -8,7 +8,7 @@ A mobile and web platform connecting customers with verified beauty professional
 - Browse and book beauty services (nails, hair, makeup, etc.)
 - View service provider portfolios and reviews
 - Location-based service matching
-- Secure in-app payments via Stripe
+- Secure in-app purchases via RevenueCat
 - Real-time appointment tracking
 - Rate and review service providers
 
@@ -33,18 +33,18 @@ A mobile and web platform connecting customers with verified beauty professional
 - **TypeScript** for type safety
 - **React Navigation** for routing
 - **React Query** for data fetching
-- **Stripe SDK** for payments
+- **RevenueCat SDK** for in-app purchases
 
 ### Backend
 - **Node.js** with Express
 - **TypeScript**
 - **Supabase** for authentication and database
 - **PostgreSQL** database
-- **Stripe** for payment processing
+- **RevenueCat** for payment processing
 
 ### Infrastructure
 - **Supabase** - Auth, Database, Storage
-- **Stripe** - Payment processing
+- **RevenueCat** - In-app purchases & provider payouts
 - **Expo** - Mobile app deployment
 
 ## 📋 Prerequisites
@@ -101,7 +101,7 @@ Create `glamora-app/.env`:
 ```
 EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=your_stripe_publishable_key
+EXPO_PUBLIC_REVENUECAT_API_KEY=your_revenuecat_api_key
 EXPO_PUBLIC_API_URL=http://localhost:3000
 ```
 
@@ -111,8 +111,7 @@ Create `glamora-backend/.env`:
 PORT=3000
 SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_KEY=your_supabase_service_key
-STRIPE_SECRET_KEY=your_stripe_secret_key
-STRIPE_WEBHOOK_SECRET=your_stripe_webhook_secret
+REVENUECAT_SECRET_KEY=your_revenuecat_secret_key
 DATABASE_URL=your_supabase_database_url
 ```
 
@@ -122,11 +121,11 @@ DATABASE_URL=your_supabase_database_url
 2. Run the database migrations in `glamora-backend/supabase/migrations`
 3. Copy your project URL and keys to the .env files
 
-### 5. Stripe Setup
+### 5. RevenueCat Setup
 
-1. Create a Stripe account at https://stripe.com
-2. Get your API keys from the Stripe dashboard
-3. Set up webhook endpoint for payment events
+1. Create a RevenueCat account at https://www.revenuecat.com
+2. Get your API keys from the RevenueCat dashboard
+3. Configure your entitlements and products
 4. Copy keys to the .env files
 
 ### 6. Run the Application
@@ -203,7 +202,7 @@ Glamora/
 ## 💳 Payment Flow
 
 1. Customer selects service and books appointment
-2. Payment intent created via Stripe
+2. Payment processed via RevenueCat in-app purchase
 3. Customer completes payment in-app
 4. Booking confirmed upon successful payment
 5. Provider receives payout after service completion

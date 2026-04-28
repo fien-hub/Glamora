@@ -26,6 +26,7 @@ import paymentMethodRoutes from './routes/paymentMethods';
 import reviewRoutes from './routes/reviews';
 import verificationRoutes from './routes/verification';
 import pricingRoutes from './routes/pricing';
+import adminRoutes from './routes/admin';
 
 const app: Application = express();
 const PORT = process.env.PORT || 3000;
@@ -75,6 +76,7 @@ app.use('/api/payment-methods', paymentMethodRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/pricing', pricingRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Debug: Log all registered routes
 console.log('📋 Registered routes:');

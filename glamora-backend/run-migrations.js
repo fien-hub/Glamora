@@ -66,19 +66,20 @@ async function main() {
   
   const migrationsDir = path.join(__dirname, 'supabase', 'migrations');
   
-  const migrations = [
-    'add-other-category.sql',
-    'add-comprehensive-services.sql'
-  ];
-  
-  for (const migration of migrations) {
+  // Discover and sort all .sql files in the migrations directory
+  const allFiles = fs.readdirSync(migrationsDir)
+    .filter((f) => f.toLowerCase().endsWith('.sql'))
+    .sort();
+
+  if (allFiles.length === 0) {
+    console.log('ℹ️  No SQL migration files found. Nothing to do.');
+    return;
+  }
+
+  console.log(`📦 Found ${allFiles.length} migration files to run`);
+
+  for (const migration of allFiles) {
     const filePath = path.join(migrationsDir, migration);
-    
-    if (!fs.existsSync(filePath)) {
-      console.error(`❌ Migration file not found: ${migration}`);
-      continue;
-    }
-    
     await runMigration(filePath);
   }
   

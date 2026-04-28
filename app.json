@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "dd4a4b8d-eaf7-4fc3-94d3-53c1dc04fa9b"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.fien.glamora",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}

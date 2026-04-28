@@ -69,6 +69,12 @@ export const createBooking = async (req: Request, res: Response) => {
       .single();
 
     if (bookingError) {
+      // Handle concurrency overlap (exclusion constraint) gracefully
+      const code = (bookingError as any).code;
+      const msg = (bookingError as any).message || '';
+      if (code === '23P01' || msg.includes('bookings_no_overlap')) {
+        return res.status(409).json({ error: 'Selected time is no longer available. Please pick a different time.' });
+      }
       return res.status(400).json({ error: bookingError.message });
     }
 

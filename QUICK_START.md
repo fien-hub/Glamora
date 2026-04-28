@@ -162,7 +162,7 @@ npx expo start
 1. **Image Upload** - Using placeholder URLs (`https://via.placeholder.com/400`)
 2. **Clipboard Copy** - Shows alert only (needs `@react-native-clipboard/clipboard`)
 3. **Push Notifications** - In-app only (needs Expo Notifications setup)
-4. **Payment Processing** - Stripe Connect incomplete
+4. **Payment Processing** - RevenueCat in-app purchases (configured via RevenueCat dashboard)
 5. **Search Filter Logic** - UI complete, backend logic partial
 6. **Location/Maps** - Basic GPS only (needs react-native-maps)
 7. **Chat Images** - Text only (needs image picker)

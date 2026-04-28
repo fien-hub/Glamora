@@ -21,16 +21,13 @@ const PLATFORM_COMMISSION_RATE = 0.20;
 // Conversion: 1 mile = 1.60934 km
 const KM_TO_MILES = 0.621371;
 
-// Standard travel fees enforced by platform (in cents, by miles)
-// Cost-based to fairly compensate providers for round-trip travel
-const STANDARD_TRAVEL_FEES_CENTS = {
-  '0-3 mi': 500,      // $5 for very close (6 mi round trip)
-  '3-5 mi': 800,      // $8 for nearby (10 mi round trip)
-  '5-8 mi': 1200,     // $12 for medium distance (16 mi round trip)
-  '8-12 mi': 1800,    // $18 for farther (24 mi round trip)
-  '12-15 mi': 2200,   // $22 for far (30 mi round trip)
-  '15+ mi': 3000,     // $30 for special requests (40+ mi round trip)
-};
+// Import shared travel fee table (in dollars)
+import { STANDARD_TRAVEL_FEES } from '../config/travelFees';
+
+// Convert to cents for backend usage
+const STANDARD_TRAVEL_FEES_CENTS = Object.fromEntries(
+  Object.entries(STANDARD_TRAVEL_FEES).map(([tier, dollars]) => [tier, dollars * 100])
+);
 
 /**
  * Get travel fee and tier based on distance

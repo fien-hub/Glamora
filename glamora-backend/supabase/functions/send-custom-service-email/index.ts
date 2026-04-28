@@ -30,28 +30,30 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!)
 
-    // Fetch service details
+    // 1) Fetch service details (provider_id)
     const { data: service, error: serviceError } = await supabase
       .from('provider_services')
-      .select(`
-        id,
-        custom_service_name,
-        price,
-        duration,
-        provider_id,
-        profiles!provider_id (
-          id,
-          email,
-          full_name,
-          business_name
-        )
-      `)
+      .select('id, custom_service_name, price, provider_id')
       .eq('id', serviceId)
       .single()
 
     if (serviceError || !service) {
       return new Response(
         JSON.stringify({ error: 'Service not found' }),
+        { status: 404, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // 2) Fetch provider's contact email from profiles via provider_id
+    const { data: providerProfile, error: providerProfileError } = await supabase
+      .from('profiles')
+      .select('id, email, first_name, last_name')
+      .eq('id', service.provider_id)
+      .single()
+
+    if (providerProfileError || !providerProfile) {
+      return new Response(
+        JSON.stringify({ error: 'Provider profile not found' }),
         { status: 404, headers: { 'Content-Type': 'application/json' } }
       )
     }
@@ -70,7 +72,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         from: 'Glamora <notifications@glamora.com>',
-        to: service.profiles.email,
+        to: providerProfile.email,
         subject: emailTemplate.subject,
         html: emailTemplate.html,
       }),
@@ -91,7 +93,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         emailId: emailData.id,
-        message: `Email sent to ${service.profiles.email}` 
+        message: `Email sent to ${providerProfile.email}` 
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     )

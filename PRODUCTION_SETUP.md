@@ -13,7 +13,7 @@ All detailed implementation guides are ready:
 | Guide | Location | Time | Priority |
 |-------|----------|------|----------|
 | **Database Migrations** | `glamora-backend/supabase/MIGRATION_GUIDE.md` | 30 min | 🔴 CRITICAL |
-| **Stripe Payments** | `glamora-backend/STRIPE_SETUP_GUIDE.md` | 2-3 hrs | 🔴 CRITICAL |
+| **RevenueCat Payments** | `glamora-backend/REVENUECAT_SETUP_GUIDE.md` | 2-3 hrs | 🔴 CRITICAL |
 | **Push Notifications** | `glamora-app/PUSH_NOTIFICATIONS_GUIDE.md` | 2-3 hrs | 🟡 HIGH |
 | **Performance** | `glamora-app/PERFORMANCE_OPTIMIZATION_GUIDE.md` | 4-6 hrs | 🟡 HIGH |
 | **Polish & Animations** | `glamora-app/POLISH_AND_ANIMATIONS_GUIDE.md` | 6-8 hrs | 🟢 MEDIUM |
@@ -103,7 +103,7 @@ npx expo start
 - `BusinessSettingsScreen.tsx`
 
 **Migrations** (10 database migrations):
-- `add_stripe_fields.sql`
+- `add_payment_fields.sql`
 - `add_provider_location_fields.sql`
 - `add_review_response_fields.sql`
 - `add_customer_notes.sql`
@@ -114,7 +114,7 @@ npx expo start
 
 **Guides** (7 comprehensive guides):
 - Database Migration Guide
-- Stripe Setup Guide
+- RevenueCat Setup Guide
 - Push Notifications Guide
 - Performance Optimization Guide
 - Polish & Animations Guide
@@ -127,7 +127,7 @@ npx expo start
 
 ### Week 1: Foundation (6-8 hours)
 1. **Database Setup** (30 min) - Run all migrations
-2. **Stripe Setup** (2-3 hrs) - Enable payments
+2. **RevenueCat Setup** (2-3 hrs) - Enable payments
 3. **Testing** (2-3 hrs) - Test all features
 4. **Bug Fixes** (2 hrs) - Fix any issues found
 
@@ -159,14 +159,14 @@ npx expo start
 EXPO_PUBLIC_SUPABASE_URL=https://hygbxfkkdmenpkvgpwhn.supabase.co
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 
-# Stripe (test mode)
-EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_key
+# RevenueCat
+EXPO_PUBLIC_REVENUECAT_API_KEY=your_revenuecat_api_key
 ```
 
 ### Get Your Keys
 
 1. **Supabase**: Dashboard → Project Settings → API
-2. **Stripe**: Dashboard → Developers → API Keys
+2. **RevenueCat**: Dashboard → Project → API Keys
 
 ---
 
@@ -179,9 +179,9 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_key
 - [ ] Backups configured
 
 ### Payments
-- [ ] Stripe Connect configured
-- [ ] Test payments working
-- [ ] Webhooks set up
+- [ ] RevenueCat configured with products
+- [ ] Test purchases working
+- [ ] Entitlements set up
 - [ ] Payout schedule configured
 
 ### Features
@@ -202,7 +202,7 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_key
 ## 📞 Support Resources
 
 - **Supabase**: [supabase.com/docs](https://supabase.com/docs)
-- **Stripe**: [stripe.com/docs/connect](https://stripe.com/docs/connect)
+- **RevenueCat**: [docs.revenuecat.com](https://docs.revenuecat.com)
 - **Expo**: [docs.expo.dev](https://docs.expo.dev)
 - **React Native**: [reactnative.dev](https://reactnative.dev)
 
@@ -213,7 +213,7 @@ EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_key
 All features are complete. Follow the guides step by step:
 
 1. Start with **Database Setup** (30 min)
-2. Then **Stripe Setup** (2-3 hrs)
+2. Then **RevenueCat Setup** (2-3 hrs)
 3. Follow the **Implementation Roadmap** for the rest
 
 **Good luck with your launch! 🚀**

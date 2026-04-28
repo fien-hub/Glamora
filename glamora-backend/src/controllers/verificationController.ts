@@ -1,12 +1,7 @@
 import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
-import Stripe from 'stripe';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2023-10-16',
-});
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -592,81 +587,19 @@ export const getUserVerificationStatus = async (req: Request, res: Response) => 
 };
 
 /**
- * Create a Stripe Identity Verification Session
- * Returns a URL to the Stripe-hosted verification page
+ * Create a hosted identity verification session
+ * Returns a URL to the hosted verification page when available
  */
 export const createKYCVerificationSession = async (req: Request, res: Response) => {
-  try {
-    const userId = (req as any).user?.id;
-
-    console.log('[KYC] Creating Stripe Identity verification session for user:', userId);
-
-    // Get provider profile
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('id, email, full_name')
-      .eq('user_id', userId)
-      .single();
-
-    if (!profileData) {
-      return res.status(404).json({ error: 'Profile not found' });
-    }
-
-    // Create Stripe Identity VerificationSession
-    const verificationSession = await stripe.identity.verificationSessions.create({
-      type: 'document',
-      metadata: {
-        user_id: userId,
-        profile_id: profileData.id,
-      },
-      options: {
-        document: {
-          allowed_types: ['driving_license', 'passport', 'id_card'],
-          require_id_number: false,
-          require_live_capture: true,
-          require_matching_selfie: true,
-        },
-      },
-      return_url: `glamora://kyc-verification/complete?session_id={VERIFICATION_SESSION_ID}`,
-    });
-
-    // Create KYC verification record in database
-    const { data: kycRecord, error: insertError } = await supabase
-      .from('kyc_verifications')
-      .insert({
-        provider_id: profileData.id,
-        document_type: 'pending', // Will be updated by webhook
-        id_front_url: '',
-        selfie_url: '',
-        status: 'processing',
-        stripe_verification_session_id: verificationSession.id,
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error('[KYC] Error creating KYC record:', insertError);
-      return res.status(500).json({ error: 'Failed to create KYC record' });
-    }
-
-    console.log('[KYC] Verification session created:', verificationSession.id);
-
-    res.json({
-      sessionId: verificationSession.id,
-      url: verificationSession.url,
-      kycId: kycRecord.id,
-      clientSecret: verificationSession.client_secret,
-    });
-
-  } catch (error: any) {
-    console.error('[KYC] Create session error:', error);
-    res.status(500).json({ error: error.message || 'Internal server error' });
-  }
+  return res.status(410).json({
+    success: false,
+    error: 'Hosted KYC session creation is deprecated. Use document upload and manual verification flow.',
+  });
 };
 
 /**
- * Process KYC verification (fallback for custom flow without Stripe hosted page)
- * Uses Stripe Identity to verify uploaded documents
+ * Process KYC verification (fallback for custom flow without hosted verification)
+ * Uses the app-managed verification flow to validate uploaded documents
  */
 export const processKYCVerification = async (req: Request, res: Response) => {
   try {
@@ -702,13 +635,13 @@ export const processKYCVerification = async (req: Request, res: Response) => {
       })
       .eq('id', kycId);
 
-    // For custom flow: simulate verification (in production, use Stripe's file upload API)
-    // This is a fallback when not using Stripe's hosted verification page
+    // For custom flow: simulate verification until a hosted provider is wired up
+    // This is a fallback when not using a hosted verification page
     const processingTime = Math.floor(Math.random() * 5000) + 3000;
 
     setTimeout(async () => {
       try {
-        // Simulate verification (replace with actual Stripe Identity API calls in production)
+        // Simulate verification (replace with actual hosted verification provider calls in production)
         const faceMatchScore = Math.random() * 30 + 70;
         const documentAuthenticityScore = Math.random() * 20 + 80;
         const livenessScore = Math.random() * 15 + 85;
@@ -780,135 +713,14 @@ export const processKYCVerification = async (req: Request, res: Response) => {
 };
 
 /**
- * Handle Stripe Identity webhook events
+ * Handle hosted KYC webhook events
  */
-export const handleIdentityWebhook = async (req: Request, res: Response) => {
-  const sig = req.headers['stripe-signature'] as string;
-  const webhookSecret = process.env.STRIPE_IDENTITY_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET || '';
-
-  let event: Stripe.Event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-  } catch (err: any) {
-    console.error('[KYC Webhook] Signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  console.log('[KYC Webhook] Received event:', event.type);
-
-  try {
-    switch (event.type) {
-      case 'identity.verification_session.verified': {
-        const session = event.data.object as Stripe.Identity.VerificationSession;
-        await handleVerificationVerified(session);
-        break;
-      }
-      case 'identity.verification_session.requires_input': {
-        const session = event.data.object as Stripe.Identity.VerificationSession;
-        await handleVerificationRequiresInput(session);
-        break;
-      }
-      case 'identity.verification_session.canceled': {
-        const session = event.data.object as Stripe.Identity.VerificationSession;
-        await handleVerificationCanceled(session);
-        break;
-      }
-      default:
-        console.log('[KYC Webhook] Unhandled event type:', event.type);
-    }
-
-    res.json({ received: true });
-  } catch (error: any) {
-    console.error('[KYC Webhook] Error processing event:', error);
-    res.status(500).json({ error: error.message });
-  }
+export const handleIdentityWebhook = async (_req: Request, res: Response) => {
+  return res.status(410).json({
+    received: false,
+    error: 'Hosted KYC webhook is deprecated.',
+  });
 };
-
-async function handleVerificationVerified(session: Stripe.Identity.VerificationSession) {
-  const profileId = session.metadata?.profile_id;
-
-  console.log('[KYC] Verification verified for profile:', profileId);
-
-  // Update KYC record
-  const { error: updateError } = await supabase
-    .from('kyc_verifications')
-    .update({
-      status: 'approved',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('stripe_verification_session_id', session.id);
-
-  if (updateError) {
-    console.error('[KYC] Error updating KYC record:', updateError);
-    return;
-  }
-
-  // Get the KYC record to find the ID
-  const { data: kycRecord } = await supabase
-    .from('kyc_verifications')
-    .select('id')
-    .eq('stripe_verification_session_id', session.id)
-    .single();
-
-  // Update provider profile
-  if (profileId) {
-    await supabase
-      .from('provider_profiles')
-      .update({
-        identity_verification_status: 'approved',
-        identity_verified_at: new Date().toISOString(),
-        kyc_verification_id: kycRecord?.id,
-        kyc_verified_at: new Date().toISOString(),
-        is_verified: true,
-      })
-      .eq('id', profileId);
-
-    await supabase
-      .from('provider_verification_checklist')
-      .upsert({
-        provider_id: profileId,
-        govt_id_uploaded: true,
-        selfie_uploaded: true,
-        selfie_matched: true,
-      }, { onConflict: 'provider_id' });
-  }
-
-  console.log('[KYC] Provider verified successfully');
-}
-
-async function handleVerificationRequiresInput(session: Stripe.Identity.VerificationSession) {
-  console.log('[KYC] Verification requires input for session:', session.id);
-
-  const lastError = session.last_error;
-  let rejectionReason = 'Additional information required';
-
-  if (lastError) {
-    rejectionReason = lastError.reason || lastError.code || 'Verification failed';
-  }
-
-  await supabase
-    .from('kyc_verifications')
-    .update({
-      status: 'rejected',
-      rejection_reason: rejectionReason,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('stripe_verification_session_id', session.id);
-}
-
-async function handleVerificationCanceled(session: Stripe.Identity.VerificationSession) {
-  console.log('[KYC] Verification canceled for session:', session.id);
-
-  await supabase
-    .from('kyc_verifications')
-    .update({
-      status: 'canceled',
-      rejection_reason: 'Verification was canceled',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('stripe_verification_session_id', session.id);
-}
 
 /**
  * Get KYC verification status

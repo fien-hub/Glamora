@@ -19,9 +19,14 @@ CREATE POLICY "Users can view their own data" ON public.users
 CREATE POLICY "Users can update their own data" ON public.users
     FOR UPDATE USING (auth.uid() = id);
 
--- Profiles policies
-CREATE POLICY "Anyone can view profiles" ON public.profiles
-    FOR SELECT USING (true);
+-- Profiles policies (hardened)
+-- Replace broad public read with authenticated-only read
+DROP POLICY IF EXISTS "Anyone can view profiles" ON public.profiles;
+CREATE POLICY "Authenticated users can view profiles"
+ON public.profiles
+FOR SELECT
+TO authenticated
+USING (true);
 
 CREATE POLICY "Users can update their own profile" ON public.profiles
     FOR UPDATE USING (auth.uid() = user_id);
@@ -29,9 +34,38 @@ CREATE POLICY "Users can update their own profile" ON public.profiles
 CREATE POLICY "Users can insert their own profile" ON public.profiles
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- Customer profiles policies
-CREATE POLICY "Anyone can view customer profiles" ON public.customer_profiles
-    FOR SELECT USING (true);
+-- Customer profiles policies (hardened)
+-- Remove broad public read; allow only owner and providers for related bookings
+DROP POLICY IF EXISTS "Anyone can view customer profiles" ON public.customer_profiles;
+
+-- Owner: can view their own customer profile
+DROP POLICY IF EXISTS "Customer can view own profile" ON public.customer_profiles;
+CREATE POLICY "Customer can view own profile"
+ON public.customer_profiles
+FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = customer_profiles.id
+      AND p.user_id = auth.uid()
+  )
+);
+
+-- Providers: can view customer profiles only if they share a booking
+DROP POLICY IF EXISTS "Providers can view customers from their bookings" ON public.customer_profiles;
+CREATE POLICY "Providers can view customers from their bookings"
+ON public.customer_profiles
+FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.bookings b
+    JOIN public.provider_profiles pp ON pp.id = b.provider_id
+    JOIN public.profiles p ON p.id = pp.id
+    WHERE b.customer_id = customer_profiles.id
+      AND p.user_id = auth.uid()
+  )
+);
 
 CREATE POLICY "Customers can update their own profile" ON public.customer_profiles
     FOR UPDATE USING (

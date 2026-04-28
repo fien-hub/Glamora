@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Glamora Admin - Read Flips</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    .form-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .input, .select { width: 100%; padding: 10px; border: 1px solid #E5E7EB; border-radius: 8px; }
+    .btn { padding: 10px 16px; background: #111827; color: white; border-radius: 8px; border: none; cursor: pointer; }
+    .table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .table th, .table td { padding: 8px 10px; border-bottom: 1px solid #E5E7EB; font-size: 12px; text-align: left; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 11px; }
+  </style>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="logo"><h1>✨ Glamora</h1><p>Admin Dashboard</p></div>
+      <nav class="nav">
+        <a href="index.html" class="nav-item"><span class="icon">🏠</span><span>Home</span></a>
+        <a href="read-flips.html" class="nav-item active"><span class="icon">📬</span><span>Read Flips</span></a>
+      </nav>
+    </aside>
+    <main class="main-content">
+      <header class="header">
+        <div class="header-left">
+          <h2>Messages Read Flips</h2>
+          <p class="subtitle">Inspect read/unread changes with filters (admin only)</p>
+        </div>
+      </header>
+
+      <div class="section">
+        <div class="section-header"><h3>Filters</h3></div>
+        <div class="form-grid">
+          <div>
+            <label>Backend Base URL</label>
+            <input id="backendUrl" class="input" placeholder="http://localhost:3000" />
+          </div>
+          <div>
+            <label>Since (text)</label>
+            <input id="since" class="input" placeholder="7 days" />
+          </div>
+          <div>
+            <label>Since Days (number)</label>
+            <input id="sinceDays" type="number" min="1" max="3650" class="input" placeholder="optional" />
+          </div>
+          <div>
+            <label>Receiver ID (uuid)</label>
+            <input id="receiverId" class="input" placeholder="optional" />
+          </div>
+          <div>
+            <label>Message ID (uuid)</label>
+            <input id="messageId" class="input" placeholder="optional" />
+          </div>
+          <div class="full" style="margin-top:8px;">
+            <h4>Login (Supabase)</h4>
+          </div>
+          <div>
+            <label>Supabase URL</label>
+            <input id="spUrl" class="input" placeholder="https://YOUR_PROJECT.supabase.co" />
+          </div>
+          <div>
+            <label>Supabase anon key</label>
+            <input id="spAnon" class="input mono" placeholder="public anon key" />
+          </div>
+          <div>
+            <label>Admin email</label>
+            <input id="email" class="input" placeholder="admin@example.com" />
+          </div>
+          <div>
+            <label>Password</label>
+            <input id="password" type="password" class="input" placeholder="••••••••" />
+          </div>
+          <div class="full">
+            <label>Admin Bearer Token</label>
+            <input id="adminToken" class="input mono" placeholder="auto-filled after login or paste manually" />
+            <div id="loginStatus" class="subtitle"></div>
+          </div>
+          <div>
+            <button id="loadBtn" class="btn">Load</button>
+          </div>
+          <div>
+            <button id="loginBtn" class="btn" type="button">Login</button>
+          </div>
+          <div>
+            <button id="logoutBtn" class="btn" type="button" style="background:#6B7280">Logout</button>
+          </div>
+          <div>
+            <button id="exportBtn" class="btn" type="button" style="background:#10B981">Export CSV</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header"><h3>Results</h3><div id="meta" class="subtitle"></div></div>
+        <div id="status" class="subtitle"></div>
+        <div style="overflow:auto">
+          <table class="table" id="results">
+            <thead>
+              <tr>
+                <th>changed_at</th>
+                <th>receiver_id</th>
+                <th>message_id</th>
+                <th>old→new</th>
+                <th>changed_by</th>
+                <th>sender_id</th>
+                <th>message</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+
+    <script src="read-flips.js"></script>
+  </body>
+</html>

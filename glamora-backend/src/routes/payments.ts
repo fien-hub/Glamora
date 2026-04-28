@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import {
   createPaymentIntent,
   confirmPayment,
+  verifyRevenueCatBookingPayment,
   handleWebhook,
   createConnectedAccount,
   createAccountLink,
@@ -42,7 +43,21 @@ router.post(
   confirmPayment
 );
 
-// Stripe Connect endpoints
+router.post(
+  '/revenuecat/verify-booking-payment',
+  authenticate,
+  paymentLimiter,
+  [
+    body('appUserId').notEmpty(),
+    body('productId').notEmpty(),
+    body('transactionId').notEmpty(),
+    body('platform').isIn(['ios', 'android']),
+    validate,
+  ],
+  verifyRevenueCatBookingPayment
+);
+
+// Provider payout onboarding endpoints
 router.post(
   '/connect/create-account',
   authenticate,
@@ -72,7 +87,7 @@ router.get(
   getAccountStatus
 );
 
-// Stripe webhook (no auth required)
+// Legacy billing webhook (no auth required)
 router.post('/webhook', handleWebhook);
 
 // Payment history endpoints (use read limiter - more permissive)

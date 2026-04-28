@@ -111,7 +111,7 @@ router.delete(
 // KYC Verification (Government ID + Selfie)
 // ============================================
 
-// Create Stripe Identity verification session
+// Create hosted identity verification session
 router.post(
   '/kyc/create-session',
   authenticate,
@@ -132,7 +132,7 @@ router.get(
   getKYCVerificationStatus
 );
 
-// Stripe Identity webhook (no auth - verified by signature)
+// Hosted identity verification webhook (no auth - verified by signature)
 router.post(
   '/kyc/webhook',
   raw({ type: 'application/json' }),
