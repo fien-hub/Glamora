@@ -7,9 +7,12 @@ import {
   listCustomServices,
   approveCustomService,
   rejectCustomService,
+  customServiceAlert,
   searchProvidersAdmin,
   getProviderAdmin,
   verifyProvider,
+  approveProviderIdentity,
+  rejectProviderIdentity,
   suspendProvider,
   listServicesToAdd,
   analyticsSummary,
@@ -34,6 +37,10 @@ router.get(
   ],
   listReadFlips
 );
+
+// Internal webhook — Supabase DB trigger fires this when a custom service is submitted
+// Protected by x-internal-secret header (no JWT needed)
+router.post('/internal/custom-service-alert', customServiceAlert);
 
 // Custom services moderation
 router.get(
@@ -65,7 +72,12 @@ router.get(
   '/providers',
   authenticate,
   authorize('admin'),
-  [query('q').optional().isString(), query('verified').optional().isIn(['true', 'false']), validate],
+  [
+    query('q').optional().isString(),
+    query('verified').optional().isIn(['true', 'false']),
+    query('identityStatus').optional().isIn(['pending', 'under_review', 'approved', 'rejected']),
+    validate,
+  ],
   searchProvidersAdmin
 );
 
@@ -83,6 +95,22 @@ router.post(
   authorize('admin'),
   [param('id').isUUID(), body('verified').isBoolean(), validate],
   verifyProvider
+);
+
+router.post(
+  '/providers/:id/identity/approve',
+  authenticate,
+  authorize('admin'),
+  [param('id').isUUID(), body('notes').optional().isString(), validate],
+  approveProviderIdentity
+);
+
+router.post(
+  '/providers/:id/identity/reject',
+  authenticate,
+  authorize('admin'),
+  [param('id').isUUID(), body('reason').optional().isString(), validate],
+  rejectProviderIdentity
 );
 
 router.post(

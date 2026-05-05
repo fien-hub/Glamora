@@ -1,10 +1,18 @@
 import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
+import Stripe from 'stripe';
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
   process.env.SUPABASE_SERVICE_KEY || ''
 );
+
+const getStripe = () => {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY is not configured');
+  // apiVersion cast to `any` so SDK types don't require a specific hardcoded string
+  return new Stripe(key, { apiVersion: '2024-12-18.acacia' as any });
+};
 
 const toValidDate = (value?: string | null) => {
   if (!value) return null;
@@ -31,8 +39,8 @@ const legacyBillingResponse = (res: Response) => {
 
 export const verifyRevenueCatBookingPayment = async (req: Request, res: Response) => {
   try {
-    const revenueCatApiKey = process.env.REVENUECAT_SECRET_API_KEY;
-    if (!revenueCatApiKey) {
+    const revenueCatApiKey = process.env.REVENUECAT_SECRET_API_KEY || process.env.REVENUECAT_SECRET_KEY;
+    if (!revenueCatApiKey || revenueCatApiKey.includes('your_revenuecat')) {
       return res.status(500).json({ error: 'RevenueCat is not configured on backend' });
     }
 
@@ -120,29 +128,243 @@ export const confirmPayment = async (_req: Request, res: Response) => {
   return legacyBillingResponse(res);
 };
 
-export const createConnectedAccount = async (_req: Request, res: Response) => {
-  return legacyBillingResponse(res);
+export const createConnectedAccount = async (req: Request, res: Response) => {
+  try {
+    const stripe = getStripe();
+    const userId = (req as any).user?.id;
+    const { email, businessName, country = 'US' } = req.body;
+
+    // Look up the provider profile
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+
+    if (profileError || !profile) {
+      return res.status(404).json({ error: 'Provider profile not found' });
+    }
+
+    const { data: providerProfile } = await supabase
+      .from('provider_profiles')
+      .select('id, stripe_account_id')
+      .eq('id', profile.id)
+      .single();
+
+    if (!providerProfile) {
+      return res.status(404).json({ error: 'Provider profile not found' });
+    }
+
+    // Return existing account if already created
+    if (providerProfile.stripe_account_id) {
+      return res.json({ accountId: providerProfile.stripe_account_id, alreadyExists: true });
+    }
+
+    // Create Stripe Express account
+    const account = await stripe.accounts.create({
+      type: 'express',
+      country,
+      email,
+      business_type: 'individual',
+      business_profile: {
+        name: businessName,
+        product_description: 'Beauty and wellness services marketplace',
+        url: 'https://glamora.app',
+        mcc: '7299', // Personal Services MCC
+      },
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
+      metadata: { glamora_provider_id: providerProfile.id },
+    });
+
+    // Store stripe_account_id in provider_profiles
+    await supabase
+      .from('provider_profiles')
+      .update({ stripe_account_id: account.id })
+      .eq('id', providerProfile.id);
+
+    return res.json({ accountId: account.id });
+  } catch (error: any) {
+    console.error('[Stripe] createConnectedAccount error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create Stripe account' });
+  }
 };
 
-export const createAccountLink = async (_req: Request, res: Response) => {
-  return legacyBillingResponse(res);
+export const createAccountLink = async (req: Request, res: Response) => {
+  try {
+    const stripe = getStripe();
+    const userId = (req as any).user?.id;
+    const { returnUrl, refreshUrl } = req.body;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+
+    if (!profile) return res.status(404).json({ error: 'Profile not found' });
+
+    const { data: providerProfile } = await supabase
+      .from('provider_profiles')
+      .select('id, stripe_account_id')
+      .eq('id', profile.id)
+      .single();
+
+    if (!providerProfile) return res.status(404).json({ error: 'Provider profile not found' });
+
+    let accountId = providerProfile.stripe_account_id;
+
+    // Auto-create the account if it doesn't exist yet
+    if (!accountId) {
+      const { data: profileFull } = await supabase
+        .from('profiles')
+        .select('email, first_name, last_name')
+        .eq('user_id', userId)
+        .single();
+
+      const { data: ppFull } = await supabase
+        .from('provider_profiles')
+        .select('business_name')
+        .eq('id', profile.id)
+        .single();
+
+      const account = await stripe.accounts.create({
+        type: 'express',
+        country: 'US',
+        email: (profileFull as any)?.email || '',
+        business_type: 'individual',
+        business_profile: {
+          name: (ppFull as any)?.business_name || `${(profileFull as any)?.first_name || ''} ${(profileFull as any)?.last_name || ''}`.trim(),
+          product_description: 'Beauty and wellness services marketplace',
+          url: 'https://glamora.app',
+          mcc: '7299',
+        },
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        metadata: { glamora_provider_id: profile.id },
+      });
+
+      accountId = account.id;
+      await supabase
+        .from('provider_profiles')
+        .update({ stripe_account_id: accountId })
+        .eq('id', profile.id);
+    }
+
+    const finalReturnUrl = returnUrl || 'glamora://payout-return?status=success';
+    const finalRefreshUrl = refreshUrl || 'glamora://payout-return?status=refresh';
+
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: finalRefreshUrl,
+      return_url: finalReturnUrl,
+      type: 'account_onboarding',
+      collect: 'eventually_due',
+    });
+
+    return res.json({ url: accountLink.url });
+  } catch (error: any) {
+    console.error('[Stripe] createAccountLink error:', error);
+    return res.status(500).json({ error: error.message || 'Failed to create account link' });
+  }
 };
 
-export const getAccountStatus = async (_req: Request, res: Response) => {
-  return res.json({
-    connected: false,
-    detailsSubmitted: false,
-    chargesEnabled: false,
-    payoutsEnabled: false,
-    message: 'Provider payout onboarding is temporarily unavailable while the payout system is being rebuilt.',
-  });
+export const getAccountStatus = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+
+    if (!profile) return res.status(404).json({ error: 'Profile not found' });
+
+    const { data: providerProfile } = await supabase
+      .from('provider_profiles')
+      .select('id, stripe_account_id')
+      .eq('id', profile.id)
+      .single();
+
+    if (!providerProfile?.stripe_account_id) {
+      return res.json({
+        connected: false,
+        detailsSubmitted: false,
+        chargesEnabled: false,
+        payoutsEnabled: false,
+      });
+    }
+
+    const stripe = getStripe();
+    const account = await stripe.accounts.retrieve(providerProfile.stripe_account_id);
+
+    const status = {
+      connected: true,
+      accountId: account.id,
+      detailsSubmitted: account.details_submitted,
+      chargesEnabled: account.charges_enabled,
+      payoutsEnabled: account.payouts_enabled,
+      requirementsCurrentlyDue: account.requirements?.currently_due || [],
+      requirementsEventuallyDue: account.requirements?.eventually_due || [],
+    };
+
+    // Sync latest status back to Supabase
+    await supabase
+      .from('provider_profiles')
+      .update({
+        stripe_onboarding_complete: account.details_submitted,
+        stripe_charges_enabled: account.charges_enabled,
+        stripe_payouts_enabled: account.payouts_enabled,
+      })
+      .eq('id', providerProfile.id);
+
+    return res.json(status);
+  } catch (error: any) {
+    console.error('[Stripe] getAccountStatus error:', error);
+    // If the account was deleted on Stripe side, treat as not connected
+    if (error.code === 'account_invalid') {
+      return res.json({ connected: false, detailsSubmitted: false, chargesEnabled: false, payoutsEnabled: false });
+    }
+    return res.status(500).json({ error: error.message || 'Failed to get account status' });
+  }
 };
 
-export const handleWebhook = async (_req: Request, res: Response) => {
-  return res.status(410).json({
-    received: false,
-    error: 'Legacy billing webhook endpoint is deprecated.',
-  });
+export const handleWebhook = async (req: Request, res: Response) => {
+  const stripe = getStripe();
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!webhookSecret) {
+    console.warn('[Stripe] Webhook secret not configured — skipping signature check in dev mode');
+    return res.json({ received: true });
+  }
+
+  let event: any;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig as string, webhookSecret);
+  } catch (err: any) {
+    console.error('[Stripe] Webhook signature verification failed:', err.message);
+    return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+  }
+
+  if (event.type === 'account.updated') {
+    const account = event.data.object as any;
+    await supabase
+      .from('provider_profiles')
+      .update({
+        stripe_onboarding_complete: account.details_submitted,
+        stripe_charges_enabled: account.charges_enabled,
+        stripe_payouts_enabled: account.payouts_enabled,
+      })
+      .eq('stripe_account_id', account.id);
+  }
+
+  return res.json({ received: true });
 };
 
 export const getCustomerPayments = async (req: Request, res: Response) => {

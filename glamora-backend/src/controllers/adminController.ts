@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
+import { notifyAdminsNewCustomService } from '../utils/pushNotifications';
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const serviceKey = process.env.SUPABASE_SERVICE_KEY || '';
@@ -50,6 +51,42 @@ export async function listReadFlips(req: Request, res: Response) {
     });
   } catch (err: any) {
     console.error('listReadFlips handler error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// ------------------------------
+// Internal webhook — called by Supabase DB trigger
+// ------------------------------
+
+export async function customServiceAlert(req: Request, res: Response) {
+  try {
+    const secret = req.headers['x-internal-secret'];
+    const expected = process.env.INTERNAL_WEBHOOK_SECRET;
+
+    if (!expected || secret !== expected) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { serviceId, serviceName, providerName } = req.body as {
+      serviceId?: string;
+      serviceName?: string;
+      providerName?: string;
+    };
+
+    if (!serviceId || !serviceName) {
+      return res.status(400).json({ error: 'serviceId and serviceName are required' });
+    }
+
+    await notifyAdminsNewCustomService(
+      serviceName,
+      providerName || 'A provider',
+      serviceId
+    );
+
+    return res.json({ ok: true });
+  } catch (err: any) {
+    console.error('customServiceAlert error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
@@ -131,7 +168,7 @@ export async function rejectCustomService(req: Request, res: Response) {
 
 export async function searchProvidersAdmin(req: Request, res: Response) {
   try {
-    const { q, verified } = req.query as { q?: string; verified?: string };
+    const { q, verified, identityStatus } = req.query as { q?: string; verified?: string; identityStatus?: string };
     let query = supabaseAdmin
       .from('provider_profiles')
       .select(`
@@ -142,18 +179,48 @@ export async function searchProvidersAdmin(req: Request, res: Response) {
 
     if (verified === 'true') query = query.eq('is_verified', true);
     if (verified === 'false') query = query.eq('is_verified', false);
+    if (identityStatus && ['pending', 'under_review', 'approved', 'rejected'].includes(identityStatus)) {
+      query = query.eq('identity_verification_status', identityStatus);
+    }
 
     const { data, error } = await query.order('created_at', { ascending: false });
     if (error) return res.status(400).json({ error: error.message });
 
+    let activeProviders = data || [];
+    const userIds = Array.from(
+      new Set(
+        activeProviders
+          .map((provider: any) => provider?.profile?.user_id)
+          .filter((id: any) => typeof id === 'string' && id.length > 0)
+      )
+    );
+
+    if (userIds.length > 0) {
+      const { data: activeUsers, error: activeUsersError } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .in('id', userIds)
+        .eq('is_active', true);
+
+      if (!activeUsersError) {
+        const activeUserIds = new Set((activeUsers || []).map((row: any) => row.id));
+        activeProviders = activeProviders.filter((provider: any) => {
+          const userId = provider?.profile?.user_id;
+          return !!userId && activeUserIds.has(userId);
+        });
+      } else {
+        console.warn('searchProvidersAdmin active-user filter failed:', activeUsersError.message);
+      }
+    }
+
     const term = (q || '').trim().toLowerCase();
     const filtered = term
-      ? data?.filter((p: any) =>
+      ? activeProviders?.filter((p: any) =>
           (p.business_name || '').toLowerCase().includes(term) ||
           (p.profile?.full_name || '').toLowerCase().includes(term) ||
           (p.profile?.email || '').toLowerCase().includes(term)
         )
-      : data;
+      : activeProviders;
     return res.json({ providers: filtered });
   } catch (err: any) {
     console.error('searchProvidersAdmin error:', err);
@@ -195,6 +262,56 @@ export async function verifyProvider(req: Request, res: Response) {
     return res.json({ provider: data });
   } catch (err: any) {
     console.error('verifyProvider error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function approveProviderIdentity(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const { notes } = req.body as { notes?: string };
+
+    const { data, error } = await supabaseAdmin
+      .from('provider_profiles')
+      .update({
+        identity_verification_status: 'approved',
+        identity_verified_at: new Date().toISOString(),
+        identity_verification_notes: notes || null,
+        is_verified: true,
+      })
+      .eq('id', id)
+      .select('id,is_verified,identity_verification_status,identity_verified_at,identity_verification_notes')
+      .single();
+
+    if (error) return res.status(400).json({ error: error.message });
+    return res.json({ provider: data });
+  } catch (err: any) {
+    console.error('approveProviderIdentity error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function rejectProviderIdentity(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body as { reason?: string };
+
+    const { data, error } = await supabaseAdmin
+      .from('provider_profiles')
+      .update({
+        identity_verification_status: 'rejected',
+        identity_verified_at: null,
+        identity_verification_notes: reason || null,
+        is_verified: false,
+      })
+      .eq('id', id)
+      .select('id,is_verified,identity_verification_status,identity_verified_at,identity_verification_notes')
+      .single();
+
+    if (error) return res.status(400).json({ error: error.message });
+    return res.json({ provider: data });
+  } catch (err: any) {
+    console.error('rejectProviderIdentity error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }

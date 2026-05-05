@@ -11,6 +11,7 @@
   const loginStatus = $('loginStatus');
   const qEl = $('q');
   const verifiedEl = $('verified');
+  const identityStatusEl = $('identityStatus');
   const searchBtn = $('searchBtn');
   const statusEl = $('status');
   const tbody = document.querySelector('#results tbody');
@@ -62,6 +63,7 @@
       const url = new URL(baseUrl() + '/api/admin/providers');
       if (qEl.value.trim()) url.searchParams.set('q', qEl.value.trim());
       if (verifiedEl.value) url.searchParams.set('verified', verifiedEl.value);
+      if (identityStatusEl.value) url.searchParams.set('identityStatus', identityStatusEl.value);
       const resp = await fetch(url.toString(), { headers: { Authorization: 'Bearer ' + tokenEl.value.trim() } });
       const json = await resp.json();
       if (!resp.ok) throw new Error(json?.error || 'Request failed');
@@ -74,8 +76,11 @@
           <td>${p.profile?.email || ''}</td>
           <td>${p.business_name || ''}</td>
           <td>${p.is_verified ? 'Yes' : 'No'}</td>
+          <td>${p.identity_verification_status || 'pending'}</td>
           <td>
             <button class="btn" data-verify="${p.id}" data-v="${!p.is_verified}">${p.is_verified ? 'Unverify' : 'Verify'}</button>
+            <button class="btn" data-idapprove="${p.id}">ID Approve</button>
+            <button class="btn" style="background:#EF4444" data-idreject="${p.id}">ID Reject</button>
             <button class="btn" style="background:#DC2626" data-suspend="${p.id}">Suspend</button>
           </td>`;
         tbody.appendChild(tr);
@@ -104,6 +109,36 @@
     } catch (e) { alert('Suspend error: ' + (e?.message || 'Unknown')); }
   }
 
+  async function approveIdentity(id) {
+    const notes = prompt('Optional approval notes:') || '';
+    try {
+      const url = baseUrl() + `/api/admin/providers/${id}/identity/approve`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + tokenEl.value.trim(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notes }),
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json?.error || 'Request failed');
+      await search();
+    } catch (e) { alert('Identity approve error: ' + (e?.message || 'Unknown')); }
+  }
+
+  async function rejectIdentity(id) {
+    const reason = prompt('Rejection reason (optional):') || '';
+    try {
+      const url = baseUrl() + `/api/admin/providers/${id}/identity/reject`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + tokenEl.value.trim(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json?.error || 'Request failed');
+      await search();
+    } catch (e) { alert('Identity reject error: ' + (e?.message || 'Unknown')); }
+  }
+
   async function login() {
     persist();
     const client = supabaseClient();
@@ -130,8 +165,12 @@
 
   document.addEventListener('click', (e) => {
     const vBtn = e.target.closest('[data-verify]');
+    const iaBtn = e.target.closest('[data-idapprove]');
+    const irBtn = e.target.closest('[data-idreject]');
     const sBtn = e.target.closest('[data-suspend]');
     if (vBtn) verify(vBtn.getAttribute('data-verify'), vBtn.getAttribute('data-v') === 'true');
+    if (iaBtn) approveIdentity(iaBtn.getAttribute('data-idapprove'));
+    if (irBtn) rejectIdentity(irBtn.getAttribute('data-idreject'));
     if (sBtn) suspend(sBtn.getAttribute('data-suspend'));
   });
 

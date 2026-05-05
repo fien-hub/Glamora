@@ -84,6 +84,16 @@
           </select>
         </div>
         <div>
+          <label>Identity Status</label>
+          <select id="identityStatus" class="input">
+            <option value="">Any</option>
+            <option value="pending">Pending</option>
+            <option value="under_review">Under Review</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+        </div>
+        <div>
           <button id="searchBtn" class="btn" type="button">Search</button>
         </div>
         <div id="status" class="subtitle"></div>
@@ -96,6 +106,7 @@
               <th>Email</th>
               <th>Business</th>
               <th>Verified</th>
+              <th>Identity</th>
               <th>Actions</th>
             </tr>
           </thead>

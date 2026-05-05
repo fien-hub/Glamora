@@ -243,6 +243,50 @@ export const notifyNewReview = async (
 };
 
 /**
+ * Send push notification to all admin users when a provider submits a custom service
+ */
+export const notifyAdminsNewCustomService = async (
+  serviceName: string,
+  providerName: string,
+  serviceId: string
+): Promise<void> => {
+  try {
+    // Fetch all admin user IDs
+    const { data: admins, error } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('role', 'admin');
+
+    if (error || !admins || admins.length === 0) {
+      console.log('[Admin Push] No admin users found or error:', error?.message);
+      return;
+    }
+
+    const title = '🆕 New Custom Service Submitted';
+    const body = `${providerName} submitted "${serviceName}" — tap to review.`;
+
+    await Promise.all(
+      admins.map((admin) =>
+        sendPushNotification({
+          userId: admin.user_id,
+          title,
+          body,
+          data: {
+            type: 'admin_custom_service_pending',
+            serviceId,
+            screen: 'PendingServices',
+          },
+        })
+      )
+    );
+
+    console.log(`[Admin Push] Notified ${admins.length} admin(s) about new custom service: ${serviceName}`);
+  } catch (error) {
+    console.error('[Admin Push] Error notifying admins of new custom service:', error);
+  }
+};
+
+/**
  * Send notification for payment received
  */
 export const notifyPaymentReceived = async (

@@ -2,6 +2,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.84.0",
     "dotenv": "^17.2.3",
+    "expo-mail-composer": "^55.0.13",
     "stripe": "^20.0.0"
   }
 }
