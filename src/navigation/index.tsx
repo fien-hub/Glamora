@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, TransitionPresets } from '@react-navigation/stack';
-import { ActivityIndicator, View } from 'react-native';
+import { HeaderBackButton } from '@react-navigation/elements';
 import { useAuth } from '../contexts/AuthContext';
 import { animation, colors } from '../constants/theme';
+import { navigationRef } from './RootNavigation';
 
 // Onboarding Screens
 import SplashScreen from '../screens/onboarding/SplashScreen';
@@ -15,8 +17,8 @@ import WelcomeScreen from '../screens/auth/WelcomeScreen';
 import RoleSelectionScreen from '../screens/auth/RoleSelectionScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import SignupScreen from '../screens/auth/SignupScreen';
-import TwoFactorVerificationScreen from '../screens/auth/TwoFactorVerificationScreen';
 import AccountVerificationScreen from '../screens/auth/AccountVerificationScreen';
+import TwoFactorVerificationScreen from '../screens/auth/TwoFactorVerificationScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 
@@ -38,6 +40,7 @@ import PaymentMethodsScreen from '../screens/customer/PaymentMethodsScreen';
 import CustomerNotificationSettingsScreen from '../screens/customer/NotificationSettingsScreen';
 import HelpSupportScreen from '../screens/customer/HelpSupportScreen';
 import ProviderPortfolioScreen from '../screens/customer/ProviderPortfolioScreen';
+import ProviderReviewsScreen from '../screens/customer/ProviderReviewsScreen';
 import PostDetailScreen from '../screens/customer/PostDetailScreen';
 import BookingScreen from '../screens/customer/BookingScreen';
 import BookingFlowScreen from '../screens/customer/BookingFlowScreen';
@@ -62,22 +65,69 @@ import VerificationScreen from '../screens/provider/VerificationScreen';
 import KYCVerificationScreen from '../screens/provider/KYCVerificationScreen';
 import MyCustomerBookingsScreen from '../screens/provider/MyCustomerBookingsScreen';
 import SecuritySettingsScreen from '../screens/SecuritySettingsScreen';
+import AccountSettingsScreen from '../screens/AccountSettingsScreen';
 import CreatePostScreen from '../screens/provider/CreatePostScreen';
+import ProviderHelpSupportScreen from '../screens/provider/HelpSupportScreen';
+import { recordStartupCheckpoint } from '../utils/startupDiagnostics';
 
 const Stack = createStackNavigator();
 
 export default function Navigation() {
   const { user, userRole, needsOnboarding, needsVerification, loading } = useAuth();
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
+  const [roleResolutionExpired, setRoleResolutionExpired] = useState(false);
 
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  useEffect(() => {
+    // Hard timeout: if AsyncStorage doesn't respond within 3 s, unblock the
+    // navigator rather than staying frozen on the splash screen.
+    const storageTimeout = setTimeout(() => {
+      setHasSeenOnboarding((prev) => {
+        if (prev === null) {
+          recordStartupCheckpoint('Navigation.asyncStorageTimeout', 'warn');
+          return false;
+        }
+        return prev;
+      });
+    }, 3000);
 
+    AsyncStorage.getItem('hasSeenOnboarding')
+      .then((val) => {
+        clearTimeout(storageTimeout);
+        setHasSeenOnboarding(val === 'true');
+      })
+      .catch(() => {
+        clearTimeout(storageTimeout);
+        setHasSeenOnboarding(false);
+      });
 
+    return () => clearTimeout(storageTimeout);
+  }, []);
+
+  useEffect(() => {
+    if (!user || userRole) {
+      setRoleResolutionExpired(false);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setRoleResolutionExpired(true);
+    }, 2000);
+
+    return () => clearTimeout(timeout);
+  }, [user, userRole]);
+
+  // Wait until we know whether onboarding has been seen (quick local read)
+  const initialUnauthRoute = hasSeenOnboarding === null ? null : hasSeenOnboarding ? 'RoleSelection' : 'Onboarding';
+
+  useEffect(() => {
+    recordStartupCheckpoint('Navigation.state', 'ok', {
+      loading,
+      hasUser: !!user,
+      userRole: userRole ?? 'none',
+      initialUnauthRoute: initialUnauthRoute ?? 'pending',
+      roleResolutionExpired,
+    });
+  }, [loading, user, userRole, initialUnauthRoute, roleResolutionExpired]);
 
   const linking = {
     prefixes: ['glamora://', 'https://glamora.app'],
@@ -91,7 +141,7 @@ export default function Navigation() {
   };
 
   return (
-    <NavigationContainer linking={linking}>
+    <NavigationContainer ref={navigationRef} linking={linking}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -134,12 +184,33 @@ export default function Navigation() {
           },
         }}
       >
-        {!user ? (
-          // Not logged in - show onboarding and auth
+        {initialUnauthRoute === null ? (
+          // AsyncStorage onboarding flag is still loading.
+          // Keep Splash as the visible route, but register fallback unauth routes
+          // so Splash's absolute-deadline navigate() has valid destinations.
           <>
             <Stack.Screen name="Splash" component={SplashScreen} />
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
             <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Signup" component={SignupScreen} />
+          </>
+        ) : !user ? (
+          // Not logged in - start at correct screen based on onboarding history
+          <>
+            {initialUnauthRoute === 'RoleSelection' ? (
+              <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+            ) : (
+              <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            )}
+            <Stack.Screen name="Splash" component={SplashScreen} />
+            {initialUnauthRoute !== 'Onboarding' && (
+              <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            )}
+            {initialUnauthRoute !== 'RoleSelection' && (
+              <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+            )}
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Signup" component={SignupScreen} />
@@ -152,13 +223,27 @@ export default function Navigation() {
               options={{ headerShown: true, title: 'Verify Identity' }}
             />
           </>
+        ) : user && !userRole && !roleResolutionExpired ? (
+          // A session exists, but role hydration has not completed yet.
+          // Keep showing the splash briefly instead of rendering an empty navigator.
+          <Stack.Screen name="Splash" component={SplashScreen} />
+        ) : user && !userRole ? (
+          // If role resolution failed, recover to the unauthenticated flow instead of
+          // leaving the navigator with no active screen.
+          <>
+            <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Signup" component={SignupScreen} />
+          </>
         ) : user && needsVerification ? (
-          // User needs to verify email or phone
+          // Verification required before any onboarding/main flow
           <>
             <Stack.Screen
               name="AccountVerification"
               component={AccountVerificationScreen}
-              options={{ headerShown: true, title: 'Verify Your Account', headerBackVisible: false }}
+              options={{ headerShown: true, title: 'Verify Your Account' }}
             />
           </>
         ) : user && needsOnboarding && userRole === 'customer' ? (
@@ -167,7 +252,7 @@ export default function Navigation() {
             <Stack.Screen
               name="Personalization"
               component={PersonalizationScreen}
-              options={{ headerShown: true, title: 'Complete Your Profile' }}
+              options={{ headerShown: false }}
             />
           </>
         ) : user && needsOnboarding && userRole === 'provider' ? (
@@ -180,15 +265,14 @@ export default function Navigation() {
             />
             <Stack.Screen
               name="KYCVerification"
-              component={KYCVerificationScreen}
-              options={{ headerShown: true, title: 'Identity Verification' }}
+              component={VerificationScreen}
+              options={{ headerShown: true, title: 'KYC Documents' }}
             />
           </>
         ) : userRole === 'customer' ? (
           // Customer screens
           <>
             <Stack.Screen name="CustomerMain" component={CustomerTabNavigator} />
-            <Stack.Screen name="Personalization" component={PersonalizationScreen} />
             <Stack.Screen
               name="Chat"
               component={ChatScreen}
@@ -198,6 +282,11 @@ export default function Navigation() {
               name="Notifications"
               component={NotificationsScreen}
               options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="AccountVerification"
+              component={AccountVerificationScreen}
+              options={{ headerShown: true, title: 'Verify Your Account' }}
             />
             <Stack.Screen
               name="Loyalty"
@@ -226,6 +315,14 @@ export default function Navigation() {
                 title: 'Portfolio',
                 ...TransitionPresets.ModalSlideFromBottomIOS,
               }}
+            />
+            <Stack.Screen
+              name="ProviderReviews"
+              component={ProviderReviewsScreen}
+              options={({ route }) => ({
+                headerShown: true,
+                title: (route.params as any)?.providerName ? `${(route.params as any).providerName} Reviews` : 'Reviews',
+              })}
             />
             <Stack.Screen
               name="PostDetail"
@@ -279,7 +376,23 @@ export default function Navigation() {
             <Stack.Screen
               name="EditProfile"
               component={CustomerEditProfileScreen}
-              options={{ headerShown: true, title: 'Edit Profile' }}
+              options={({ navigation }) => ({
+                headerShown: true,
+                title: 'Edit Profile',
+                headerBackTitleVisible: false,
+                headerLeft: (props) => (
+                  <HeaderBackButton
+                    {...props}
+                    onPress={() => {
+                      if (navigation.canGoBack()) {
+                        navigation.goBack();
+                      } else {
+                        navigation.navigate('CustomerMain' as never);
+                      }
+                    }}
+                  />
+                ),
+              })}
             />
             <Stack.Screen
               name="PaymentHistory"
@@ -301,6 +414,11 @@ export default function Navigation() {
               component={HelpSupportScreen}
               options={{ headerShown: false }}
             />
+            <Stack.Screen
+              name="AccountSettings"
+              component={AccountSettingsScreen}
+              options={{ headerShown: false }}
+            />
           </>
         ) : userRole === 'provider' ? (
           // Provider screens
@@ -317,6 +435,11 @@ export default function Navigation() {
               options={{ headerShown: false }}
             />
             <Stack.Screen
+              name="AccountVerification"
+              component={AccountVerificationScreen}
+              options={{ headerShown: true, title: 'Verify Your Account' }}
+            />
+            <Stack.Screen
               name="Portfolio"
               component={PortfolioScreen}
               options={{ headerShown: true, title: 'My Portfolio' }}
@@ -324,7 +447,23 @@ export default function Navigation() {
             <Stack.Screen
               name="EditProfile"
               component={EditProfileScreen}
-              options={{ headerShown: true, title: 'Edit Profile' }}
+              options={({ navigation }) => ({
+                headerShown: true,
+                title: 'Edit Profile',
+                headerBackTitleVisible: false,
+                headerLeft: (props) => (
+                  <HeaderBackButton
+                    {...props}
+                    onPress={() => {
+                      if (navigation.canGoBack()) {
+                        navigation.goBack();
+                      } else {
+                        navigation.navigate('ProviderMain' as never);
+                      }
+                    }}
+                  />
+                ),
+              })}
             />
             <Stack.Screen
               name="Availability"
@@ -374,12 +513,12 @@ export default function Navigation() {
             <Stack.Screen
               name="Verification"
               component={VerificationScreen}
-              options={{ headerShown: true, title: 'Identity Verification' }}
+              options={{ headerShown: true, title: 'KYC Documents' }}
             />
             <Stack.Screen
               name="KYCVerification"
-              component={KYCVerificationScreen}
-              options={{ headerShown: true, title: 'Identity Verification' }}
+              component={VerificationScreen}
+              options={{ headerShown: true, title: 'KYC Documents' }}
             />
             <Stack.Screen
               name="ProviderOnboarding"
@@ -399,6 +538,11 @@ export default function Navigation() {
             <Stack.Screen
               name="PhoneVerification"
               component={PhoneVerificationScreen}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              name="AccountSettings"
+              component={AccountSettingsScreen}
               options={{ headerShown: false }}
             />
             <Stack.Screen
@@ -430,6 +574,14 @@ export default function Navigation() {
               }}
             />
             <Stack.Screen
+              name="ProviderReviews"
+              component={ProviderReviewsScreen}
+              options={({ route }) => ({
+                headerShown: true,
+                title: (route.params as any)?.providerName ? `${(route.params as any).providerName} Reviews` : 'Reviews',
+              })}
+            />
+            <Stack.Screen
               name="PostDetail"
               component={PostDetailScreen}
               options={{
@@ -448,11 +600,25 @@ export default function Navigation() {
             <Stack.Screen
               name="Search"
               component={SearchScreen}
-              options={{
+              initialParams={{ disableHeaderOffset: true }}
+              options={({ navigation }) => ({
                 headerShown: true,
                 title: 'Find Services',
+                headerBackTitleVisible: false,
+                headerLeft: (props) => (
+                  <HeaderBackButton
+                    {...props}
+                    onPress={() => {
+                      if (navigation.canGoBack()) {
+                        navigation.goBack();
+                      } else {
+                        navigation.navigate('ProviderMain' as never);
+                      }
+                    }}
+                  />
+                ),
                 ...TransitionPresets.SlideFromRightIOS,
-              }}
+              })}
             />
             <Stack.Screen
               name="MyCustomerBookings"
@@ -469,6 +635,11 @@ export default function Navigation() {
                 headerShown: false,
                 ...TransitionPresets.ModalSlideFromBottomIOS,
               }}
+            />
+            <Stack.Screen
+              name="HelpSupport"
+              component={ProviderHelpSupportScreen}
+              options={{ headerShown: false }}
             />
           </>
         ) : userRole === 'admin' ? (

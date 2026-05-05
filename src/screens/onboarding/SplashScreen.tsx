@@ -1,15 +1,23 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Image, Dimensions } from 'react-native';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
+import { View, Text, StyleSheet, Animated, Image, Dimensions, ScrollView, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, fontSize, fontWeight } from '../../constants/theme';
+import {
+  getStartupTimeline,
+  recordStartupCheckpoint,
+  subscribeToStartupTimeline,
+} from '../../utils/startupDiagnostics';
 
 const { width } = Dimensions.get('window');
 
 export default function SplashScreen() {
   const navigation = useNavigation();
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  const [startupTimeline, setStartupTimeline] = useState(getStartupTimeline);
+  const animationDoneRef = useRef(false);
+  const hasNavigatedRef = useRef(false);
 
   // Animation values
   const logoScale = useRef(new Animated.Value(0)).current;
@@ -28,7 +36,76 @@ export default function SplashScreen() {
   // Shimmer animation
   const shimmerPosition = useRef(new Animated.Value(-width)).current;
 
+  // Called whenever both animation is done AND auth has finished loading.
+  // useCallback keeps identity stable so it can be used as a dep below.
+  const maybeNavigate = useCallback(async () => {
+    if (!animationDoneRef.current) return;
+    if (hasNavigatedRef.current) return;
+
+    // If a user session exists, wait for auth hydration. If not signed in,
+    // proceed without waiting so token refresh noise can't trap splash.
+    if (loading && user) return;
+
+    recordStartupCheckpoint('SplashScreen.maybeNavigate', 'ok', {
+      hasUser: !!user,
+      loading,
+    });
+
+    hasNavigatedRef.current = true;
+
+    // If the user is logged in, the navigator's conditional rendering will
+    // automatically move them to the authenticated stack. We don't need to
+    // call replace() here — doing so would target a route that no longer
+    // exists in the current stack and cause a navigation error.
+    if (user) return;
+
+    try {
+      const hasSeenOnboarding = await AsyncStorage.getItem('hasSeenOnboarding');
+      if (hasSeenOnboarding === 'true') {
+        (navigation as any).replace('RoleSelection');
+      } else {
+        (navigation as any).replace('Onboarding');
+      }
+    } catch {
+      (navigation as any).replace('Onboarding');
+    }
+  }, [loading, user, navigation]);
+
+  // Trigger navigation check whenever auth state settles (loading/user changes).
   useEffect(() => {
+    maybeNavigate();
+  }, [maybeNavigate]);
+
+  // Absolute deadline: if auth hasn't resolved within 8 seconds of mounting,
+  // force navigation so the user is never permanently stuck on the splash screen.
+  useEffect(() => {
+    const deadline = setTimeout(() => {
+      if (hasNavigatedRef.current) return;
+      recordStartupCheckpoint('SplashScreen.absoluteDeadline', 'warn', {
+        animationDone: animationDoneRef.current,
+      });
+      hasNavigatedRef.current = true;
+      // Navigate using a direct call — bypass the loading gate entirely.
+      AsyncStorage.getItem('hasSeenOnboarding')
+        .then((val) => {
+          if (val === 'true') {
+            (navigation as any).navigate('RoleSelection');
+          } else {
+            (navigation as any).navigate('Onboarding');
+          }
+        })
+        .catch(() => (navigation as any).navigate('Onboarding'));
+    }, 8000);
+
+    return () => clearTimeout(deadline);
+  // navigation is stable; intentionally omit loading/user so this never resets.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    recordStartupCheckpoint('SplashScreen.mounted', 'ok');
+    const unsubscribe = subscribeToStartupTimeline(setStartupTimeline);
+
     // Main animation sequence - navigate only after animation completes
     Animated.sequence([
       // Logo appears with bounce
@@ -82,30 +159,14 @@ export default function SplashScreen() {
       // Hold for a moment so user can see the full splash
       Animated.delay(800),
     ]).start(() => {
-      // Navigate only after animation is complete
-      checkOnboardingStatus();
+      animationDoneRef.current = true;
+      recordStartupCheckpoint('SplashScreen.animationCompleted', 'ok');
+      maybeNavigate();
     });
+
+    return unsubscribe;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const checkOnboardingStatus = async () => {
-    try {
-      if (user) {
-        return;
-      }
-
-      const hasSeenOnboarding = await AsyncStorage.getItem('hasSeenOnboarding');
-
-      // Navigate immediately since animation is already complete
-      if (hasSeenOnboarding === 'true') {
-        (navigation as any).replace('RoleSelection');
-      } else {
-        (navigation as any).replace('Onboarding');
-      }
-    } catch (error) {
-      console.error('Error checking onboarding status:', error);
-      (navigation as any).replace('Onboarding');
-    }
-  };
 
   return (
     <View style={styles.container}>
@@ -198,6 +259,25 @@ export default function SplashScreen() {
       >
         Beauty at your doorstep
       </Animated.Text>
+
+      <View style={styles.tracePanel}>
+        <Text style={styles.traceTitle}>Startup trace</Text>
+        <ScrollView
+          style={styles.traceScroll}
+          contentContainerStyle={styles.traceContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {startupTimeline.slice(-12).map((entry, index) => {
+            const details = entry.details ? ` ${JSON.stringify(entry.details)}` : '';
+
+            return (
+              <Text key={`${entry.atMs}-${entry.step}-${index}`} style={styles.traceLine}>
+                {`+${entry.atMs}ms ${entry.step} :: ${entry.status}${details}`}
+              </Text>
+            );
+          })}
+        </ScrollView>
+      </View>
     </View>
   );
 }
@@ -234,9 +314,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoContainer: {
-    width: 180,
-    height: 180,
-    borderRadius: 40,
+    width: 220,
+    height: 220,
+    borderRadius: 50,
     overflow: 'hidden',
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 10 },
@@ -288,6 +368,38 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 8,
     letterSpacing: 1,
+  },
+  tracePanel: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 24,
+    maxHeight: 220,
+    borderRadius: 12,
+    backgroundColor: 'rgba(17, 24, 39, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  traceTitle: {
+    color: '#F9FAFB',
+    fontSize: 12,
+    fontWeight: '700',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+  },
+  traceScroll: {
+    maxHeight: 180,
+  },
+  traceContent: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  traceLine: {
+    color: '#D1D5DB',
+    fontSize: 11,
+    marginBottom: 6,
+    fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
   },
 });
 
