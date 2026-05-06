@@ -238,13 +238,20 @@ export default function Navigation() {
             <Stack.Screen name="Signup" component={SignupScreen} />
           </>
         ) : user && needsVerification ? (
-          // Verification required before any onboarding/main flow
+          // Verification required before any onboarding/main flow.
+          // Include post-verification destinations so navigation.reset() works
+          // immediately after the user verifies (before the tree re-renders).
           <>
             <Stack.Screen
               name="AccountVerification"
               component={AccountVerificationScreen}
               options={{ headerShown: true, title: 'Verify Your Account' }}
             />
+            <Stack.Screen name="CustomerMain" component={CustomerTabNavigator} />
+            <Stack.Screen name="ProviderMain" component={ProviderTabNavigator} />
+            <Stack.Screen name="Personalization" component={PersonalizationScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="ProviderOnboarding" component={ProviderOnboardingScreen} options={{ headerShown: true, title: 'Complete Your Profile' }} />
+            <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
           </>
         ) : user && needsOnboarding && userRole === 'customer' ? (
           // Customer needs onboarding

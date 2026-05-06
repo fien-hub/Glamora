@@ -343,7 +343,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('user_id', userId)
         .single();
 
-      const isVerified = !!profileData?.email_verified;
+      // Treat null/undefined as verified — users who existed before the
+      // email_verified column was added would have null, not false.
+      // Only explicitly-false means "not yet verified".
+      const isVerified = profileData?.email_verified !== false;
       console.log('[AuthContext] Verification status:', {
         email_verified: profileData?.email_verified,
         isVerified,
