@@ -9,7 +9,7 @@ const baseConfig: ExpoConfig = {
   userInterfaceStyle: 'automatic',
   icon: './assets/icon.png',
   splash: {
-    image: './assets/splash.png',
+    image: './assets/icon.png',
     resizeMode: 'contain',
     backgroundColor: '#FFFFFF',
   },
@@ -72,14 +72,11 @@ const baseConfig: ExpoConfig = {
       {
         ios: {
           newArchEnabled: true,
-          buildReactNativeFromSource: true,
         },
       },
     ],
     '@react-native-community/datetimepicker',
-    '@sentry/react-native',
     'expo-secure-store',
-    'expo-router',
     'expo-web-browser',
     [
       'expo-location',
@@ -102,18 +99,6 @@ const baseConfig: ExpoConfig = {
     ],
     ['expo-apple-authentication'],
     ['@react-native-google-signin/google-signin'],
-    [
-      'react-native-fbsdk-next',
-      {
-        appID: 'YOUR_META_APP_ID',
-        clientToken: 'YOUR_META_CLIENT_TOKEN',
-        displayName: 'Glamora',
-        scheme: 'fbYOUR_META_APP_ID',
-        advertiserIDCollectionEnabled: true,
-        autoLogAppEventsEnabled: true,
-        isAutoInitEnabled: false,
-      },
-    ],
     [
       'expo-local-authentication',
       {
