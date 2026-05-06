@@ -3,6 +3,8 @@ import { Alert } from 'react-native';
 import { supabase } from '../services/supabase';
 import { trackSessionTimeout, trackSecurityEvent } from './analytics';
 
+const ENABLE_INACTIVITY_TIMEOUT = false;
+
 // Session timeout configuration
 const SESSION_TIMEOUT_MINUTES = 30; // 30 minutes of inactivity
 const SESSION_WARNING_MINUTES = 5; // Warn 5 minutes before timeout
@@ -41,6 +43,11 @@ class SessionManager {
    * Initialize session monitoring
    */
   async initialize() {
+    if (!ENABLE_INACTIVITY_TIMEOUT) {
+      console.log('[SessionManager] Inactivity timeout disabled');
+      return;
+    }
+
     // Set initial activity timestamp
     await this.updateActivity();
     
@@ -54,6 +61,10 @@ class SessionManager {
    * Start monitoring session activity
    */
   private startMonitoring() {
+    if (!ENABLE_INACTIVITY_TIMEOUT) {
+      return;
+    }
+
     if (this.intervalId) {
       clearInterval(this.intervalId);
     }
@@ -78,6 +89,10 @@ class SessionManager {
    * Update last activity timestamp
    */
   async updateActivity() {
+    if (!ENABLE_INACTIVITY_TIMEOUT) {
+      return;
+    }
+
     const now = Date.now();
     await AsyncStorage.setItem(LAST_ACTIVITY_KEY, now.toString());
     
@@ -92,6 +107,10 @@ class SessionManager {
    * Get last activity timestamp
    */
   private async getLastActivity(): Promise<number> {
+    if (!ENABLE_INACTIVITY_TIMEOUT) {
+      return Date.now();
+    }
+
     const lastActivity = await AsyncStorage.getItem(LAST_ACTIVITY_KEY);
     return lastActivity ? parseInt(lastActivity, 10) : Date.now();
   }
@@ -100,6 +119,10 @@ class SessionManager {
    * Check if session has timed out
    */
   private async checkSession() {
+    if (!ENABLE_INACTIVITY_TIMEOUT) {
+      return;
+    }
+
     const lastActivity = await this.getLastActivity();
     const now = Date.now();
     const inactiveMinutes = (now - lastActivity) / 1000 / 60;
@@ -123,6 +146,10 @@ class SessionManager {
    * Handle session timeout
    */
   private async handleTimeout() {
+    if (!ENABLE_INACTIVITY_TIMEOUT) {
+      return;
+    }
+
     this.stopMonitoring();
 
     // Track security event
@@ -148,6 +175,10 @@ class SessionManager {
    * Handle session warning
    */
   private async handleWarning(remainingMinutes: number) {
+    if (!ENABLE_INACTIVITY_TIMEOUT) {
+      return;
+    }
+
     this.warningShown = true;
     await AsyncStorage.setItem(SESSION_WARNING_SHOWN_KEY, 'true');
 
@@ -198,6 +229,10 @@ class SessionManager {
    * Manually trigger session timeout (for testing)
    */
   async forceTimeout() {
+    if (!ENABLE_INACTIVITY_TIMEOUT) {
+      return;
+    }
+
     await this.handleTimeout();
   }
 
@@ -205,6 +240,10 @@ class SessionManager {
    * Reset session (useful when user signs in)
    */
   async reset() {
+    if (!ENABLE_INACTIVITY_TIMEOUT) {
+      return;
+    }
+
     this.warningShown = false;
     await AsyncStorage.multiRemove([
       LAST_ACTIVITY_KEY,
@@ -218,6 +257,10 @@ class SessionManager {
    * Get remaining session time in minutes
    */
   async getRemainingTime(): Promise<number> {
+    if (!ENABLE_INACTIVITY_TIMEOUT) {
+      return Number.POSITIVE_INFINITY;
+    }
+
     const lastActivity = await this.getLastActivity();
     const now = Date.now();
     const inactiveMinutes = (now - lastActivity) / 1000 / 60;
@@ -229,6 +272,10 @@ class SessionManager {
    * Check if session is active
    */
   async isSessionActive(): Promise<boolean> {
+    if (!ENABLE_INACTIVITY_TIMEOUT) {
+      return true;
+    }
+
     const remainingTime = await this.getRemainingTime();
     return remainingTime > 0;
   }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import SocialDiscoveryFeed from '../../components/SocialDiscoveryFeed';
 import TrendingFeed from '../../components/TrendingFeed';
 import PillTabs from '../../components/PillTabs';
@@ -50,13 +51,13 @@ export default function ProviderHomeScreen() {
                 <View style={styles.bannerTextContainer}>
                   <Text style={styles.bannerTitle}>
                     {verificationStatus === 'under_review'
-                      ? 'Verification Pending'
-                      : 'Verify Your Identity'}
+                      ? 'KYC Pending'
+                      : 'Complete KYC'}
                   </Text>
                   <Text style={styles.bannerText}>
                     {verificationStatus === 'under_review'
-                      ? 'Your documents are under review. You\'ll be visible to customers once approved.'
-                      : 'You\'re not visible to customers yet. Verify your identity to start receiving bookings.'}
+                      ? 'Your KYC documents are under review. You\'ll be visible to customers once approved.'
+                      : 'You\'re not visible to customers yet. Complete KYC to start receiving bookings.'}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -68,14 +69,16 @@ export default function ProviderHomeScreen() {
               </View>
               {verificationStatus !== 'under_review' && (
                 <TouchableOpacity style={styles.verifyButton} onPress={handleVerifyPress}>
-                  <Text style={styles.verifyButtonText}>Verify Now</Text>
+                  <Text style={styles.verifyButtonText}>Start KYC</Text>
                 </TouchableOpacity>
               )}
             </View>
           </FadeInView>
         )}
 
-        <FadeInView delay={needsVerification && showBanner ? 100 : 0}>
+        {/* Search Bar removed as requested */}
+
+        <FadeInView delay={needsVerification && showBanner ? 150 : 50}>
           <View style={styles.tabsContainer}>
             <PillTabs
               tabs={TABS}

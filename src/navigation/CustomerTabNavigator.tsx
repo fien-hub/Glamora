@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/theme';
 import CurvedHeader from '../components/CurvedHeader';
+import HomeHeader from '../components/HomeHeader';
 import FloatingTabBar from '../components/FloatingTabBar';
 
 // Customer Screens
@@ -39,7 +40,24 @@ export default function CustomerTabNavigator() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
         headerShown: true,
-        header: ({ route }) => {
+        header: ({ route, navigation }) => {
+          if (route.name === 'Home') {
+            return (
+              <HomeHeader
+                onSearchPress={() => navigation.navigate('Search')}
+                onFilterPress={() => navigation.navigate('Search')}
+                onLocationPress={() => {
+                  const parentNavigation = navigation.getParent();
+                  if (parentNavigation) {
+                    (parentNavigation as any).navigate('EditProfile');
+                  } else {
+                    navigation.navigate('Profile');
+                  }
+                }}
+              />
+            );
+          }
+
           let title = 'Discover';
           if (route.name === 'Search') title = 'Find Services';
           else if (route.name === 'Bookings') title = 'My Bookings';

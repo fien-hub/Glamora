@@ -18,6 +18,7 @@ import AnimatedCard from './AnimatedCard';
 import AnimatedHeart from './AnimatedHeart';
 import { SkeletonProviderList, SkeletonServiceList } from './SkeletonCards';
 import BrandedRefreshControl from './BrandedRefreshControl';
+import CachedImage, { CachedAvatarImage } from './CachedImage';
 
 interface Booking {
   id: string;
@@ -390,7 +391,7 @@ const PersonalizedHome = React.memo(() => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Your Favorites ⭐</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Favorites')}>
+            <TouchableOpacity onPress={() => (navigation as any).navigate('Favorites')}>
               <Text style={styles.viewAllText}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -402,9 +403,10 @@ const PersonalizedHome = React.memo(() => {
               >
                 <View style={styles.providerCard}>
                   {provider.avatar_url ? (
-                    <Image
-                      source={{ uri: provider.avatar_url }}
+                    <CachedAvatarImage
+                      uri={provider.avatar_url}
                       style={styles.providerAvatarImage}
+                      showLoader={false}
                     />
                   ) : (
                     <View style={styles.providerAvatar}>

@@ -11,10 +11,11 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Calendar } from 'react-native-calendars';
-import { useStripe, usePaymentSheet } from '@stripe/stripe-react-native';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
+import { purchaseBookingProduct, verifyRevenueCatBookingPayment } from '../services/revenuecat';
+import { trackMetaInitiatedCheckout } from '../services/metaAds';
 import { getCurrentLocation } from '../services/location';
 import {
   checkProviderAvailability,
@@ -64,7 +65,6 @@ export default function BookingModal({
   onSuccess,
 }: BookingModalProps) {
   const { user } = useAuth();
-  const { initPaymentSheet, presentPaymentSheet } = usePaymentSheet();
   
   const [step, setStep] = useState<'details' | 'payment' | 'processing'>('details');
   const [date, setDate] = useState('');
@@ -74,6 +74,10 @@ export default function BookingModal({
   const [state, setState] = useState('');
   const [zipCode, setZipCode] = useState('');
   const [notes, setNotes] = useState('');
+
+  // Pricing state
+  const [pricingData, setPricingData] = useState<any>(null);
+  const [loadingPrice, setLoadingPrice] = useState(false);
   const [paymentSheetReady, setPaymentSheetReady] = useState(false);
 
   const [loadingLocation, setLoadingLocation] = useState(false);
@@ -93,11 +97,11 @@ export default function BookingModal({
   // Confirmation animation state
   const [showConfirmation, setShowConfirmation] = useState(false);
 
+
   // Load blocked dates when modal opens
   useEffect(() => {
     if (visible && provider.id) {
       loadBlockedDates();
-
       // Track user action
       trackUserAction('booking_modal_opened', {
         providerId: provider.id,
@@ -113,6 +117,45 @@ export default function BookingModal({
       loadAvailableTimeSlots();
     }
   }, [date, provider.id]);
+
+  // Calculate pricing when address or provider changes
+  useEffect(() => {
+    if (provider && service && address && city && state && zipCode) {
+      calculatePricing();
+    }
+  }, [provider, service, address, city, state, zipCode]);
+
+  // Calculate pricing (travel fee + base price)
+  const calculatePricing = async () => {
+    setLoadingPrice(true);
+    try {
+      // Compose address string
+      const fullAddress = `${address}, ${city}, ${state} ${zipCode}`;
+      // Call pricing API (replace with your backend endpoint)
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000'}/api/pricing/calculate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider_id: provider.id,
+            service_id: service.id,
+            customer_address: fullAddress,
+          }),
+        }
+      );
+      const data = await response.json();
+      if (data.success) {
+        setPricingData(data.data);
+      } else {
+        setPricingData(null);
+      }
+    } catch (error) {
+      setPricingData(null);
+    } finally {
+      setLoadingPrice(false);
+    }
+  };
 
   const loadBlockedDates = async () => {
     try {
@@ -246,6 +289,7 @@ export default function BookingModal({
 
   const handlePayment = async () => {
     setStep('processing');
+    let bookingData: any = null;
 
     try {
       // Get customer profile ID
@@ -287,8 +331,30 @@ export default function BookingModal({
 
       const providerServiceId = providerServiceData.id;
       console.log('[Booking] Using provider_service_id:', providerServiceId);
-      let bookingData: any;
       let recurringBookingId: string | null = null;
+
+      // Process payment before creating booking records
+      console.log('[Booking] Refreshing session...');
+      void trackMetaInitiatedCheckout(provider.price / 100, {
+        providerId: provider.id,
+        serviceId: providerServiceId,
+        source: 'booking_modal',
+      });
+      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+
+      if (sessionError || !session) {
+        console.error('[Booking] Session refresh error:', sessionError);
+        throw new Error('Session expired. Please log in again.');
+      }
+
+      console.log('[Booking] Session refreshed, creating RevenueCat purchase...');
+      console.log('[Booking] User ID:', session.user.id);
+      const purchasePayload = await purchaseBookingProduct(session.user.id);
+      const verification = await verifyRevenueCatBookingPayment(session.access_token, purchasePayload);
+
+      if (!verification?.success) {
+        throw new Error('Payment verification failed');
+      }
 
       // Handle recurring booking
       if (isRecurring) {
@@ -340,13 +406,15 @@ export default function BookingModal({
           provider_service_id: providerServiceId,
           scheduled_date: instance.date,
           scheduled_time: instance.time,
-          status: 'pending',
+          status: instance.instanceNumber === 1 ? 'confirmed' : 'pending',
           total_price: provider.price,
           address: address,
           city: city,
           state: state,
           zip_code: zipCode,
           notes: notes || null,
+          payment_intent_id: verification?.paymentReference || `rc_${purchasePayload.transactionId}`,
+          payment_status: 'paid',
           recurring_booking_id: recurringBookingId,
           instance_number: instance.instanceNumber,
           is_recurring_instance: true,
@@ -371,13 +439,15 @@ export default function BookingModal({
             provider_service_id: providerServiceId,
             scheduled_date: date,
             scheduled_time: time,
-            status: 'pending',
+            status: 'confirmed',
             total_price: provider.price,
             address: address,
             city: city,
             state: state,
             zip_code: zipCode,
             notes: notes || null,
+            payment_intent_id: verification?.paymentReference || `rc_${purchasePayload.transactionId}`,
+            payment_status: 'paid',
             is_recurring_instance: false,
           })
           .select()
@@ -387,131 +457,7 @@ export default function BookingModal({
         bookingData = singleBookingData;
       }
 
-      // 2. Create payment intent via backend
-      // Get and refresh the session token
-      console.log('[Booking] Refreshing session...');
-      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
-
-      if (sessionError || !session) {
-        console.error('[Booking] Session refresh error:', sessionError);
-        throw new Error('Session expired. Please log in again.');
-      }
-
-      console.log('[Booking] Session refreshed, creating payment intent...');
-      console.log('[Booking] User ID:', session.user.id);
-
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/payments/create-intent`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          bookingId: bookingData.id,
-          amount: provider.price,
-        }),
-      });
-
-      console.log('[Booking] Payment intent response status:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('[Booking] Payment intent creation failed:', errorData);
-        throw new Error(errorData.error || 'Failed to create payment intent');
-      }
-
-      const { clientSecret, ephemeralKey, customer } = await response.json();
-      console.log('[Booking] Payment intent created successfully');
-
-      // 3. Initialize Payment Sheet
-      console.log('[Booking] Initializing Payment Sheet...');
-      const { error: initError } = await initPaymentSheet({
-        merchantDisplayName: provider.business_name,
-        customerId: customer,
-        customerEphemeralKeySecret: ephemeralKey,
-        paymentIntentClientSecret: clientSecret,
-        defaultBillingDetails: {
-          email: user?.email,
-          address: {
-            line1: address,
-            city: city,
-            state: state,
-            postalCode: zipCode,
-            country: 'US',
-          },
-        },
-        allowsDelayedPaymentMethods: false,
-      });
-
-      if (initError) {
-        console.error('[Booking] Payment Sheet initialization failed:', initError);
-        throw new Error(initError.message || 'Failed to initialize payment');
-      }
-
-      console.log('[Booking] Payment Sheet initialized, presenting...');
-
-      // 4. Present Payment Sheet
-      const { error: presentError } = await presentPaymentSheet();
-
-      if (presentError) {
-        console.error('[Booking] Payment Sheet presentation failed:', presentError);
-        console.error('[Booking] Error code:', presentError.code);
-        console.error('[Booking] Error message:', presentError.message);
-
-        // Payment failed or cancelled, update booking status
-        await supabase
-          .from('bookings')
-          .update({ status: 'cancelled' })
-          .eq('id', bookingData.id);
-
-        // Track payment failure
-        trackPaymentFailed(provider.price, bookingData.id, presentError.message);
-        trackPaymentError(new Error(presentError.message), {
-          bookingId: bookingData.id,
-          amount: provider.price,
-          currency: 'USD',
-          paymentMethod: 'card',
-        });
-
-        // Provide helpful error message based on error code
-        if (presentError.code === 'Canceled') {
-          throw new Error('Payment was canceled. Please try again when ready to complete payment.');
-        } else if (presentError.message?.includes('card')) {
-          throw new Error('Card was declined. In test mode, use card: 4242 4242 4242 4242');
-        } else {
-          throw presentError;
-        }
-      }
-
-      console.log('[Booking] Payment completed successfully!');
-
-      // 5. Confirm payment on backend
-      console.log('[Booking] Confirming payment on backend...');
-      const paymentIntentId = clientSecret.split('_secret_')[0];
-
-      try {
-        const confirmResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/payments/confirm`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            paymentIntentId,
-            bookingId: bookingData.id,
-          }),
-        });
-
-        if (!confirmResponse.ok) {
-          console.error('[Booking] Payment confirmation failed:', await confirmResponse.text());
-          // Don't throw error - payment already succeeded, just log the issue
-        } else {
-          console.log('[Booking] Payment confirmed on backend');
-        }
-      } catch (confirmError) {
-        console.error('[Booking] Error confirming payment:', confirmError);
-        // Don't throw error - payment already succeeded, just log the issue
-      }
+      console.log('[Booking] RevenueCat payment completed successfully!');
 
       // Track successful booking and payment
       if (isRecurring && recurringBookingId) {
@@ -617,13 +563,10 @@ export default function BookingModal({
         errorMessage = 'Network error. Please check your internet connection and try again.';
       } else if (error.message?.includes('canceled') || error.message?.includes('Canceled')) {
         errorTitle = 'Payment Canceled';
-        errorMessage = 'You canceled the payment. The booking has been canceled. You can try again when ready.';
-      } else if (error.message?.includes('4242')) {
-        errorTitle = 'Payment Failed - Test Mode';
-        errorMessage = 'Please use Stripe test card:\n\nCard: 4242 4242 4242 4242\nExpiry: 12/25\nCVC: 123\nZIP: 12345';
-      } else if (error.message?.includes('card') || error.message?.includes('declined')) {
-        errorTitle = 'Card Declined';
-        errorMessage = 'Your card was declined. In test mode, use:\n\nCard: 4242 4242 4242 4242\nExpiry: 12/25\nCVC: 123';
+        errorMessage = 'You canceled the payment. No booking was created. You can try again when ready.';
+      } else if (error.message?.includes('declined')) {
+        errorTitle = 'Payment Declined';
+        errorMessage = 'Your in-app purchase could not be completed. Please try again.';
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -671,10 +614,20 @@ export default function BookingModal({
 
         <ScrollView style={styles.content}>
           {/* Service Info */}
+
           <View style={styles.serviceInfo}>
             <Text style={styles.serviceName}>{service.name}</Text>
             <Text style={styles.providerName}>{provider.business_name}</Text>
-            <Text style={styles.price}>${(provider.price / 100).toFixed(2)}</Text>
+            {loadingPrice ? (
+              <Text style={styles.price}>Calculating price...</Text>
+            ) : pricingData && pricingData.pricing && pricingData.pricing.total_cents ? (
+              <Text style={styles.price}>
+                ${ (pricingData.pricing.total_cents / 100).toFixed(2) }
+                <Text style={styles.priceLabel}> (includes travel fee)</Text>
+              </Text>
+            ) : (
+              <Text style={styles.price}>${(provider.price / 100).toFixed(2)}</Text>
+            )}
             <Text style={styles.duration}>⏱️ {service.base_duration_minutes} minutes</Text>
           </View>
 
@@ -1070,19 +1023,22 @@ export default function BookingModal({
               <View style={styles.testCardInfo}>
                 <Text style={styles.testCardTitle}>💳 Secure Payment</Text>
                 <Text style={styles.testCardText}>
-                  You'll be prompted to enter your card details securely on the next screen.
-                </Text>
-                <Text style={[styles.testCardText, { marginTop: 8 }]}>
-                  Test card: 4242 4242 4242 4242 (any future date, any CVC)
+                  You'll be prompted to complete your in-app purchase securely on the next screen.
                 </Text>
               </View>
+
 
               <TouchableOpacity
                 style={styles.payButton}
                 onPress={handlePayment}
+                disabled={loadingPrice}
               >
                 <Text style={styles.payButtonText}>
-                  Pay ${(provider.price / 100).toFixed(2)}
+                  {loadingPrice
+                    ? 'Calculating...'
+                    : pricingData && pricingData.pricing && pricingData.pricing.total_cents
+                      ? `Pay $${(pricingData.pricing.total_cents / 100).toFixed(2)}`
+                      : `Pay $${(provider.price / 100).toFixed(2)}`}
                 </Text>
               </TouchableOpacity>
 
@@ -1169,6 +1125,11 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     color: colors.primary,
     marginBottom: spacing.xs,
+  },
+  priceLabel: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontWeight: fontWeight.regular,
   },
   duration: {
     fontSize: fontSize.sm,

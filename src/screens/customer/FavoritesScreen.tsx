@@ -43,6 +43,11 @@ interface FavoriteProvider {
     rating: number;
     total_reviews: number;
     is_verified: boolean;
+    profiles?: {
+      user_id?: string;
+      bio?: string;
+      avatar_url?: string;
+    };
   };
 }
 
@@ -55,15 +60,41 @@ export default function FavoritesScreen({ navigation }: any) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
+  const [profileId, setProfileId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
-      fetchFavorites();
+      fetchProfileId();
     }
   }, [user]);
 
-  const fetchFavorites = async () => {
+  // Fetch profile ID from profiles table (needed for favorite_providers)
+  const fetchProfileId = async () => {
     if (!user) return;
+    try {
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching profile ID:', error);
+        return;
+      }
+
+      if (profileData) {
+        setProfileId(profileData.id);
+        fetchFavorites(profileData.id);
+      }
+    } catch (error) {
+      console.error('Error fetching profile ID:', error);
+    }
+  };
+
+  const fetchFavorites = async (customerProfileId?: string) => {
+    const idToUse = customerProfileId || profileId;
+    if (!idToUse) return;
 
     try {
       setLoading(true);
@@ -81,7 +112,7 @@ export default function FavoritesScreen({ navigation }: any) {
             base_duration_minutes
           )
         `)
-        .eq('customer_id', user.id)
+        .eq('customer_id', idToUse)
         .order('created_at', { ascending: false });
 
       if (servicesError) throw servicesError;
@@ -111,7 +142,7 @@ export default function FavoritesScreen({ navigation }: any) {
           },
         }));
 
-        setFavoriteServices(servicesWithPrices as FavoriteService[]);
+        setFavoriteServices(servicesWithPrices as unknown as FavoriteService[]);
       } else {
         setFavoriteServices([]);
       }
@@ -129,17 +160,45 @@ export default function FavoritesScreen({ navigation }: any) {
             total_reviews,
             is_verified,
             profiles (
+              user_id,
               bio,
               avatar_url
             )
           )
         `)
-        .eq('customer_id', user.id)
+        .eq('customer_id', idToUse)
         .order('created_at', { ascending: false });
 
       if (providersError) throw providersError;
 
-      setFavoriteProviders((providersData as FavoriteProvider[]) || []);
+      let activeProvidersData = providersData || [];
+      const providerUserIds = Array.from(
+        new Set(
+          activeProvidersData
+            .map((provider: any) => provider?.provider_profiles?.profiles?.user_id)
+            .filter((id: any) => typeof id === 'string' && id.length > 0)
+        )
+      );
+
+      if (providerUserIds.length > 0) {
+        const { data: activeUsers, error: activeUsersError } = await supabase
+          .from('users')
+          .select('id')
+          .in('id', providerUserIds)
+          .eq('is_active', true);
+
+        if (!activeUsersError) {
+          const activeUserIds = new Set((activeUsers || []).map((row: any) => row.id));
+          activeProvidersData = activeProvidersData.filter((provider: any) => {
+            const userId = provider?.provider_profiles?.profiles?.user_id;
+            return !!userId && activeUserIds.has(userId);
+          });
+        } else {
+          console.warn('Unable to filter deactivated favorite providers:', activeUsersError.message);
+        }
+      }
+
+      setFavoriteProviders((activeProvidersData as unknown as FavoriteProvider[]) || []);
     } catch (error) {
       console.error('Error fetching favorites:', error);
       Alert.alert('Error', 'Failed to load favorites');

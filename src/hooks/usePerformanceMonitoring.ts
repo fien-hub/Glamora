@@ -17,15 +17,15 @@ import * as Sentry from '@sentry/react-native';
  * ```
  */
 export const usePerformanceMonitoring = (screenName: string, enabled: boolean = true) => {
-  const transactionRef = useRef<Sentry.Transaction | null>(null);
+  const transactionRef = useRef<Sentry.Span | null>(null);
   const mountTimeRef = useRef<number>(Date.now());
 
   useEffect(() => {
     if (!enabled) return;
 
-    // Start transaction on mount
+    // Start span on mount
     mountTimeRef.current = Date.now();
-    transactionRef.current = Sentry.startTransaction({
+    transactionRef.current = Sentry.startInactiveSpan({
       name: `Screen: ${screenName}`,
       op: 'screen.load',
     });
@@ -36,10 +36,10 @@ export const usePerformanceMonitoring = (screenName: string, enabled: boolean = 
         const loadTime = Date.now() - mountTimeRef.current;
         
         // Add measurement for screen load time
-        transactionRef.current.setMeasurement('screen_load_time', loadTime, 'millisecond');
+        Sentry.setMeasurement('screen_load_time', loadTime, 'millisecond');
         
-        // Finish transaction
-        transactionRef.current.finish();
+        // Finish span
+        transactionRef.current.end();
         transactionRef.current = null;
       }
     };
@@ -52,13 +52,13 @@ export const usePerformanceMonitoring = (screenName: string, enabled: boolean = 
   const markOperation = (operationName: string) => {
     if (!enabled || !transactionRef.current) return;
 
-    const span = transactionRef.current.startChild({
+    const span = Sentry.startInactiveSpan({
       op: operationName,
-      description: `${screenName} - ${operationName}`,
+      name: `${screenName} - ${operationName}`,
     });
 
     return {
-      finish: () => span.finish(),
+      finish: () => span.end(),
     };
   };
 
@@ -95,28 +95,21 @@ export const useApiPerformanceMonitoring = (apiName: string, enabled: boolean = 
       return { finish: () => {} };
     }
 
-    const transaction = Sentry.startTransaction({
+    const transaction = Sentry.startInactiveSpan({
       name: `API: ${apiName}`,
       op: 'http.client',
-      data: {
+      attributes: {
         method,
         url: url || apiName,
       },
     });
 
     return {
-      finish: (statusCode?: number) => {
-        if (statusCode) {
-          transaction.setHttpStatus(statusCode);
-        }
-        transaction.finish();
+      finish: (_statusCode?: number) => {
+        transaction.end();
       },
-      setTag: (key: string, value: string) => {
-        transaction.setTag(key, value);
-      },
-      setData: (key: string, value: any) => {
-        transaction.setData(key, value);
-      },
+      setTag: (_key: string, _value: string) => { /* no-op in v7 span API */ },
+      setData: (_key: string, _value: any) => { /* no-op in v7 span API */ },
     };
   };
 

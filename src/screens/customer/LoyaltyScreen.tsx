@@ -10,15 +10,8 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '../../contexts/AuthContext';
-
-// Try to import Clipboard, but make it optional for Expo Go
-let Clipboard: any = null;
-try {
-  Clipboard = require('@react-native-clipboard/clipboard').default;
-} catch (error) {
-  console.warn('Clipboard not available in Expo Go');
-}
 import { supabase } from '../../services/supabase';
 import { colors, spacing, fontSize, borderRadius } from '../../constants/theme';
 import { useScreenTracking } from '../../hooks/useScreenTracking';
@@ -284,15 +277,10 @@ export default function LoyaltyScreen() {
               </View>
               <TouchableOpacity
                 style={styles.copyButton}
-                onPress={() => {
-                  if (Clipboard) {
-                    Clipboard.setString(promo.code);
-                    setPromoCodeInput(promo.code);
-                    Alert.alert('Copied!', `Code ${promo.code} copied to clipboard`);
-                  } else {
-                    setPromoCodeInput(promo.code);
-                    Alert.alert('Code', `${promo.code} - Added to input field`);
-                  }
+                onPress={async () => {
+                  await Clipboard.setStringAsync(promo.code);
+                  setPromoCodeInput(promo.code);
+                  Alert.alert('Copied!', `Code ${promo.code} copied to clipboard`);
                 }}
               >
                 <Text style={styles.copyButtonText}>Copy</Text>

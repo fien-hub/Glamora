@@ -28,20 +28,25 @@ export const colors = {
 
   // Neutral - Enhanced grayscale for better hierarchy
   background: '#FFFFFF',
+  backgroundSecondary: '#F7F7F7',
   backgroundGray: '#F7F7F7',
   backgroundDark: '#F0F0F0',
 
   surface: '#FFFFFF',
+  card: '#FFFFFF',
   surfaceElevated: '#FAFAFA',
 
   text: '#1A1A1A',
   textSecondary: '#6B6B6B',
   textLight: '#9E9E9E',
   textDisabled: '#BDBDBD',
+  darkGray: '#4B5563',
+  mediumGray: '#9CA3AF',
 
   border: '#E5E5E5',
   borderLight: '#F0F0F0',
   borderDark: '#D0D0D0',
+  lightGray: '#F3F4F6',
 
   // Semantic colors
   success: '#10B981',
@@ -52,6 +57,7 @@ export const colors = {
   errorLight: '#FEE2E2',
   info: '#3B82F6',
   infoLight: '#DBEAFE',
+  gold: '#FCD34D',
 
   white: '#FFFFFF',
   black: '#000000',
@@ -69,11 +75,16 @@ export const colors = {
 };
 
 export const spacing = {
+  tiny: 2,
   xxs: 2,
   xs: 4,
+  small: 8,
   sm: 8,
+  medium: 12,
   md: 12,
   lg: 16,
+  large: 16,
+  extraLarge: 24,
   xl: 24,
   xxl: 32,
   xxxl: 48,
@@ -88,17 +99,23 @@ export const spacing = {
 
 export const borderRadius = {
   sm: 4,
+  small: 4,
   md: 8,
+  medium: 8,
   lg: 12,
   xl: 16,
   xxl: 24,
   round: 999,
+  full: 999,
 };
 
 export const fontSize = {
   xs: 11,
+  small: 13,
   sm: 13,
+  medium: 15,
   md: 15,
+  large: 17,
   lg: 17,
   xl: 20,
   xxl: 28,
@@ -153,7 +170,21 @@ export const shadows = {
     shadowRadius: 3,
     elevation: 2,
   },
+  small: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
   md: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  medium: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,

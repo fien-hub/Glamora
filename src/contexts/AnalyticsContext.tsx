@@ -41,7 +41,7 @@ export const AnalyticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           const userProperties: UserProperties = {
             userId: user.id,
             email: user.email,
-            role: userRole,
+            role: userRole || undefined,
           };
 
           await analytics.identifyUser(user.id, userProperties);

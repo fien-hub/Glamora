@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
-export type DocumentType = 'drivers_license' | 'passport' | 'national_id' | 'business_license' | 'other';
+export type DocumentType = 'drivers_license' | 'passport' | 'national_id' | 'business_license' | 'certification' | 'professional_license' | 'other';
 export type VerificationStatus = 'pending' | 'under_review' | 'approved' | 'rejected';
 
 export interface VerificationDocument {
@@ -110,30 +110,50 @@ export const getVerificationDocuments = async (): Promise<{ documents: Verificat
 };
 
 /**
- * Get verification status
+ * Get verification status (provider identity verification)
  */
 export const getVerificationStatus = async (): Promise<VerificationStatusResponse> => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    
+
     if (!session) {
       throw new Error('Not authenticated');
     }
 
-    const response = await fetch(`${API_URL}/api/verification/status`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-    });
+    // Query Supabase directly instead of backend API to avoid network errors
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('user_id', session.user.id)
+      .single();
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to fetch verification status');
+    if (!profileData) {
+      throw new Error('Profile not found');
     }
 
-    return data;
+    // Get provider profile with verification status
+    const { data: providerData, error } = await supabase
+      .from('provider_profiles')
+      .select(`
+        identity_verification_status,
+        identity_verified_at,
+        identity_verification_notes,
+        is_verified
+      `)
+      .eq('id', profileData.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Get verification status error:', error);
+      throw new Error('Failed to fetch verification status');
+    }
+
+    return {
+      status: providerData?.identity_verification_status || 'pending',
+      verifiedAt: providerData?.identity_verified_at,
+      notes: providerData?.identity_verification_notes,
+      isVerified: providerData?.identity_verification_status === 'approved',
+    };
   } catch (error: any) {
     console.error('Get verification status error:', error);
     throw error;
@@ -354,20 +374,50 @@ export const getUserVerificationStatus = async (): Promise<UserVerificationStatu
       throw new Error('Not authenticated');
     }
 
-    const response = await fetch(`${API_URL}/api/verification/user-status`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-    });
+    // Query Supabase directly instead of backend API to avoid network errors
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, phone, phone_verified, email_verified')
+      .eq('user_id', session.user.id)
+      .single();
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to get verification status');
+    if (profileError || !profile) {
+      throw new Error('Profile not found');
     }
 
-    return data;
+    // Get customer profile status
+    const { data: customerProfile } = await supabase
+      .from('customer_profiles')
+      .select('verification_status, payment_method_verified')
+      .eq('id', profile.id)
+      .maybeSingle();
+
+    // Get provider checklist if exists
+    const { data: providerChecklist } = await supabase
+      .from('provider_verification_checklist')
+      .select('*')
+      .eq('provider_id', profile.id)
+      .maybeSingle();
+
+    if (__DEV__) {
+      console.log('[Verification] Fetched user verification flags', {
+        userId: session.user.id,
+        profileId: profile.id,
+        emailVerified: profile.email_verified || false,
+        phoneVerified: profile.phone_verified || false,
+        customerVerificationStatus: customerProfile?.verification_status || 'unverified',
+        paymentMethodVerified: customerProfile?.payment_method_verified ?? false,
+      });
+    }
+
+    return {
+      phone: profile.phone,
+      phoneVerified: profile.phone_verified || false,
+      emailVerified: profile.email_verified || false,
+      customerStatus: customerProfile?.verification_status || 'unverified',
+      paymentMethodVerified: customerProfile?.payment_method_verified ?? false,
+      providerChecklist: providerChecklist || null,
+    };
   } catch (error: any) {
     console.error('Get user verification status error:', error);
     throw error;

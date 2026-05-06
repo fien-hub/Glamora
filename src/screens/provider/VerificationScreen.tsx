@@ -26,6 +26,7 @@ export default function VerificationScreen() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [showUpload, setShowUpload] = useState(false);
   const [selectedDocumentType, setSelectedDocumentType] = useState<DocumentType>('drivers_license');
+  const [sendingVerification, setSendingVerification] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -58,8 +59,8 @@ export default function VerificationScreen() {
       case 'approved':
         return {
           icon: '✅',
-          title: 'Identity Verified',
-          description: 'Your identity has been verified. This helps build trust with customers.',
+          title: 'KYC Verified',
+          description: 'Your KYC has been approved. This helps build trust with customers.',
           color: colors.success,
           bgColor: colors.successLight,
         };
@@ -82,8 +83,8 @@ export default function VerificationScreen() {
       default:
         return {
           icon: '🆔',
-          title: 'Not Verified',
-          description: 'Upload a government-issued ID to verify your identity and increase customer trust.',
+          title: 'KYC Not Started',
+          description: 'Upload a government-issued ID to complete KYC and increase customer trust.',
           color: colors.warning,
           bgColor: colors.warningLight,
         };
@@ -103,21 +104,16 @@ export default function VerificationScreen() {
   return (
     <ScrollView
       style={styles.container}
+      contentContainerStyle={styles.contentContainer}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
       }
     >
-      {/* Status Card */}
-      <View style={[styles.statusCard, { backgroundColor: statusInfo.bgColor }]}>
-        <Text style={styles.statusIcon}>{statusInfo.icon}</Text>
-        <Text style={[styles.statusTitle, { color: statusInfo.color }]}>{statusInfo.title}</Text>
-        <Text style={styles.statusDescription}>{statusInfo.description}</Text>
-      </View>
-
       {/* Benefits Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Why Verify Your Identity?</Text>
-        <View style={styles.benefitsList}>
+        <Text style={styles.sectionTitle}>Why Complete KYC?</Text>
+        <View style={styles.sectionCard}>
+          <View style={styles.benefitsList}>
           <View style={styles.benefitItem}>
             <Text style={styles.benefitIcon}>✓</Text>
             <Text style={styles.benefitText}>Build trust with customers</Text>
@@ -134,6 +130,7 @@ export default function VerificationScreen() {
             <Text style={styles.benefitIcon}>✓</Text>
             <Text style={styles.benefitText}>Show you're a legitimate business</Text>
           </View>
+          </View>
         </View>
       </View>
 
@@ -141,12 +138,13 @@ export default function VerificationScreen() {
       {(verificationStatus === 'pending' || verificationStatus === 'rejected') && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Upload ID Document</Text>
-          <Text style={styles.sectionDescription}>
-            Upload a clear photo of your government-issued ID to verify your identity.
-          </Text>
+          <View style={styles.sectionCard}>
+            <Text style={styles.sectionDescription}>
+              Upload a clear photo of your government-issued ID to complete KYC.
+            </Text>
 
-          {!showUpload ? (
-            <>
+            {!showUpload ? (
+              <>
               {/* Document Type Selection */}
               <Text style={styles.selectLabel}>Select Document Type:</Text>
               <View style={styles.documentTypeOptions}>
@@ -156,6 +154,7 @@ export default function VerificationScreen() {
                     selectedDocumentType === 'drivers_license' && styles.documentTypeOptionSelected,
                   ]}
                   onPress={() => setSelectedDocumentType('drivers_license')}
+                  disabled={sendingVerification}
                 >
                   <Text style={styles.documentTypeIcon}>🪪</Text>
                   <Text style={[
@@ -170,6 +169,7 @@ export default function VerificationScreen() {
                     selectedDocumentType === 'passport' && styles.documentTypeOptionSelected,
                   ]}
                   onPress={() => setSelectedDocumentType('passport')}
+                  disabled={sendingVerification}
                 >
                   <Text style={styles.documentTypeIcon}>📘</Text>
                   <Text style={[
@@ -184,6 +184,7 @@ export default function VerificationScreen() {
                     selectedDocumentType === 'national_id' && styles.documentTypeOptionSelected,
                   ]}
                   onPress={() => setSelectedDocumentType('national_id')}
+                  disabled={sendingVerification}
                 >
                   <Text style={styles.documentTypeIcon}>🆔</Text>
                   <Text style={[
@@ -198,6 +199,7 @@ export default function VerificationScreen() {
                     selectedDocumentType === 'business_license' && styles.documentTypeOptionSelected,
                   ]}
                   onPress={() => setSelectedDocumentType('business_license')}
+                  disabled={sendingVerification}
                 >
                   <Text style={styles.documentTypeIcon}>📄</Text>
                   <Text style={[
@@ -208,36 +210,44 @@ export default function VerificationScreen() {
               </View>
 
               <TouchableOpacity
-                style={styles.uploadButton}
+                style={[styles.uploadButton, sendingVerification && styles.buttonDisabled]}
                 onPress={() => setShowUpload(true)}
+                disabled={sendingVerification}
               >
-                <Text style={styles.uploadButtonText}>📷 Take Photo or Upload</Text>
+                <Text style={styles.uploadButtonText}>
+                  {sendingVerification ? 'Sending...' : '📷 Take Photo or Upload'}
+                </Text>
               </TouchableOpacity>
-            </>
-          ) : (
-            <View style={styles.uploadContainer}>
-              <Text style={styles.uploadingDocType}>
-                Uploading: {selectedDocumentType.replace('_', ' ').toUpperCase()}
-              </Text>
-              <DocumentUpload
-                documentType={selectedDocumentType}
-                onUploadSuccess={() => {
-                  setShowUpload(false);
-                  fetchData();
-                  Alert.alert('Success', 'Document uploaded successfully! We\'ll review it within 1-2 business days.');
-                }}
-                onUploadError={(error) => {
-                  Alert.alert('Upload Failed', error);
-                }}
-              />
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setShowUpload(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+              </>
+            ) : (
+              <View style={styles.uploadContainer}>
+                <Text style={styles.uploadingDocType}>
+                  Uploading: {selectedDocumentType.replace('_', ' ').toUpperCase()}
+                </Text>
+                <DocumentUpload
+                  documentType={selectedDocumentType}
+                  onUploadStateChange={setSendingVerification}
+                  onUploadSuccess={() => {
+                    setSendingVerification(false);
+                    setShowUpload(false);
+                    fetchData();
+                    Alert.alert('Success', 'Document uploaded successfully! We\'ll review it within 1-2 business days.');
+                  }}
+                  onUploadError={(error) => {
+                    setSendingVerification(false);
+                    Alert.alert('Upload Failed', error);
+                  }}
+                />
+                <TouchableOpacity
+                  style={[styles.cancelButton, sendingVerification && styles.buttonDisabled]}
+                  onPress={() => setShowUpload(false)}
+                  disabled={sendingVerification}
+                >
+                  <Text style={styles.cancelButtonText}>{sendingVerification ? 'Sending...' : 'Cancel'}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
       )}
 
@@ -245,6 +255,7 @@ export default function VerificationScreen() {
       {documents.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Uploaded Documents</Text>
+          <View style={styles.documentsList}>
           {documents.map((doc) => (
             <View key={doc.id} style={styles.documentCard}>
               <View style={styles.documentInfo}>
@@ -286,6 +297,7 @@ export default function VerificationScreen() {
               </View>
             </View>
           ))}
+          </View>
         </View>
       )}
 
@@ -299,7 +311,7 @@ export default function VerificationScreen() {
 
         <Text style={[styles.infoTitle, { marginTop: spacing.lg }]}>🔒 Your Privacy</Text>
         <Text style={styles.infoText}>
-          Your documents are encrypted and stored securely. We only use them to verify your identity.
+          Your documents are encrypted and stored securely. We only use them for KYC review.
         </Text>
       </View>
     </ScrollView>
@@ -311,41 +323,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  contentContainer: {
+    paddingBottom: spacing.xxxl,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background,
   },
-  statusCard: {
-    margin: spacing.lg,
-    padding: spacing.xl,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-  },
-  statusIcon: {
-    fontSize: 48,
-    marginBottom: spacing.md,
-  },
-  statusTitle: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    marginBottom: spacing.sm,
-  },
-  statusDescription: {
-    fontSize: fontSize.md,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
   section: {
-    margin: spacing.lg,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
   },
   sectionTitle: {
     fontSize: fontSize.lg,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  sectionCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.borderLight || colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 1,
   },
   sectionDescription: {
     fontSize: fontSize.md,
@@ -360,6 +367,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    paddingVertical: 2,
   },
   benefitIcon: {
     fontSize: 20,
@@ -368,6 +376,7 @@ const styles = StyleSheet.create({
   benefitText: {
     fontSize: fontSize.md,
     color: colors.text,
+    flex: 1,
   },
   selectLabel: {
     fontSize: fontSize.md,
@@ -378,45 +387,52 @@ const styles = StyleSheet.create({
   documentTypeOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    justifyContent: 'space-between',
+    rowGap: spacing.sm,
     marginBottom: spacing.lg,
   },
   documentTypeOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.sm,
+    width: '48.2%',
+    minHeight: 78,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.white,
   },
   documentTypeOptionSelected: {
     borderColor: colors.primary,
     backgroundColor: colors.primaryLight,
   },
   documentTypeIcon: {
-    fontSize: 20,
-    marginRight: spacing.xs,
+    fontSize: 22,
+    marginRight: spacing.sm,
   },
   documentTypeText: {
     fontSize: fontSize.sm,
     color: colors.text,
+    flexShrink: 1,
   },
   documentTypeTextSelected: {
     fontWeight: '600',
-    color: colors.primary,
+    color: colors.primaryDarker,
   },
   uploadButton: {
     backgroundColor: colors.primary,
     padding: spacing.lg,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     alignItems: 'center',
   },
   uploadButtonText: {
     fontSize: fontSize.lg,
     fontWeight: '600',
     color: colors.black,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   uploadContainer: {
     gap: spacing.md,
@@ -430,24 +446,27 @@ const styles = StyleSheet.create({
   },
   cancelButton: {
     padding: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border,
+    backgroundColor: colors.white,
   },
   cancelButtonText: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
     fontWeight: '600',
   },
+  documentsList: {
+    gap: spacing.sm,
+  },
   documentCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: spacing.lg,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.md,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -467,17 +486,20 @@ const styles = StyleSheet.create({
   documentStatus: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: borderRadius.sm,
+    borderRadius: borderRadius.round,
   },
   documentStatusText: {
     fontSize: fontSize.xs,
     fontWeight: '700',
   },
   infoSection: {
-    margin: spacing.lg,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
     padding: spacing.lg,
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: borderRadius.lg,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+    borderColor: colors.borderLight || colors.border,
   },
   infoTitle: {
     fontSize: fontSize.md,

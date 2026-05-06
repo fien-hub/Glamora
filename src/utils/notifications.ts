@@ -1,16 +1,29 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { supabase } from '../services/supabase';
 
-// Configure notification behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+let notificationHandlerInitialized = false;
+
+export const initializeNotificationHandler = () => {
+  if (notificationHandlerInitialized) {
+    return;
+  }
+
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      // iOS behavior fields to satisfy Expo SDK 54 types
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+
+  notificationHandlerInitialized = true;
+};
 
 export interface NotificationData {
   type: 'booking' | 'message' | 'review' | 'payment' | 'reminder';
@@ -18,6 +31,14 @@ export interface NotificationData {
   messageId?: string;
   reviewId?: string;
   [key: string]: any;
+}
+
+interface RemotePushPayload {
+  targetUserId: string;
+  title: string;
+  body: string;
+  data?: Record<string, any>;
+  type?: 'booking' | 'message' | 'review' | 'payment' | 'system';
 }
 
 /**
@@ -65,9 +86,27 @@ export const getExpoPushToken = async (): Promise<string | null> => {
       return null;
     }
 
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FFB6C1',
+      });
+    }
+
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ||
+      Constants.easConfig?.projectId;
+
+    if (!projectId) {
+      console.warn('[Notifications] Missing EAS projectId, cannot request Expo push token');
+      return null;
+    }
+
     // Note: Push notifications don't work in Expo Go
     // This will only work in a development build or production app
-    const token = await Notifications.getExpoPushTokenAsync();
+    const token = await Notifications.getExpoPushTokenAsync({ projectId });
 
     return token.data;
   } catch (error) {
@@ -94,6 +133,7 @@ export const registerDeviceToken = async (
           user_id: userId,
           token: token,
           platform: Platform.OS,
+          is_active: true,
           updated_at: new Date().toISOString(),
         },
         {
@@ -135,6 +175,74 @@ export const unregisterDeviceToken = async (
     return true;
   } catch (error) {
     console.error('Error unregistering device token:', error);
+    return false;
+  }
+};
+
+/**
+ * Invoke edge function to send remote push notification to an auth user ID
+ */
+export const sendRemotePushNotification = async ({
+  targetUserId,
+  title,
+  body,
+  data,
+  type = 'system',
+}: RemotePushPayload): Promise<boolean> => {
+  try {
+    const { error } = await supabase.functions.invoke('send-push-notification', {
+      body: {
+        target_user_id: targetUserId,
+        title,
+        body,
+        data: data || {},
+        type,
+      },
+    });
+
+    if (error) {
+      console.error('Error invoking send-push-notification:', error);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error sending remote push notification:', error);
+    return false;
+  }
+};
+
+/**
+ * Send remote push notification to a profile ID (resolves auth user ID first)
+ */
+export const sendRemotePushToProfile = async (
+  profileId: string,
+  title: string,
+  body: string,
+  data?: Record<string, any>,
+  type: 'booking' | 'message' | 'review' | 'payment' | 'system' = 'system'
+): Promise<boolean> => {
+  try {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('id', profileId)
+      .single();
+
+    if (error || !profile?.user_id) {
+      console.error('Error resolving profile -> user_id for push:', error);
+      return false;
+    }
+
+    return sendRemotePushNotification({
+      targetUserId: profile.user_id,
+      title,
+      body,
+      data,
+      type,
+    });
+  } catch (error) {
+    console.error('Error sending remote push to profile:', error);
     return false;
   }
 };
@@ -264,6 +372,7 @@ export const scheduleBookingReminder = async (
         bookingId,
       },
       {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: reminderTime,
       }
     );

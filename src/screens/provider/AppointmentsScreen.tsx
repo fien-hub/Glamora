@@ -8,11 +8,13 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRoute, useNavigation } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, dbService } from '../../services/supabase';
 import { useScreenTracking } from '../../hooks/useScreenTracking';
 import { trackBookingCompleted, trackBookingCancelled } from '../../utils/analytics';
+import { sendRemotePushToProfile } from '../../utils/notifications';
 import AnimatedCard from '../../components/AnimatedCard';
 import AnimatedButton from '../../components/AnimatedButton';
 import { SkeletonBookingList } from '../../components/SkeletonCards';
@@ -39,10 +41,13 @@ interface Booking {
 
 export default function AppointmentsScreen() {
   const { user } = useAuth();
+  const route = useRoute<any>();
+  const navigation = useNavigation<any>();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [highlightedBookingId, setHighlightedBookingId] = useState<string | null>(null);
 
   // Track screen view
   useScreenTracking('Provider Appointments');
@@ -50,6 +55,25 @@ export default function AppointmentsScreen() {
   useEffect(() => {
     fetchBookings();
   }, [user]);
+
+  useEffect(() => {
+    const openBookingId = route.params?.openBookingId as string | undefined;
+    if (!openBookingId || bookings.length === 0) return;
+
+    const matchedBooking = bookings.find((booking) => booking.id === openBookingId);
+    if (!matchedBooking) return;
+
+    setFilter('all');
+    setHighlightedBookingId(openBookingId);
+
+    Alert.alert(
+      'Booking Opened',
+      `${matchedBooking.customer_profiles?.first_name || 'Customer'} • ${matchedBooking.services?.name || 'Service'}`
+    );
+
+    setTimeout(() => setHighlightedBookingId(null), 6000);
+    navigation.setParams?.({ openBookingId: undefined });
+  }, [route.params?.openBookingId, bookings]);
 
   const fetchBookings = async () => {
     if (!user) return;
@@ -111,6 +135,25 @@ export default function AppointmentsScreen() {
         trackBookingCompleted(bookingId, booking.total_price);
       } else if (newStatus === 'cancelled') {
         trackBookingCancelled(bookingId, 'provider_cancelled');
+      }
+
+      if (booking?.customer_id) {
+        const serviceName = booking.services?.name || 'your service';
+        const statusLabel = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+
+        sendRemotePushToProfile(
+          booking.customer_id,
+          `Booking ${statusLabel}`,
+          `Your booking for ${serviceName} is now ${newStatus}.`,
+          {
+            type: 'booking',
+            bookingId,
+            status: newStatus,
+          },
+          'booking'
+        ).catch((pushError) => {
+          console.error('[Appointments] Failed to send customer push:', pushError);
+        });
       }
 
       Alert.alert('Success', `Booking ${newStatus}`);
@@ -237,7 +280,7 @@ export default function AppointmentsScreen() {
         ) : (
           filteredBookings.map((booking) => (
             <AnimatedCard key={booking.id}>
-              <View style={styles.bookingCard}>
+              <View style={[styles.bookingCard, highlightedBookingId === booking.id && styles.bookingCardHighlighted]}>
                 <View style={styles.bookingHeader}>
                   <View style={styles.bookingHeaderLeft}>
                     <Text style={styles.customerName}>
@@ -395,6 +438,11 @@ const styles = StyleSheet.create({
   },
   bookingCard: {
     padding: spacing.cardPadding,
+  },
+  bookingCardHighlighted: {
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.lg,
   },
   bookingHeader: {
     flexDirection: 'row',

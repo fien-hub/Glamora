@@ -10,13 +10,15 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
-import { isAppleAuthAvailable, isGoogleSignInAvailable } from '../../utils/socialAuth';
 import { isBiometricAvailable, authenticateWithBiometrics, getBiometricType } from '../../utils/biometricAuth';
 import { isBiometricEnabled, isTwoFactorEnabled, getTwoFactorMethod } from '../../utils/twoFactorAuth';
 import { supabase } from '../../services/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { UserRole } from '../../types';
 import { validateEmail } from '../../utils/validation';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
@@ -24,12 +26,12 @@ import ModernInput from '../../components/ModernInput';
 
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const { signIn, signInWithGoogle, signInWithApple, user } = useAuth();
+  const selectedRole = (route.params?.preselectedRole as UserRole | undefined) || 'customer';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
-  const [googleSignInAvailable, setGoogleSignInAvailable] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricType, setBiometricType] = useState('Biometric');
   const [showBiometricButton, setShowBiometricButton] = useState(false);
@@ -38,10 +40,8 @@ export default function LoginScreen() {
   const [emailError, setEmailError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  // Check if Apple Auth, Google Sign-In, and Biometric are available
+  // Check if Biometric is available
   useEffect(() => {
-    isAppleAuthAvailable().then(setAppleAuthAvailable);
-    setGoogleSignInAvailable(isGoogleSignInAvailable());
     checkBiometricAvailability();
   }, []);
 
@@ -134,9 +134,7 @@ export default function LoginScreen() {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      // Default to customer role for social login
-      // User can change role later in settings if needed
-      await signInWithGoogle('customer');
+      await signInWithGoogle(selectedRole);
     } catch (error: any) {
       Alert.alert('Google Sign-In Failed', error.message || 'Could not sign in with Google');
     } finally {
@@ -147,12 +145,23 @@ export default function LoginScreen() {
   const handleAppleSignIn = async () => {
     setLoading(true);
     try {
-      // Default to customer role for social login
-      await signInWithApple('customer');
+      await signInWithApple(selectedRole);
     } catch (error: any) {
       Alert.alert('Apple Sign-In Failed', error.message || 'Could not sign in with Apple');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDevResetIntro = async () => {
+    try {
+      await AsyncStorage.removeItem('hasSeenOnboarding');
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Splash' }],
+      });
+    } catch (error: any) {
+      Alert.alert('Reset Failed', error.message || 'Could not reset intro flow');
     }
   };
 
@@ -162,6 +171,14 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        <TouchableOpacity
+          style={styles.backButtonTop}
+          onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Welcome'))}
+          disabled={loading}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+
         {/* Header fades in */}
         <FadeInView delay={0}>
           <View style={styles.header}>
@@ -171,6 +188,7 @@ export default function LoginScreen() {
         </FadeInView>
 
         {/* Form fields slide up with stagger */}
+        <View style={styles.formWrapper}>
         <View style={styles.form}>
           <SlideUpView delay={100}>
             <ModernInput
@@ -235,46 +253,35 @@ export default function LoginScreen() {
             </SlideUpView>
           )}
 
-          {/* Social Login Divider - Only show if social auth is available */}
-          {(googleSignInAvailable || appleAuthAvailable) && (
-            <FadeInView delay={300}>
-              <View style={styles.dividerContainer}>
-                <View style={styles.divider} />
-                <Text style={styles.dividerText}>OR</Text>
-                <View style={styles.divider} />
-              </View>
-            </FadeInView>
-          )}
+          <FadeInView delay={280}>
+            <View style={styles.dividerContainer}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>or continue with</Text>
+              <View style={styles.divider} />
+            </View>
 
-          {/* Social Login Buttons */}
-          {googleSignInAvailable && (
-            <SlideUpView delay={350}>
+            <View style={styles.socialButtonsContainer}>
               <TouchableOpacity
-                style={[styles.socialButton, styles.googleButton, loading && styles.buttonDisabled]}
+                style={[styles.socialButton, loading && styles.buttonDisabled]}
                 onPress={handleGoogleSignIn}
                 disabled={loading}
               >
-                <Text style={styles.socialButtonIcon}>G</Text>
-                <Text style={styles.socialButtonText}>Sign in with Google</Text>
+                <Ionicons name="logo-google" size={20} color={colors.error} />
+                <Text style={styles.socialButtonText}>Google</Text>
               </TouchableOpacity>
-            </SlideUpView>
-          )}
 
-          {/* Apple Sign-In temporarily disabled - requires Apple Developer account setup */}
-          {false && appleAuthAvailable && (
-            <SlideUpView delay={400}>
               <TouchableOpacity
-                style={[styles.socialButton, styles.appleButton, loading && styles.buttonDisabled]}
+                style={[styles.socialButton, loading && styles.buttonDisabled]}
                 onPress={handleAppleSignIn}
                 disabled={loading}
               >
-                <Text style={styles.socialButtonIcon}></Text>
-                <Text style={[styles.socialButtonText, styles.appleButtonText]}>Sign in with Apple</Text>
+                <Ionicons name="logo-apple" size={20} color={colors.text} />
+                <Text style={styles.socialButtonText}>Apple</Text>
               </TouchableOpacity>
-            </SlideUpView>
-          )}
+            </View>
+          </FadeInView>
 
-          <FadeInView delay={450}>
+          <FadeInView delay={300}>
             <TouchableOpacity
               style={styles.linkButton}
               onPress={() => navigation.navigate('Signup')}
@@ -285,6 +292,19 @@ export default function LoginScreen() {
               </Text>
             </TouchableOpacity>
           </FadeInView>
+
+          {__DEV__ && (
+            <FadeInView delay={320}>
+              <TouchableOpacity
+                style={styles.devResetButton}
+                onPress={handleDevResetIntro}
+                disabled={loading}
+              >
+                <Text style={styles.devResetText}>DEV: Reset intro flow</Text>
+              </TouchableOpacity>
+            </FadeInView>
+          )}
+        </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -298,12 +318,25 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  backButtonTop: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    marginTop: spacing.xl,
   },
   header: {
     alignItems: 'center',
-    marginTop: spacing.xxl * 2,
+    marginTop: spacing.md,
     marginBottom: spacing.xxl,
+  },
+  formWrapper: {
+    width: '86%',
+    maxWidth: 300,
+    alignSelf: 'center',
   },
   logoContainer: {
     backgroundColor: colors.primaryLight,
@@ -452,40 +485,40 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: fontWeight.medium,
   },
+  socialButtonsContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
   socialButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: spacing.md,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
     backgroundColor: colors.white,
-  },
-  googleButton: {
-    borderColor: '#DB4437',
-  },
-  appleButton: {
-    backgroundColor: colors.text,
-    borderColor: colors.text,
-  },
-  socialButtonIcon: {
-    fontSize: fontSize.xl,
-    marginRight: spacing.sm,
-    fontWeight: fontWeight.bold,
+    gap: spacing.xs,
   },
   socialButtonText: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
     color: colors.text,
-    fontWeight: fontWeight.medium,
-  },
-  appleButtonText: {
-    color: colors.white,
   },
   linkButton: {
     marginTop: spacing.lg,
     alignItems: 'center',
+  },
+  devResetButton: {
+    marginTop: spacing.lg,
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+  },
+  devResetText: {
+    fontSize: fontSize.sm,
+    color: colors.primaryDarker,
+    fontWeight: fontWeight.medium,
   },
   linkText: {
     fontSize: fontSize.md,

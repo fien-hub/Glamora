@@ -197,7 +197,7 @@ export default function CreatePostScreen() {
     // Validate that all media has a service tagged
     const untaggedMedia = selectedMedia.find(m => !m.serviceId);
     if (untaggedMedia) {
-      Alert.alert('Service Required', 'Please tag a service to your post so customers can book directly.');
+      Alert.alert('Service Required', 'Please select a service for your post so customers can book directly.');
       return;
     }
 
@@ -212,9 +212,7 @@ export default function CreatePostScreen() {
 
         const result = await uploadPortfolioMedia(
           media,
-          providerInfo.id,
-          media.caption,
-          media.serviceId
+          providerInfo.id
         );
 
         if (!result.success) {
@@ -423,7 +421,7 @@ export default function CreatePostScreen() {
         <SlideUpView delay={200}>
           {/* Service Tag - Required */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Tag a Service *</Text>
+            <Text style={styles.inputLabel}>Select a Service *</Text>
             <Text style={styles.inputHint}>Customers can book this service directly from your post</Text>
             {services.length === 0 ? (
               <View style={styles.noServicesWarning}>
@@ -434,20 +432,41 @@ export default function CreatePostScreen() {
               </View>
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.serviceScroll}>
-                {services.map((service) => (
-                  <TouchableOpacity
-                    key={service.id}
-                    style={[styles.serviceChip, currentMedia.serviceId === service.id && styles.serviceChipSelected]}
-                    onPress={() => updateMediaDetails(currentMedia.id, {
-                      serviceId: service.id,
-                      serviceName: service.custom_service_name || service.services.name,
-                    })}
-                  >
-                    <Text style={[styles.serviceChipText, currentMedia.serviceId === service.id && styles.serviceChipTextSelected]}>
-                      {service.custom_service_name || service.services.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {services.map((service) => {
+                  const isSelected = currentMedia.serviceId === service.id;
+                  return (
+                    <TouchableOpacity
+                      key={service.id}
+                      style={[styles.serviceChip, isSelected && styles.serviceChipSelected]}
+                      onPress={() => {
+                        if (isSelected) {
+                          // Deselect if already selected
+                          updateMediaDetails(currentMedia.id, {
+                            serviceId: null,
+                            serviceName: null,
+                          });
+                        } else {
+                          // Select if not selected
+                          updateMediaDetails(currentMedia.id, {
+                            serviceId: service.id,
+                            serviceName: service.custom_service_name || service.services.name,
+                          });
+                        }
+                      }}
+                    >
+                      <View style={styles.checkboxContainer}>
+                        <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
+                          {isSelected && (
+                            <Ionicons name="checkmark" size={14} color={colors.white} />
+                          )}
+                        </View>
+                      </View>
+                      <Text style={[styles.serviceChipText, isSelected && styles.serviceChipTextSelected]}>
+                        {service.custom_service_name || service.services.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
             )}
           </View>
@@ -868,8 +887,29 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   serviceChipSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  checkboxContainer: {
+    marginRight: spacing.sm,
+    zIndex: 10,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: borderRadius.sm,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
@@ -877,6 +917,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
     color: colors.text,
+    paddingRight: spacing.lg,
   },
   serviceChipTextSelected: {
     color: colors.black,

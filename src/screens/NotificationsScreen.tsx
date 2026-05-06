@@ -30,10 +30,20 @@ interface Notification {
 export default function NotificationsScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const normalizeNotification = (row: any): Notification => ({
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    message: row.message,
+    isRead: row.is_read ?? row.isRead ?? false,
+    createdAt: row.created_at ?? row.createdAt ?? new Date().toISOString(),
+    relatedId: row.related_id ?? row.relatedId,
+  });
 
   // Track screen view
   useScreenTracking('Notifications');
@@ -53,7 +63,7 @@ export default function NotificationsScreen() {
           filter: `user_id=eq.${user?.id}`,
         },
         (payload) => {
-          setNotifications((prev) => [payload.new as Notification, ...prev]);
+          setNotifications((prev) => [normalizeNotification(payload.new), ...prev]);
         }
       )
       .subscribe();
@@ -73,7 +83,7 @@ export default function NotificationsScreen() {
         .limit(50);
 
       if (error) throw error;
-      setNotifications(data || []);
+      setNotifications((data || []).map(normalizeNotification));
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -118,7 +128,64 @@ export default function NotificationsScreen() {
     }
   };
 
-  const handleNotificationPress = (notification: Notification) => {
+  const openRelatedChat = async (relatedId: string): Promise<boolean> => {
+    if (!user) return false;
+
+    try {
+      let chatMessage: { booking_id: string | null; sender_id: string; receiver_id: string } | null = null;
+
+      const { data: messageById } = await supabase
+        .from('messages')
+        .select('booking_id, sender_id, receiver_id')
+        .eq('id', relatedId)
+        .single();
+
+      if (messageById) {
+        chatMessage = messageById;
+      } else {
+        const { data: messageByBooking } = await supabase
+          .from('messages')
+          .select('booking_id, sender_id, receiver_id, created_at')
+          .eq('booking_id', relatedId)
+          .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (messageByBooking) {
+          chatMessage = messageByBooking;
+        }
+      }
+
+      if (!chatMessage) return false;
+
+      const otherAuthUserId =
+        chatMessage.sender_id === user.id ? chatMessage.receiver_id : chatMessage.sender_id;
+
+      const { data: otherProfile } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name')
+        .eq('user_id', otherAuthUserId)
+        .maybeSingle();
+
+      const otherUserName = otherProfile
+        ? `${otherProfile.first_name || ''} ${otherProfile.last_name || ''}`.trim() || 'Conversation'
+        : 'Conversation';
+
+      (navigation as any).navigate('Chat', {
+        bookingId: chatMessage.booking_id,
+        otherUserId: otherProfile?.id || otherAuthUserId,
+        otherUserName,
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error opening related chat:', error);
+      return false;
+    }
+  };
+
+  const handleNotificationPress = async (notification: Notification) => {
     if (!notification.isRead) {
       markAsRead(notification.id);
     }
@@ -127,19 +194,52 @@ export default function NotificationsScreen() {
     switch (notification.type) {
       case 'booking':
         if (notification.relatedId) {
-          (navigation as any).navigate('BookingDetails', {
-            bookingId: notification.relatedId,
-          });
+          if (userRole === 'provider') {
+            (navigation as any).navigate('ProviderMain', {
+              screen: 'Appointments',
+              params: { openBookingId: notification.relatedId },
+            });
+          } else {
+            (navigation as any).navigate('CustomerMain', {
+              screen: 'Bookings',
+              params: { openBookingId: notification.relatedId },
+            });
+          }
+        } else if (userRole === 'provider') {
+          (navigation as any).navigate('ProviderMain', { screen: 'Appointments' });
+        } else {
+          (navigation as any).navigate('CustomerMain', { screen: 'Bookings' });
         }
         break;
       case 'message':
-        (navigation as any).navigate('Messages');
+        if (notification.relatedId) {
+          const opened = await openRelatedChat(notification.relatedId);
+          if (opened) break;
+        }
+        if (userRole === 'provider') {
+          (navigation as any).navigate('ProviderMain', { screen: 'Messages' });
+        } else {
+          (navigation as any).navigate('CustomerMain', { screen: 'Messages' });
+        }
         break;
       case 'review':
-        (navigation as any).navigate('Reviews');
+        if (userRole === 'provider') {
+          (navigation as any).navigate('Reviews');
+        } else if (notification.relatedId) {
+          (navigation as any).navigate('CustomerMain', {
+            screen: 'Bookings',
+            params: { openBookingId: notification.relatedId },
+          });
+        } else {
+          (navigation as any).navigate('CustomerMain', { screen: 'Bookings' });
+        }
         break;
       case 'payment':
-        (navigation as any).navigate('Payments');
+        if (userRole === 'provider') {
+          (navigation as any).navigate('Earnings');
+        } else {
+          (navigation as any).navigate('PaymentHistory');
+        }
         break;
       default:
         break;
@@ -169,6 +269,21 @@ export default function NotificationsScreen() {
         return '🔔';
       default:
         return '•';
+    }
+  };
+
+  const getNotificationDestinationHint = (notification: Notification) => {
+    switch (notification.type) {
+      case 'booking':
+        return 'Opens booking details';
+      case 'message':
+        return 'Opens chat';
+      case 'review':
+        return userRole === 'provider' ? 'Opens reviews' : 'Opens booking details';
+      case 'payment':
+        return userRole === 'provider' ? 'Opens earnings' : 'Opens payment history';
+      default:
+        return 'Opens notifications';
     }
   };
 
@@ -214,6 +329,9 @@ export default function NotificationsScreen() {
         </View>
         <Text style={styles.message} numberOfLines={2}>
           {item.message}
+        </Text>
+        <Text style={styles.destinationHint} numberOfLines={1}>
+          {getNotificationDestinationHint(item)}
         </Text>
       </View>
       {!item.isRead && <View style={styles.unreadDot} />}
@@ -383,6 +501,12 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     lineHeight: 18,
+  },
+  destinationHint: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    marginTop: 2,
+    opacity: 0.8,
   },
   unreadDot: {
     width: 8,

@@ -309,7 +309,7 @@ export default function SavedPostsScreen() {
     <View style={styles.postWrapper}>
       <FeedPostCard
         providerName={item.provider_name}
-        providerAvatar={item.provider_avatar || 'https://via.placeholder.com/100'}
+        providerAvatar={item.provider_avatar || undefined}
         postImage={item.image_url}
         serviceName={item.caption || 'View Portfolio'}
         distance={`Saved ${new Date(item.saved_at).toLocaleDateString()}`}

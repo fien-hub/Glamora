@@ -93,6 +93,7 @@ export default function EditProfileScreen() {
   };
 
   const handleSave = async () => {
+    if (!user) return;
     // Validate required fields
     if (!profileData.firstName.trim() || !profileData.lastName.trim()) {
       Alert.alert('Validation Error', 'First name and last name are required');

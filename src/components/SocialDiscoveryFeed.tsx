@@ -21,6 +21,10 @@ import BrandedRefreshControl from './BrandedRefreshControl';
 import { SkeletonFeedCard } from './SkeletonLoader';
 import { getCurrentLocation } from '../utils/location';
 import { getProviderAvailability, AvailabilityInfo } from '../utils/availability';
+import { useVerificationGuard } from '../hooks/useVerificationGuard';
+
+import { formatTravelTimeDistance } from '../services/location';
+
 
 interface FeedPost {
   id: string;
@@ -49,11 +53,23 @@ interface Category {
   name: string;
 }
 
-export default function SocialDiscoveryFeed() {
+interface SocialDiscoveryFeedProps {
+  showInternalHeader?: boolean;
+  showHeaderSearchBar?: boolean;
+  showHeaderCategoryPills?: boolean;
+}
+
+export default function SocialDiscoveryFeed({
+  showInternalHeader = true,
+  showHeaderSearchBar = true,
+  showHeaderCategoryPills = true,
+}: SocialDiscoveryFeedProps) {
   const navigation = useNavigation();
   const { user } = useAuth();
+  const { requireVerification } = useVerificationGuard();
 
   const [loading, setLoading] = useState(true);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,30 +82,37 @@ export default function SocialDiscoveryFeed() {
 
   const PAGE_SIZE = 10;
 
+
+  // Fetch categories and user location in parallel on mount
   useEffect(() => {
-    initializeData();
+    setLoading(true);
+    fetchCategories();
+    fetchUserLocation();
   }, []);
 
+  // Only load feed when both categories and userLocation are available
   useEffect(() => {
-    if (selectedCategory) {
+    if (categories.length > 0 && userLocation) {
+      const initializeFeed = async () => {
+        await loadFeedPosts(true);
+        setLoading(false);
+        setInitialLoadComplete(true);
+      };
+
+      initializeFeed();
+    }
+  }, [categories, userLocation]);
+
+  // Reload feed when category changes (and userLocation is available)
+  useEffect(() => {
+    if (!initialLoadComplete) return;
+
+    if (selectedCategory && userLocation) {
       loadFeedPosts(true);
-      // Track category filter
       analytics.trackCategoryFilter(selectedCategory, user?.id);
     }
-  }, [selectedCategory]);
+  }, [selectedCategory, userLocation, initialLoadComplete]);
 
-  const initializeData = async () => {
-    setLoading(true);
-    try {
-      await Promise.all([
-        fetchCategories(),
-        fetchUserLocation(),
-      ]);
-      await loadFeedPosts(true);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchCategories = async () => {
     try {
@@ -302,6 +325,11 @@ export default function SocialDiscoveryFeed() {
     try {
       console.log('[Feed] Like button pressed for post:', post.id);
 
+      // Check verification before allowing likes
+      if (!requireVerification('like')) {
+        return;
+      }
+
       if (!user) {
         console.log('[Feed] No user, showing login alert');
         Alert.alert('Login Required', 'Please log in to like posts');
@@ -421,6 +449,11 @@ export default function SocialDiscoveryFeed() {
     try {
       console.log('[Feed] Save button pressed for post:', post.id);
 
+      // Check verification before allowing saves (same as favorites)
+      if (!requireVerification('favorite')) {
+        return;
+      }
+
       if (!user) {
         console.log('[Feed] No user, showing login alert');
         Alert.alert('Login Required', 'Please log in to save posts');
@@ -524,24 +557,26 @@ export default function SocialDiscoveryFeed() {
 
   const renderHeader = () => (
     <View style={styles.header}>
-      {/* Search Bar - Clickable, navigates to Search screen */}
-      <TouchableOpacity
-        style={styles.searchBar}
-        onPress={handleSearchPress}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="search" size={20} color={colors.textSecondary} />
-        <Text style={styles.searchPlaceholder}>Search for services...</Text>
-        <Ionicons name="options-outline" size={20} color={colors.textSecondary} />
-      </TouchableOpacity>
+      {showHeaderSearchBar && (
+        <TouchableOpacity
+          style={styles.searchBar}
+          onPress={handleSearchPress}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="search" size={20} color={colors.textSecondary} />
+          <Text style={styles.searchPlaceholder}>Search for services...</Text>
+          <Ionicons name="options-outline" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+      )}
 
-      {/* Category Pills */}
-      <PillTabs
-        tabs={categories.map(c => c.name)}
-        activeTab={selectedCategory}
-        onTabChange={handleCategoryChange}
-        scrollable
-      />
+      {showHeaderCategoryPills && (
+        <PillTabs
+          tabs={categories.map(c => c.name)}
+          activeTab={selectedCategory}
+          onTabChange={handleCategoryChange}
+          scrollable
+        />
+      )}
     </View>
   );
 
@@ -549,11 +584,11 @@ export default function SocialDiscoveryFeed() {
     <View style={styles.gridItem}>
       <FeedPostCard
         providerName={item.provider_name}
-        providerAvatar={item.provider_avatar || 'https://via.placeholder.com/100'}
+        providerAvatar={item.provider_avatar || undefined}
         postImage={item.image_url}
         serviceName={item.service_name || item.caption || 'View Portfolio'}
         servicePrice={item.service_price ? item.service_price / 100 : undefined}
-        distance={item.distance ? `${item.distance.toFixed(1)} km` : 'N/A'}
+        distance={typeof item.distance === 'number' ? formatTravelTimeDistance(item.distance) : 'N/A'}
         caption={item.caption}
         likeCount={item.like_count}
         viewCount={item.view_count}
@@ -581,6 +616,10 @@ export default function SocialDiscoveryFeed() {
   };
 
   const renderEmpty = () => {
+    if (!initialLoadComplete) {
+      return null;
+    }
+
     if (error) {
       return (
         <View style={styles.emptyContainer}>
@@ -645,7 +684,11 @@ export default function SocialDiscoveryFeed() {
       keyExtractor={(item) => item.id}
       numColumns={2}
       columnWrapperStyle={styles.gridRow}
-      ListHeaderComponent={renderHeader}
+      ListHeaderComponent={
+        showInternalHeader && (showHeaderSearchBar || showHeaderCategoryPills)
+          ? renderHeader
+          : undefined
+      }
       ListFooterComponent={renderFooter}
       ListEmptyComponent={renderEmpty}
       refreshControl={

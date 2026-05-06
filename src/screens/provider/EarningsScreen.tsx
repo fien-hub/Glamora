@@ -8,12 +8,13 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
-  Linking,
 } from 'react-native';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, fontSize } from '../../constants/theme';
-import { getAccountStatus, createConnectedAccount, getAccountOnboardingLink } from '../../services/stripe';
+import { getPayoutAccountStatus, getPayoutOnboardingUrl } from '../../services/payouts';
+import * as WebBrowser from 'expo-web-browser';
+import { Ionicons } from '@expo/vector-icons';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 
@@ -49,8 +50,9 @@ export default function EarningsScreen() {
     lastMonth: 0,
   });
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [stripeConnected, setStripeConnected] = useState(false);
-  const [stripeAccountStatus, setStripeAccountStatus] = useState<any>(null);
+  const [payoutsConnected, setPayoutsConnected] = useState(false);
+  const [payoutAccountStatus, setPayoutAccountStatus] = useState<any>(null);
+  const [connectingPayout, setConnectingPayout] = useState(false);
 
   useEffect(() => {
     fetchEarningsData();
@@ -71,14 +73,14 @@ export default function EarningsScreen() {
 
       if (!profile) throw new Error('Profile not found');
 
-      // Check Stripe connection status
+      // Check payout connection status
       try {
-        const status = await getAccountStatus();
-        setStripeAccountStatus(status);
-        setStripeConnected(status.connected && status.chargesEnabled);
+        const status = await getPayoutAccountStatus();
+        setPayoutAccountStatus(status);
+        setPayoutsConnected(status.connected && status.chargesEnabled);
       } catch (error) {
-        console.log('No Stripe account connected yet');
-        setStripeConnected(false);
+        if (__DEV__) console.log('No payout account connected yet');
+        setPayoutsConnected(false);
       }
 
       // Fetch all completed bookings with payments
@@ -188,50 +190,24 @@ export default function EarningsScreen() {
     fetchEarningsData();
   };
 
-  const handleConnectStripe = async () => {
+  const handleConnectBank = async () => {
+    setConnectingPayout(true);
     try {
-      // Get profile data
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name')
-        .eq('user_id', user?.id)
-        .single();
-
-      const { data: providerProfile } = await supabase
-        .from('provider_profiles')
-        .select('business_name')
-        .eq('id', profile?.id)
-        .single();
-
-      const businessName = providerProfile?.business_name || `${profile?.first_name} ${profile?.last_name}`;
-
-      // Create Stripe Connect account
-      await createConnectedAccount(user?.email || '', businessName);
-
-      // Get onboarding link
-      const { url } = await getAccountOnboardingLink();
-
-      // Open Stripe onboarding
-      await Linking.openURL(url);
-
-      Alert.alert(
-        'Stripe Connect',
-        'Complete the onboarding process in your browser. Once done, return to the app and refresh this page.',
-        [{ text: 'OK' }]
-      );
+      const url = await getPayoutOnboardingUrl();
+      const result = await WebBrowser.openAuthSessionAsync(url, 'glamora://');
+      // Refresh status after returning
+      const status = await getPayoutAccountStatus();
+      setPayoutAccountStatus(status);
+      setPayoutsConnected(status.connected && status.chargesEnabled);
+      if (result.type !== 'cancel' || status.connected) {
+        if (status.chargesEnabled) {
+          Alert.alert('🎉 Bank Connected!', 'Your bank account is connected. Payouts will be sent automatically after completed bookings.');
+        }
+      }
     } catch (error: any) {
-      console.error('Error connecting Stripe:', error);
-      Alert.alert('Error', error.message || 'Failed to connect Stripe account');
-    }
-  };
-
-  const handleManageStripe = async () => {
-    try {
-      const { url } = await getAccountOnboardingLink();
-      await Linking.openURL(url);
-    } catch (error: any) {
-      console.error('Error opening Stripe dashboard:', error);
-      Alert.alert('Error', error.message || 'Failed to open Stripe dashboard');
+      Alert.alert('Setup Failed', error.message || 'Could not open payout setup. Please try again.');
+    } finally {
+      setConnectingPayout(false);
     }
   };
 
@@ -291,27 +267,45 @@ export default function EarningsScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
       }
     >
-      {/* Stripe Connection Status */}
-      {!stripeConnected && (
-        <View style={styles.stripeWarning}>
-          <Text style={styles.stripeWarningTitle}>💳 Connect Stripe to Receive Payments</Text>
-          <Text style={styles.stripeWarningText}>
-            You need to connect your Stripe account to receive payouts for your bookings.
-          </Text>
-          <TouchableOpacity style={styles.connectButton} onPress={handleConnectStripe}>
-            <Text style={styles.connectButtonText}>Connect Stripe Account</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Payout Status */}
+      {!payoutsConnected && (
+        <FadeInView delay={0}>
+          <View style={styles.payoutWarning}>
+            <View style={styles.payoutWarningHeader}>
+              <Ionicons name="card-outline" size={22} color={colors.warning} />
+              <Text style={styles.payoutWarningTitle}>Set Up Bank Payouts</Text>
+            </View>
+            <Text style={styles.payoutWarningText}>
+              Connect your bank account to receive payments from completed bookings via Stripe.
+            </Text>
+            <TouchableOpacity
+              style={[styles.connectBankButton, connectingPayout && styles.connectBankButtonDisabled]}
+              onPress={handleConnectBank}
+              disabled={connectingPayout}
+            >
+              {connectingPayout ? (
+                <ActivityIndicator size="small" color={colors.white} />
+              ) : (
+                <>
+                  <Ionicons name="lock-closed-outline" size={16} color={colors.white} />
+                  <Text style={styles.connectBankButtonText}>Connect Bank Account</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <Text style={styles.poweredByText}>Powered by Stripe • Bank-level security</Text>
+          </View>
+        </FadeInView>
       )}
 
-      {stripeConnected && stripeAccountStatus && (
-        <View style={styles.stripeConnected}>
-          <Text style={styles.stripeConnectedText}>
-            ✅ Stripe Connected
-            {stripeAccountStatus.payoutsEnabled ? ' • Payouts Enabled' : ' • Payouts Pending'}
+      {payoutsConnected && payoutAccountStatus && (
+        <View style={styles.payoutConnected}>
+          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+          <Text style={styles.payoutConnectedText}>
+            Payouts Connected
+            {payoutAccountStatus.payoutsEnabled ? ' — Active' : ' — Pending approval'}
           </Text>
-          <TouchableOpacity onPress={handleManageStripe}>
-            <Text style={styles.manageLink}>Manage Account →</Text>
+          <TouchableOpacity onPress={handleConnectBank} style={styles.managePayoutButton}>
+            <Text style={styles.managePayoutText}>Manage</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -421,55 +415,83 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.background,
   },
-  stripeWarning: {
-    backgroundColor: colors.warning + '15',
-    borderLeftWidth: 4,
-    borderLeftColor: colors.warning,
+  payoutWarning: {
+    backgroundColor: colors.warning + '12',
+    borderWidth: 1,
+    borderColor: colors.warning + '40',
     padding: spacing.lg,
     margin: spacing.lg,
-    borderRadius: 8,
+    borderRadius: 12,
   },
-  stripeWarningTitle: {
-    fontSize: fontSize.lg,
-    fontWeight: 'bold',
-    color: colors.text,
+  payoutWarningHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     marginBottom: spacing.sm,
   },
-  stripeWarningText: {
+  payoutWarningTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  payoutWarningText: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
+    lineHeight: 20,
   },
-  connectButton: {
-    backgroundColor: colors.primary,
-    padding: spacing.md,
-    borderRadius: 8,
+  connectBankButton: {
+    backgroundColor: colors.text,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    borderRadius: 10,
+    marginBottom: spacing.sm,
   },
-  connectButtonText: {
-    color: colors.black,
+  connectBankButtonDisabled: {
+    opacity: 0.6,
+  },
+  connectBankButtonText: {
+    color: colors.white,
     fontSize: fontSize.md,
     fontWeight: '600',
   },
-  stripeConnected: {
-    backgroundColor: colors.success + '15',
-    borderLeftWidth: 4,
-    borderLeftColor: colors.success,
-    padding: spacing.lg,
-    margin: spacing.lg,
-    borderRadius: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  poweredByText: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
-  stripeConnectedText: {
+  payoutConnected: {
+    backgroundColor: colors.success + '15',
+    borderWidth: 1,
+    borderColor: colors.success + '40',
+    padding: spacing.md,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  payoutConnectedText: {
+    flex: 1,
     fontSize: fontSize.md,
     fontWeight: '600',
     color: colors.success,
   },
-  manageLink: {
-    fontSize: fontSize.md,
-    color: colors.primary,
+  managePayoutButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: colors.success + '60',
+  },
+  managePayoutText: {
+    fontSize: fontSize.sm,
+    color: colors.success,
     fontWeight: '600',
   },
   summaryContainer: {

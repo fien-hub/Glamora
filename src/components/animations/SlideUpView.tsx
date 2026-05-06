@@ -7,17 +7,19 @@ interface SlideUpViewProps {
   delay?: number;
   duration?: number;
   distance?: number;
+  direction?: 'up' | 'left' | 'right';
   enabled?: boolean;
   style?: ViewStyle | ViewStyle[];
 }
 
 /**
- * SlideUpView - Wraps content with a slide-up animation on mount
+ * SlideUpView - Wraps content with a slide animation on mount
  * 
  * @param children - Content to animate
  * @param delay - Delay before animation starts (ms)
  * @param duration - Animation duration (ms)
- * @param distance - Distance to slide up from (px, default: 30)
+ * @param distance - Distance to slide from (px, default: 30)
+ * @param direction - Slide direction ('up' | 'left' | 'right', default: 'up')
  * @param enabled - Whether animation is enabled (default: true)
  * @param style - Additional styles to apply
  * 
@@ -31,17 +33,24 @@ export default function SlideUpView({
   delay,
   duration,
   distance,
+  direction = 'up',
   enabled = true,
   style,
 }: SlideUpViewProps) {
+  const animationType = direction === 'left' ? 'slideLeft' : direction === 'right' ? 'slideRight' : 'slideUp';
+
   const animatedStyle = useEntranceAnimation({
-    type: 'slideUp',
+    type: animationType,
     delay,
     duration,
     distance,
     enabled,
   });
 
-  return <Animated.View style={[style, animatedStyle]}>{children}</Animated.View>;
+  return (
+    <Animated.View style={[style, animatedStyle]} pointerEvents="box-none">
+      {children}
+    </Animated.View>
+  );
 }
 

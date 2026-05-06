@@ -33,9 +33,14 @@ import { supabase } from '../../services/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { analytics } from '../../services/analytics';
 import { getCurrentLocation, reverseGeocode } from '../../services/location';
-import { useStripe } from '@stripe/stripe-react-native';
+import { purchaseBookingProduct, verifyRevenueCatBookingPayment } from '../../services/revenuecat';
+import { trackMetaInitiatedCheckout, trackMetaPurchase } from '../../services/metaAds';
+import { sendRemotePushToProfile } from '../../utils/notifications';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
+import { useVerificationGuard } from '../../hooks/useVerificationGuard';
+import PaymentVerificationPrompt from '../../components/PaymentVerificationPrompt';
+import CachedImage, { CachedAvatarImage } from '../../components/CachedImage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -67,7 +72,6 @@ export default function BookingFlowScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { user } = useAuth();
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   
   const providerId = route.params?.providerId;
   const preSelectedServiceId = route.params?.serviceId;
@@ -103,12 +107,52 @@ export default function BookingFlowScreen() {
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [bookingId, setBookingId] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [profileId, setProfileId] = useState<string | null>(null);
+
+  // Verification guard
+  const {
+    requireVerification,
+    paymentMethodVerified,
+    loading: verificationLoading,
+  } = useVerificationGuard();
 
   useEffect(() => {
+    // Check verification before allowing booking
+    if (!requireVerification('booking')) {
+      navigation.goBack();
+      return;
+    }
+
     if (providerId) {
       loadBookingData();
     }
-  }, [providerId]);
+    if (user) {
+      fetchProfileId();
+    }
+  }, [providerId, user]);
+
+  // Fetch profile ID from profiles table (needed for bookings)
+  const fetchProfileId = async () => {
+    if (!user) return;
+    try {
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching profile ID:', error);
+        return;
+      }
+
+      if (profileData) {
+        setProfileId(profileData.id);
+      }
+    } catch (error) {
+      console.error('Error fetching profile ID:', error);
+    }
+  };
 
   // Calculate pricing when service and location are set
   useEffect(() => {
@@ -127,17 +171,35 @@ export default function BookingFlowScreen() {
         .select(`
           id,
           business_name,
-          profiles (avatar_url)
+          profiles (user_id, avatar_url)
         `)
         .eq('id', providerId)
         .single();
 
       if (providerError) throw providerError;
 
+      const providerProfiles = providerData.profiles as any;
+      const providerUserId = Array.isArray(providerProfiles)
+        ? providerProfiles?.[0]?.user_id
+        : providerProfiles?.user_id;
+
+      if (providerUserId) {
+        const { data: activeUser, error: activeUserError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', providerUserId)
+          .eq('is_active', true)
+          .single();
+
+        if (activeUserError || !activeUser) {
+          throw new Error('This provider is currently unavailable for booking.');
+        }
+      }
+
       setProvider({
         id: providerData.id,
         business_name: providerData.business_name,
-        avatar_url: providerData.profiles?.avatar_url,
+        avatar_url: providerProfiles?.avatar_url ?? (Array.isArray(providerProfiles) ? providerProfiles[0]?.avatar_url : undefined),
       });
 
       // Get provider services
@@ -166,18 +228,25 @@ export default function BookingFlowScreen() {
         provider_service_id: ps.id,
       })) || [];
 
-      // If coming from a tagged post, only show that service
+      // If coming from a tagged post/portfolio, only show that specific service
       if (preSelectedServiceId) {
+        if (__DEV__) console.log('[BookingFlow] Pre-selected service ID:', preSelectedServiceId);
+        if (__DEV__) console.log('[BookingFlow] Available services:', transformedServices.map(s => ({ id: s.id, ps_id: s.provider_service_id, name: s.name })));
+
         const preSelected = transformedServices.find(
-          (s) => s.provider_service_id === preSelectedServiceId
+          (s) => s.provider_service_id === preSelectedServiceId || s.id === preSelectedServiceId
         );
+
         if (preSelected) {
-          setServices([preSelected]); // Only show the tagged service
+          if (__DEV__) console.log('[BookingFlow] Found pre-selected service:', preSelected.name);
+          setServices([preSelected]); // ONLY show the tagged service
           setSelectedService(preSelected);
         } else {
+          console.warn('[BookingFlow] Pre-selected service not found, showing all services');
           setServices(transformedServices);
         }
       } else {
+        if (__DEV__) console.log('[BookingFlow] No pre-selected service, showing all services');
         setServices(transformedServices);
       }
     } catch (error) {
@@ -235,15 +304,17 @@ export default function BookingFlowScreen() {
     try {
       const location = await getCurrentLocation();
       if (location) {
-        const addressInfo = await reverseGeocode(location.latitude, location.longitude);
+        // Pass location as object with latitude and longitude properties
+        const addressInfo = await reverseGeocode(location);
         if (addressInfo) {
           setAddress(addressInfo.street || '');
           setCity(addressInfo.city || '');
-          setState(addressInfo.region || '');
-          setZipCode(addressInfo.postalCode || '');
+          setState(addressInfo.state || '');
+          setZipCode(addressInfo.zipCode || '');
         }
       }
     } catch (error) {
+      console.error('Error using current location:', error);
       Alert.alert('Location Error', 'Could not get your location');
     } finally {
       setLoadingLocation(false);
@@ -291,56 +362,34 @@ export default function BookingFlowScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     try {
-      // Create payment intent
-      const paymentResponse = await fetch(
-        `${process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000'}/api/payments/create-payment-intent`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            amount: pricingData?.pricing?.total_cents || selectedService.basePrice,
-            currency: 'usd',
-            provider_id: providerId,
-            customer_id: user.id,
-          }),
-        }
-      );
-
-      const paymentData = await paymentResponse.json();
-
-      if (!paymentData.success) {
-        throw new Error(paymentData.error || 'Payment setup failed');
-      }
-
-      // Initialize Stripe Payment Sheet
-      const { error: initError } = await initPaymentSheet({
-        paymentIntentClientSecret: paymentData.data.clientSecret,
-        merchantDisplayName: 'Glamora',
-        style: 'automatic',
+      const amountCents = pricingData?.pricing?.total_cents || selectedService.basePrice;
+      void trackMetaInitiatedCheckout(amountCents / 100, {
+        providerId,
+        serviceId: selectedService.provider_service_id,
+        source: 'booking_flow_screen',
       });
 
-      if (initError) {
-        throw new Error(initError.message);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Session expired. Please log in again.');
       }
 
-      // Present payment sheet
-      const { error: paymentError } = await presentPaymentSheet();
-
-      if (paymentError) {
-        if (paymentError.code !== 'Canceled') {
-          throw new Error(paymentError.message);
-        }
-        return; // User cancelled
-      }
+      const purchaseData = await purchaseBookingProduct(user.id);
+      const verification = await verifyRevenueCatBookingPayment(session.access_token, purchaseData);
 
       // Payment successful - create booking
       const bookingDate = selectedDate.toISOString().split('T')[0];
       const fullAddress = `${address}, ${city}, ${state} ${zipCode}`;
 
+      // Use profile ID for customer_id (references customer_profiles.id)
+      if (!profileId) {
+        throw new Error('Profile not loaded. Please try again.');
+      }
+
       const { data: booking, error: bookingError } = await supabase
         .from('bookings')
         .insert({
-          customer_id: user.id,
+          customer_id: profileId,
           provider_id: providerId,
           provider_service_id: selectedService.provider_service_id,
           booking_date: bookingDate,
@@ -348,8 +397,8 @@ export default function BookingFlowScreen() {
           service_address: fullAddress,
           notes: notes || null,
           status: 'pending',
-          total_amount: (pricingData?.pricing?.total_cents || selectedService.basePrice) / 100,
-          payment_intent_id: paymentData.data.paymentIntentId,
+          total_amount: amountCents / 100,
+          payment_intent_id: verification?.paymentReference || `rc_${purchaseData.transactionId}`,
           payment_status: 'paid',
         })
         .select()
@@ -357,13 +406,34 @@ export default function BookingFlowScreen() {
 
       if (bookingError) throw bookingError;
 
+      sendRemotePushToProfile(
+        providerId,
+        'New Booking Request',
+        `${selectedService.name} booking requested for ${bookingDate} at ${selectedTime}`,
+        {
+          type: 'booking',
+          bookingId: booking.id,
+          providerId,
+          serviceId: selectedService.provider_service_id,
+        },
+        'booking'
+      ).catch((pushError) => {
+        console.error('[BookingFlow] Failed to send provider push:', pushError);
+      });
+
       setBookingId(booking.id);
       setShowSuccess(true);
+      void trackMetaPurchase(amountCents / 100, 'USD', {
+        bookingId: booking.id,
+        providerId,
+        source: 'booking_flow_screen',
+      });
 
       analytics.track('booking_created', {
         provider_id: providerId,
         service_id: selectedService.id,
-        amount: pricingData?.pricing?.total_cents / 100,
+        amount: amountCents / 100,
+        payment_provider: 'revenuecat',
       });
     } catch (error: any) {
       Alert.alert('Booking Failed', error.message || 'Please try again');
@@ -436,6 +506,35 @@ export default function BookingFlowScreen() {
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setSelectedService(service);
+                  // Trigger price calculation immediately if address is available
+                  if (address && city && state && zipCode) {
+                    setLoadingPrice(true);
+                    (async () => {
+                      try {
+                        const fullAddress = `${address}, ${city}, ${state} ${zipCode}`;
+                        const response = await fetch(
+                          `${process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000'}/api/pricing/calculate`,
+                          {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              provider_id: providerId,
+                              service_id: service.id,
+                              customer_address: fullAddress,
+                            }),
+                          }
+                        );
+                        const data = await response.json();
+                        if (data.success) {
+                          setPricingData(data.data);
+                        }
+                      } catch (error) {
+                        console.error('[BookingFlow] Immediate pricing error:', error);
+                      } finally {
+                        setLoadingPrice(false);
+                      }
+                    })();
+                  }
                 }}
                 activeOpacity={0.7}
               >
@@ -456,7 +555,13 @@ export default function BookingFlowScreen() {
                   <View style={styles.serviceFooter}>
                     <View style={styles.priceTag}>
                       <Text style={styles.priceFrom}>From</Text>
-                      <Text style={styles.servicePrice}>${(service.basePrice / 100).toFixed(2)}</Text>
+                      {selectedService?.id === service.id && pricingData && pricingData.pricing?.total_cents ? (
+                        <Text style={styles.servicePrice}>
+                          ${ (pricingData.pricing.total_cents / 100).toFixed(2) }
+                        </Text>
+                      ) : (
+                        <Text style={styles.servicePrice}>${(service.basePrice / 100).toFixed(2)}</Text>
+                      )}
                     </View>
                     <View style={styles.durationTag}>
                       <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
@@ -654,7 +759,7 @@ export default function BookingFlowScreen() {
           <View style={styles.summaryHeader}>
             <View style={styles.providerAvatar}>
               {provider?.avatar_url ? (
-                <Image source={{ uri: provider.avatar_url }} style={styles.avatarImage} />
+                <CachedAvatarImage uri={provider.avatar_url} style={styles.avatarImage} />
               ) : (
                 <Ionicons name="person" size={24} color={colors.textSecondary} />
               )}
@@ -716,6 +821,13 @@ export default function BookingFlowScreen() {
       </SlideUpView>
 
       <SlideUpView delay={200}>
+        {!verificationLoading && !paymentMethodVerified && (
+          <PaymentVerificationPrompt
+            containerStyle={{ marginBottom: spacing.md }}
+            onPress={() => navigation.navigate('PaymentMethods')}
+          />
+        )}
+
         {/* Price Breakdown */}
         <View style={styles.priceCard}>
           <Text style={styles.priceCardTitle}>Price Breakdown</Text>

@@ -1,25 +1,43 @@
 import React, { useEffect, useRef } from 'react';
-import { View, TouchableOpacity, StyleSheet, Platform, Animated } from 'react-native';
+import {
+  View,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+  Animated,
+} from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';
+import { borderRadius, spacing } from '../constants/theme';
+
+// Icon map per route name
+const ROUTE_ICONS: Record<string, { active: any; inactive: any }> = {
+  Home:     { active: 'home',       inactive: 'home-outline' },
+  Search:   { active: 'search',   inactive: 'search-outline' },
+  Bookings: { active: 'calendar', inactive: 'calendar-outline' },
+  Appointments: { active: 'calendar', inactive: 'calendar-outline' },
+  Services: { active: 'list', inactive: 'list-outline' },
+  Messages: { active: 'chatbubble', inactive: 'chatbubble-outline' },
+  Profile:  { active: 'person',     inactive: 'person-outline' },
+};
+
+const NAV_BG        = '#1C1C1E';   // near-black bar
+const ACTIVE_BG     = '#FFFFFF';   // white bubble for active tab
+const ACTIVE_ICON   = '#1C1C1E';   // dark icon on white bubble
+const INACTIVE_ICON = '#9E9E9E';   // muted icon for inactive
 
 export default function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
-  // Animation values for each tab
-  const pillWidth = useRef(
-    state.routes.map((_, i) => new Animated.Value(i === state.index ? 1 : 0))
+  const scaleAnims = useRef(
+    state.routes.map((_, i) => new Animated.Value(i === state.index ? 1 : 0.85))
   ).current;
 
   useEffect(() => {
-    // Animate pill expansion for active tab
-    pillWidth.forEach((anim, index) => {
-      const isActive = index === state.index;
-
+    scaleAnims.forEach((anim, i) => {
       Animated.spring(anim, {
-        toValue: isActive ? 1 : 0,
-        useNativeDriver: false,
-        damping: 18,
-        stiffness: 200,
+        toValue: i === state.index ? 1 : 0.85,
+        useNativeDriver: true,
+        damping: 15,
+        stiffness: 220,
       }).start();
     });
   }, [state.index]);
@@ -29,14 +47,8 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
       <View style={styles.tabBar}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
-          const label =
-            options.tabBarLabel !== undefined
-              ? options.tabBarLabel
-              : options.title !== undefined
-              ? options.title
-              : route.name;
-
           const isFocused = state.index === index;
+          const icons = ROUTE_ICONS[route.name] ?? ROUTE_ICONS.Home;
 
           const onPress = () => {
             const event = navigation.emit({
@@ -44,23 +56,14 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
               target: route.key,
               canPreventDefault: true,
             });
-
             if (!isFocused && !event.defaultPrevented) {
               navigation.navigate(route.name);
             }
           };
 
           const onLongPress = () => {
-            navigation.emit({
-              type: 'tabLongPress',
-              target: route.key,
-            });
+            navigation.emit({ type: 'tabLongPress', target: route.key });
           };
-
-          // Get icon name from options
-          const iconName = options.tabBarIcon
-            ? (options.tabBarIcon as any)({ focused: isFocused, color: '', size: 24 })?.props?.name
-            : 'home';
 
           return (
             <TouchableOpacity
@@ -68,43 +71,23 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
               accessibilityRole="button"
               accessibilityState={isFocused ? { selected: true } : {}}
               accessibilityLabel={options.tabBarAccessibilityLabel}
-              testID={options.tabBarTestID}
               onPress={onPress}
               onLongPress={onLongPress}
               style={styles.tab}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
             >
               <Animated.View
                 style={[
-                  styles.tabContent,
-                  isFocused && styles.tabContentActive,
-                  {
-                    backgroundColor: pillWidth[index].interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['transparent', colors.primarySubtle],
-                    }),
-                  },
+                  styles.iconWrapper,
+                  isFocused && styles.iconWrapperActive,
+                  { transform: [{ scale: scaleAnims[index] }] },
                 ]}
               >
                 <Ionicons
-                  name={iconName}
-                  size={22}
-                  color={isFocused ? colors.primaryDarker : colors.textLight}
+                  name={isFocused ? icons.active : icons.inactive}
+                  size={24}
+                  color={isFocused ? ACTIVE_ICON : INACTIVE_ICON}
                 />
-                {/* Label - only visible when active, positioned beside icon */}
-                {isFocused && (
-                  <Animated.Text
-                    style={[
-                      styles.tabLabel,
-                      {
-                        opacity: pillWidth[index],
-                      },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {typeof label === 'string' ? label : route.name}
-                  </Animated.Text>
-                )}
               </Animated.View>
             </TouchableOpacity>
           );
@@ -120,47 +103,41 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.lg,
-    paddingTop: spacing.md,
+    alignItems: 'center',
+    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
+    paddingTop: spacing.sm,
     backgroundColor: 'transparent',
   },
   tabBar: {
     flexDirection: 'row',
-    backgroundColor: colors.white,
-    marginHorizontal: spacing.md,
-    borderRadius: borderRadius.xxl,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    shadowColor: colors.text,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: NAV_BG,
+    borderRadius: borderRadius.round,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.lg,
+    width: '84%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
     shadowRadius: 16,
-    elevation: 10,
+    elevation: 14,
+    gap: 4,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tabContent: {
-    flexDirection: 'row',
+  iconWrapper: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: borderRadius.xl,
   },
-  tabContentActive: {
-    paddingHorizontal: spacing.md,
-  },
-  tabLabel: {
-    fontSize: fontSize.caption,
-    fontWeight: fontWeight.semibold,
-    color: colors.primaryDarker,
-    marginLeft: spacing.xs,
+  iconWrapperActive: {
+    backgroundColor: ACTIVE_BG,
   },
 });
 

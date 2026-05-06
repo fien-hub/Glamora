@@ -25,7 +25,7 @@ interface ModernInputProps extends TextInputProps {
   containerStyle?: ViewStyle;
 }
 
-export default function ModernInput({
+const ModernInput = React.forwardRef<TextInput, ModernInputProps>(({
   label,
   value,
   onChangeText,
@@ -37,7 +37,7 @@ export default function ModernInput({
   required,
   containerStyle,
   ...textInputProps
-}: ModernInputProps) {
+}: ModernInputProps, ref) => {
   const [isFocused, setIsFocused] = useState(false);
   const animatedValue = useRef(new Animated.Value(value ? 1 : 0)).current;
   const borderColorAnim = useRef(new Animated.Value(0)).current;
@@ -96,10 +96,11 @@ export default function ModernInput({
         )}
 
         <View style={styles.inputWrapper}>
-          <Animated.Text style={[styles.label, labelStyle]}>
+          <Animated.Text style={[styles.label, labelStyle]} pointerEvents="none">
             {label}{required && ' *'}
           </Animated.Text>
           <TextInput
+            ref={ref}
             style={[styles.input, icon && styles.inputWithIcon]}
             value={value}
             onChangeText={onChangeText}
@@ -133,7 +134,9 @@ export default function ModernInput({
       )}
     </View>
   );
-}
+});
+
+ModernInput.displayName = 'ModernInput';
 
 const styles = StyleSheet.create({
   container: {
@@ -173,8 +176,9 @@ const styles = StyleSheet.create({
   input: {
     fontSize: fontSize.md,
     color: colors.text,
-    paddingVertical: spacing.md,
-    paddingTop: spacing.lg,
+    paddingVertical: spacing.lg, // increase for better touch area
+    paddingTop: spacing.xl, // extra space for floating label
+    minHeight: 48, // ensure minimum touchable height
   },
   inputWithIcon: {
     paddingLeft: 0,
@@ -200,4 +204,6 @@ const styles = StyleSheet.create({
     marginLeft: spacing.sm,
   },
 });
+
+export default ModernInput;
 

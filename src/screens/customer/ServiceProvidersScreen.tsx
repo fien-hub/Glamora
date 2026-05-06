@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius, lineHeight } from '../../constants/theme';
 import { supabase } from '../../services/supabase';
 import { getCurrentLocation, calculateDistance, Coordinates } from '../../utils/location';
+import { formatTravelTimeDistance } from '../../services/location';
 import { getProviderAvailability, AvailabilityInfo } from '../../utils/availability';
 import BookingModal from '../../components/BookingModal';
 import { useScreenTracking } from '../../hooks/useScreenTracking';
@@ -53,13 +54,14 @@ export default function ServiceProvidersScreen() {
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [userLocation, setUserLocation] = useState<Coordinates | null>(null);
   const [favoriteProviders, setFavoriteProviders] = useState<Set<string>>(new Set());
+  const [profileId, setProfileId] = useState<string | null>(null);
 
   useScreenTracking('ServiceProviders', { serviceId: params?.serviceId });
 
   useEffect(() => {
     getUserLocation();
     fetchProviders();
-    if (user) fetchFavorites();
+    if (user) fetchProfileId();
   }, [params?.serviceId, user]);
 
   const getUserLocation = async () => {
@@ -71,13 +73,38 @@ export default function ServiceProvidersScreen() {
     }
   };
 
-  const fetchFavorites = async () => {
+  // Fetch profile ID from profiles table (needed for favorite_providers)
+  const fetchProfileId = async () => {
     if (!user) return;
+    try {
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching profile ID:', error);
+        return;
+      }
+
+      if (profileData) {
+        setProfileId(profileData.id);
+        fetchFavorites(profileData.id);
+      }
+    } catch (error) {
+      console.error('Error fetching profile ID:', error);
+    }
+  };
+
+  const fetchFavorites = async (customerProfileId?: string) => {
+    const idToUse = customerProfileId || profileId;
+    if (!idToUse) return;
     try {
       const { data } = await supabase
         .from('favorite_providers')
         .select('provider_id')
-        .eq('customer_id', user.id);
+        .eq('customer_id', idToUse);
       if (data) setFavoriteProviders(new Set(data.map(f => f.provider_id)));
     } catch (error) {
       console.error('Error fetching favorites:', error);
@@ -115,7 +142,7 @@ export default function ServiceProvidersScreen() {
 
       if (error) throw error;
 
-      let formattedProviders = (data || []).map((ps: any) => {
+      const rawProviders = (data || []).map((ps: any) => {
         const basePrice = Number(ps.base_price);
         const commissionRate = Number(ps.platform_commission_rate) || 0.20;
         const finalPrice = Math.round(basePrice * (1 + commissionRate));
@@ -134,7 +161,27 @@ export default function ServiceProvidersScreen() {
           avatar_url: ps.provider_profiles.profiles.avatar_url,
           provider_service_id: ps.id,
         };
-      });
+      }) as Provider[];
+
+      const providerUserIds = Array.from(
+        new Set(rawProviders.map((provider) => provider.user_id).filter(Boolean))
+      );
+
+      let formattedProviders = rawProviders;
+      if (providerUserIds.length > 0) {
+        const { data: activeUsers, error: activeUsersError } = await supabase
+          .from('users')
+          .select('id')
+          .in('id', providerUserIds)
+          .eq('is_active', true);
+
+        if (!activeUsersError) {
+          const activeUserIds = new Set((activeUsers || []).map((row: any) => row.id));
+          formattedProviders = rawProviders.filter((provider) => activeUserIds.has(provider.user_id));
+        } else {
+          console.warn('Unable to filter deactivated providers:', activeUsersError.message);
+        }
+      }
 
       // Calculate distances
       if (userLocation) {
@@ -178,17 +225,22 @@ export default function ServiceProvidersScreen() {
       Alert.alert('Login Required', 'Please login to save favorites');
       return;
     }
+    if (!profileId) {
+      Alert.alert('Error', 'Profile not loaded. Please try again.');
+      return;
+    }
     const isFavorite = favoriteProviders.has(providerId);
     try {
       if (isFavorite) {
         await supabase.from('favorite_providers').delete()
-          .eq('customer_id', user.id).eq('provider_id', providerId);
+          .eq('customer_id', profileId).eq('provider_id', providerId);
         setFavoriteProviders(prev => { const s = new Set(prev); s.delete(providerId); return s; });
       } else {
-        await supabase.from('favorite_providers').insert({ customer_id: user.id, provider_id: providerId });
+        await supabase.from('favorite_providers').insert({ customer_id: profileId, provider_id: providerId });
         setFavoriteProviders(prev => new Set(prev).add(providerId));
       }
     } catch (error) {
+      console.error('Error updating favorites:', error);
       Alert.alert('Error', 'Failed to update favorites');
     }
   };
@@ -255,7 +307,7 @@ export default function ServiceProvidersScreen() {
                     {provider.distance && (
                       <View style={styles.metaRow}>
                         <Ionicons name="location" size={14} color={colors.textSecondary} />
-                        <Text style={styles.metaText}>{provider.distance.toFixed(1)} mi away</Text>
+                        <Text style={styles.metaText}>{formatTravelTimeDistance(provider.distance)}</Text>
                       </View>
                     )}
                     {provider.availability && (

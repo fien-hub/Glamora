@@ -71,7 +71,7 @@ export default function NotificationBell() {
       if (error) throw error;
 
       setNotifications(data || []);
-      setUnreadCount(data?.filter((n) => !n.is_read).length || 0);
+      setUnreadCount(data?.filter((n: any) => !n.read).length || 0);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -134,9 +134,9 @@ export default function NotificationBell() {
 
     return (
       <TouchableOpacity
-        style={[styles.notificationItem, !item.is_read && styles.unreadNotification]}
+        style={[styles.notificationItem, !item.read && styles.unreadNotification]}
         onPress={() => {
-          if (!item.is_read) {
+          if (!item.read) {
             markAsRead(item.id);
           }
         }}
@@ -149,7 +149,7 @@ export default function NotificationBell() {
           <Text style={styles.notificationMessage}>{item.message}</Text>
           <Text style={styles.notificationTime}>{timeAgo}</Text>
         </View>
-        {!item.is_read && <View style={styles.unreadDot} />}
+        {!item.read && <View style={styles.unreadDot} />}
       </TouchableOpacity>
     );
   };

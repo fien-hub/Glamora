@@ -110,7 +110,7 @@ export default function AnalyticsScreen() {
       if (error) throw error;
 
       // Process analytics data
-      processAnalyticsData(bookings || [], startDate, endDate);
+      processAnalyticsData(bookings || [], startDate, endDate, profile.id);
     } catch (error) {
       console.error('Error fetching analytics:', error);
     } finally {
@@ -124,7 +124,7 @@ export default function AnalyticsScreen() {
     setRefreshing(false);
   };
 
-  const processAnalyticsData = (bookings: any[], startDate: Date, endDate: Date) => {
+  const processAnalyticsData = (bookings: any[], startDate: Date, endDate: Date, profileId?: string) => {
     // 1. Booking Trends (daily counts)
     const bookingTrends = generateBookingTrends(bookings, startDate, endDate);
 
@@ -196,7 +196,7 @@ export default function AnalyticsScreen() {
     supabase
       .from('provider_profiles')
       .select('rating')
-      .eq('id', profile.id)
+      .eq('id', profileId)
       .single()
       .then(({ data }) => {
         setAnalytics((prev) => ({

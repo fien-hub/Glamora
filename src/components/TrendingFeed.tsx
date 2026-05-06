@@ -55,6 +55,7 @@ export default function TrendingFeed() {
   const { user } = useAuth();
   const [trendingPosts, setTrendingPosts] = useState<TrendingPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTimeRange, setSelectedTimeRange] = useState(TIME_RANGES[0]);
   const [error, setError] = useState<string | null>(null);
@@ -172,6 +173,7 @@ export default function TrendingFeed() {
       setError('Failed to load trending posts');
     } finally {
       setLoading(false);
+      setInitialLoadComplete(true);
     }
   };
 
@@ -354,7 +356,7 @@ export default function TrendingFeed() {
     <View style={styles.gridItem}>
       <FeedPostCard
         providerName={item.provider_name}
-        providerAvatar={item.provider_avatar || 'https://via.placeholder.com/100'}
+        providerAvatar={item.provider_avatar || undefined}
         postImage={item.image_url}
         serviceName={item.service_name || item.caption || 'View Portfolio'}
         servicePrice={item.service_price ? item.service_price / 100 : undefined}
@@ -375,6 +377,10 @@ export default function TrendingFeed() {
   );
 
   const renderEmpty = () => {
+    if (!initialLoadComplete) {
+      return null;
+    }
+
     if (error) {
       return (
         <View style={styles.emptyContainer}>

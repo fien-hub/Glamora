@@ -17,12 +17,14 @@ interface DocumentUploadProps {
   documentType: DocumentType;
   onUploadSuccess?: () => void;
   onUploadError?: (error: string) => void;
+  onUploadStateChange?: (uploading: boolean) => void;
 }
 
 export const DocumentUpload: React.FC<DocumentUploadProps> = ({
   documentType,
   onUploadSuccess,
   onUploadError,
+  onUploadStateChange,
 }) => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -78,6 +80,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
     }
 
     setUploading(true);
+    onUploadStateChange?.(true);
 
     try {
       const fileName = selectedImage.split('/').pop() || 'document.jpg';
@@ -102,6 +105,7 @@ export const DocumentUpload: React.FC<DocumentUploadProps> = ({
       onUploadError?.(errorMessage);
     } finally {
       setUploading(false);
+      onUploadStateChange?.(false);
     }
   };
 

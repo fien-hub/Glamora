@@ -68,6 +68,21 @@ interface ProviderInfo {
   certifications?: string[];
 }
 
+interface CustomerReview {
+  id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  customer?: {
+    profile?: {
+      first_name?: string;
+      last_name?: string;
+    };
+  };
+}
+
+// Verification documents are not displayed to customers to protect sensitive PII
+
 export default function ProviderPortfolioScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
@@ -77,6 +92,8 @@ export default function ProviderPortfolioScreen() {
   const [provider, setProvider] = useState<ProviderInfo | null>(null);
   const [providerServices, setProviderServices] = useState<ProviderService[]>([]);
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
+  const [customerReviews, setCustomerReviews] = useState<CustomerReview[]>([]);
+  
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedItem, setSelectedItem] = useState<PortfolioItem | null>(null);
@@ -182,6 +199,34 @@ export default function ProviderPortfolioScreen() {
       };
 
       setProvider(flatProvider);
+
+      // Fetch latest customer reviews for profile display
+      try {
+        const { data: reviewsData, error: reviewsError } = await supabase
+          .from('reviews')
+          .select(`
+            id,
+            rating,
+            comment,
+            created_at,
+            customer:customer_profiles!reviews_customer_id_fkey(
+              profile:profiles(first_name, last_name)
+            )
+          `)
+          .eq('provider_id', providerId)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        if (reviewsError) {
+          console.error('Error loading customer reviews:', reviewsError);
+          setCustomerReviews([]);
+        } else {
+          setCustomerReviews((reviewsData || []) as CustomerReview[]);
+        }
+      } catch (reviewError) {
+        console.error('Error loading customer reviews:', reviewError);
+        setCustomerReviews([]);
+      }
 
       // Fetch provider's services
       const { data: servicesData, error: servicesError } = await supabase
@@ -298,6 +343,8 @@ export default function ProviderPortfolioScreen() {
       }));
 
       setPortfolioItems(items);
+
+      // Do not fetch raw verification documents here; keep sensitive data private
 
       // Track analytics
       analytics.track('provider_portfolio_view', {
@@ -470,6 +517,24 @@ export default function ProviderPortfolioScreen() {
     setRefreshing(false);
   };
 
+  const getReviewerName = (review: CustomerReview) => {
+    const firstName = review.customer?.profile?.first_name?.trim();
+    const lastName = review.customer?.profile?.last_name?.trim();
+
+    if (firstName && lastName) return `${firstName} ${lastName}`;
+    if (firstName) return firstName;
+    return 'Verified Customer';
+  };
+
+  const formatReviewDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -503,7 +568,7 @@ export default function ProviderPortfolioScreen() {
         {/* Provider Header */}
         <View style={styles.header}>
           <Image
-            source={{ uri: provider.avatar_url || 'https://via.placeholder.com/100' }}
+            source={provider.avatar_url ? { uri: provider.avatar_url } : require('../../../assets/icon.png')}
             style={styles.avatar}
           />
           <View style={styles.headerInfo}>
@@ -584,6 +649,64 @@ export default function ProviderPortfolioScreen() {
             </View>
           </View>
         )}
+
+        {/* Customer Reviews */}
+        <View style={styles.reviewsContainer}>
+          <View style={styles.reviewsHeaderRow}>
+            <Text style={styles.reviewsLabel}>Customer Reviews</Text>
+            <View style={styles.reviewsHeaderActions}>
+              {provider.total_reviews > 0 && (
+                <Text style={styles.reviewsCountText}>{provider.total_reviews} total</Text>
+              )}
+              {provider.total_reviews > 0 && (
+                <TouchableOpacity
+                  onPress={() =>
+                    navigation.navigate('ProviderReviews', {
+                      providerId,
+                      providerName: provider.business_name,
+                    })
+                  }
+                >
+                  <Text style={styles.viewAllReviewsText}>View all reviews</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {customerReviews.length === 0 ? (
+            <View style={styles.noReviewsCard}>
+              <Text style={styles.noReviewsText}>No customer reviews yet</Text>
+            </View>
+          ) : (
+            customerReviews.map((review) => (
+              <View key={review.id} style={styles.reviewCard}>
+                <View style={styles.reviewHeader}>
+                  <Text style={styles.reviewerName}>{getReviewerName(review)}</Text>
+                  <Text style={styles.reviewDate}>{formatReviewDate(review.created_at)}</Text>
+                </View>
+
+                <View style={styles.reviewStarsRow}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <Ionicons
+                      key={`${review.id}-${star}`}
+                      name={star <= review.rating ? 'star' : 'star-outline'}
+                      size={14}
+                      color={colors.warning}
+                    />
+                  ))}
+                </View>
+
+                {review.comment ? (
+                  <Text style={styles.reviewComment}>{review.comment}</Text>
+                ) : (
+                  <Text style={styles.reviewCommentMuted}>No written comment</Text>
+                )}
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* Trust badges are shown in the header; raw documents are not displayed. */}
 
         {/* Tabs */}
         <View style={styles.tabsContainer}>
@@ -822,6 +945,8 @@ export default function ProviderPortfolioScreen() {
           </View>
         </View>
       )}
+
+      {/* No document modal; sensitive verification documents are never shown to customers. */}
     </View>
   );
 }
@@ -1174,6 +1299,86 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.primary,
     fontWeight: fontWeight.medium,
+  },
+  reviewsContainer: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.background,
+  },
+  reviewsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  reviewsHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  reviewsLabel: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+  },
+  reviewsCountText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  viewAllReviewsText: {
+    fontSize: fontSize.sm,
+    color: colors.primary,
+    fontWeight: fontWeight.semibold,
+  },
+  noReviewsCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+  },
+  noReviewsText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  reviewCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  reviewerName: {
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+  },
+  reviewDate: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+  },
+  reviewStarsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginBottom: spacing.xs,
+  },
+  reviewComment: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  reviewCommentMuted: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
   },
   tabsContainer: {
     flexDirection: 'row',

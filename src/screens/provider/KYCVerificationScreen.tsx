@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
 import { colors, spacing, fontSize, borderRadius, fontWeight } from '../../constants/theme';
 import { supabase } from '../../services/supabase';
 
@@ -21,8 +20,6 @@ type VerificationResult = 'approved' | 'rejected' | 'manual_review' | null;
 interface RouteParams {
   onSuccess?: () => void;
 }
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
 export default function KYCVerificationScreen() {
   const navigation = useNavigation();
@@ -36,41 +33,13 @@ export default function KYCVerificationScreen() {
 
   const progressAnim = useRef(new Animated.Value(0)).current;
 
-  // Start Stripe Identity verification
+  // Route to manual KYC document verification screen (human-reviewed documents)
   const startVerification = async () => {
-    setLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-
-      const response = await fetch(`${API_URL}/api/verification/kyc/create-session`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sessionData.session?.access_token}`,
-        },
-      });
-
-      const result = await response.json() as { url?: string; kycId?: string; error?: string };
-
-      if (!response.ok) throw new Error(result.error || 'Failed to create verification session');
-
-      // Open Stripe's hosted verification page
-      if (result.url && result.kycId) {
-        const browserResult = await WebBrowser.openBrowserAsync(result.url, {
-          dismissButtonStyle: 'close',
-          showTitle: true,
-        });
-
-        // After browser closes, start polling for result
-        if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') {
-          setStep('verifying');
-          pollForResult(result.kycId);
-        }
-      }
+      (navigation as any).navigate('Verification');
     } catch (error: any) {
-      console.error('Stripe verification error:', error);
-      Alert.alert('Error', error.message || 'Failed to start verification');
-      setLoading(false);
+      console.error('Hosted verification error:', error);
+      Alert.alert('Error', error.message || 'Failed to open verification flow');
     }
   };
 
@@ -141,9 +110,9 @@ export default function KYCVerificationScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text style={styles.headerIcon}>🛡️</Text>
-        <Text style={styles.headerTitle}>Identity Verification</Text>
+        <Text style={styles.headerTitle}>KYC Verification</Text>
         <Text style={styles.headerDescription}>
-          Verify your identity to become a trusted provider on Glamora
+          Submit your KYC documents for human review to become a trusted provider on Glamora
         </Text>
       </View>
 
@@ -151,24 +120,24 @@ export default function KYCVerificationScreen() {
         <View style={styles.iconContainer}>
           <Ionicons name="shield-checkmark" size={40} color={colors.primary} />
         </View>
-        <Text style={styles.cardTitle}>Secure Identity Check</Text>
+        <Text style={styles.cardTitle}>Human-Reviewed Verification</Text>
         <Text style={styles.cardDescription}>
-          We use Stripe Identity for fast and secure verification. You'll scan your ID and take a selfie.
+          Our trust & safety team manually reviews your ID and business documents.
         </Text>
       </View>
 
       <View style={styles.featuresList}>
         <View style={styles.featureItem}>
           <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-          <Text style={styles.featureText}>Instant verification (3-20 seconds)</Text>
+          <Text style={styles.featureText}>Manual review by our trust team</Text>
         </View>
         <View style={styles.featureItem}>
           <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-          <Text style={styles.featureText}>Supports passport, ID card, driver's license</Text>
+          <Text style={styles.featureText}>Supports passport, ID card, driver's license, and business license</Text>
         </View>
         <View style={styles.featureItem}>
           <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-          <Text style={styles.featureText}>Advanced fraud detection</Text>
+          <Text style={styles.featureText}>Service quality + identity checks</Text>
         </View>
         <View style={styles.featureItem}>
           <Ionicons name="lock-closed" size={20} color={colors.success} />
@@ -184,12 +153,12 @@ export default function KYCVerificationScreen() {
         {loading ? (
           <ActivityIndicator color={colors.black} />
         ) : (
-          <Text style={styles.primaryButtonText}>Start Verification</Text>
+          <Text style={styles.primaryButtonText}>Upload Documents</Text>
         )}
       </TouchableOpacity>
 
       <Text style={styles.privacyNote}>
-        🔒 Your documents are processed securely by Stripe and never shared with third parties.
+        🔒 Documents are reviewed securely and never shared outside verification workflows.
       </Text>
     </ScrollView>
   );
@@ -239,21 +208,21 @@ export default function KYCVerificationScreen() {
         </View>
 
         <Text style={styles.resultTitle}>
-          {isApproved ? 'Verification Approved!' : isManualReview ? 'Under Review' : 'Verification Failed'}
+          {isApproved ? 'KYC Approved!' : isManualReview ? 'KYC Under Review' : 'KYC Failed'}
         </Text>
 
         <Text style={styles.resultDescription}>
           {isApproved
-            ? "Congratulations! Your identity has been verified. You're now a trusted provider on Glamora."
+            ? "Congratulations! Your KYC has been approved. You're now a trusted provider on Glamora."
             : isManualReview
-            ? "Your verification is being reviewed by our team. We'll notify you within 24 hours."
+            ? "Your KYC submission is being reviewed by our team. We'll notify you within 24 hours."
             : rejectionReason || 'Please try again with clearer photos of your documents.'}
         </Text>
 
         {isApproved && (
           <View style={styles.badge}>
             <Ionicons name="shield-checkmark" size={20} color={colors.primary} />
-            <Text style={styles.badgeText}>Verified Provider</Text>
+            <Text style={styles.badgeText}>KYC Verified Provider</Text>
           </View>
         )}
 

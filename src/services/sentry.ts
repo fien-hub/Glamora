@@ -68,7 +68,8 @@ export const initSentry = () => {
         
         // Remove sensitive query parameters
         if (event.request.query_string) {
-          event.request.query_string = event.request.query_string
+          const qs = String(event.request.query_string);
+          event.request.query_string = qs
             .replace(/token=[^&]*/gi, 'token=[REDACTED]')
             .replace(/password=[^&]*/gi, 'password=[REDACTED]')
             .replace(/api_key=[^&]*/gi, 'api_key=[REDACTED]');
@@ -111,16 +112,8 @@ export const initSentry = () => {
     
     // Integrations
     integrations: [
-      new Sentry.ReactNativeTracing({
-        // Routing instrumentation for React Navigation
-        routingInstrumentation: new Sentry.ReactNavigationInstrumentation(),
-        
-        // Enable automatic tracing of user interactions
-        tracingOrigins: ['localhost', /^\//],
-        
-        // Enable idle transaction tracking
-        idleTimeout: 5000,
-      }),
+      Sentry.reactNativeTracingIntegration(),
+      Sentry.reactNavigationIntegration(),
     ],
   });
 
@@ -201,10 +194,10 @@ export const addBreadcrumb = (breadcrumb: {
 };
 
 /**
- * Start a performance transaction
+ * Start a performance span (v7+ API)
  */
 export const startTransaction = (name: string, op: string) => {
-  return Sentry.startTransaction({ name, op });
+  return Sentry.startInactiveSpan({ name, op });
 };
 
 export default Sentry;

@@ -1,220 +1,129 @@
-// Mock React before anything else
-import 'react-native';
-import React from 'react';
+// Jest setup for React Native app: mock Sentry to avoid ESM parsing issues in tests
+// Runs before each test file via setupFilesAfterEnv in jest.config.js
 
-// Set up React for testing
-global.React = React;
+// Provide default env vars so Supabase client can initialize in tests
+process.env.EXPO_PUBLIC_SUPABASE_URL =
+  process.env.EXPO_PUBLIC_SUPABASE_URL || 'http://localhost:54321';
+process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'test-anon-key';
 
-import '@testing-library/react-native/extend-expect';
+jest.mock('@sentry/react-native', () => {
+  const noop = () => {};
+  class ReactNativeTracing { constructor() {} }
+  class ReactNavigationInstrumentation { constructor() {} }
+  return {
+    init: noop,
+    captureException: noop,
+    captureMessage: noop,
+    withScope: (fn) => fn && fn({ setExtra: noop }),
+    setUser: noop,
+    setContext: noop,
+    setTag: noop,
+    addBreadcrumb: noop,
+    startTransaction: () => ({ finish: noop }),
+    ReactNativeTracing,
+    ReactNavigationInstrumentation,
+  };
+});
 
-// Mock AsyncStorage
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  setItem: jest.fn(() => Promise.resolve()),
-  getItem: jest.fn(() => Promise.resolve(null)),
-  removeItem: jest.fn(() => Promise.resolve()),
-  clear: jest.fn(() => Promise.resolve()),
-  getAllKeys: jest.fn(() => Promise.resolve([])),
-  multiGet: jest.fn(() => Promise.resolve([])),
-  multiSet: jest.fn(() => Promise.resolve()),
-  multiRemove: jest.fn(() => Promise.resolve()),
+// Mock AsyncStorage to avoid native module requirement in Jest
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+);
+
+// Mock Expo SecureStore used by Supabase auth storage
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn().mockResolvedValue(null),
+  setItemAsync: jest.fn().mockResolvedValue(undefined),
+  deleteItemAsync: jest.fn().mockResolvedValue(undefined),
 }));
 
-// Mock Supabase
-jest.mock('./src/services/supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn(() => Promise.resolve({ data: { session: null }, error: null })),
-      signInWithPassword: jest.fn(),
-      signUp: jest.fn(),
-      signOut: jest.fn(),
-      onAuthStateChange: jest.fn(() => ({
-        data: { subscription: { unsubscribe: jest.fn() } },
-      })),
-    },
-    from: jest.fn(() => ({
-      select: jest.fn().mockReturnThis(),
-      insert: jest.fn().mockReturnThis(),
-      update: jest.fn().mockReturnThis(),
-      delete: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockReturnThis(),
-      single: jest.fn(() => Promise.resolve({ data: null, error: null })),
-    })),
-    storage: {
-      from: jest.fn(() => ({
-        upload: jest.fn(() => Promise.resolve({ data: { path: 'test-path' }, error: null })),
-        getPublicUrl: jest.fn(() => ({ data: { publicUrl: 'https://test-url.com' } })),
-      })),
-    },
-  },
-  dbService: {
-    getProviders: jest.fn(() => Promise.resolve([])),
-    getBookings: jest.fn(() => Promise.resolve([])),
-  },
-}));
-
-// Mock React Navigation
-jest.mock('@react-navigation/native', () => ({
-  ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => ({
-    navigate: jest.fn(),
-    goBack: jest.fn(),
-    setOptions: jest.fn(),
-  }),
-  useRoute: () => ({
-    params: {},
-  }),
-  useFocusEffect: jest.fn(),
-}));
-
-// Mock Expo modules
-jest.mock('expo-image-picker', () => ({
-  launchImageLibraryAsync: jest.fn(() =>
-    Promise.resolve({
-      canceled: false,
-      assets: [{ uri: 'test-image-uri', width: 100, height: 100 }],
-    })
-  ),
-  MediaTypeOptions: {
-    Images: 'Images',
-  },
-  requestMediaLibraryPermissionsAsync: jest.fn(() =>
-    Promise.resolve({ status: 'granted' })
-  ),
-}));
-
-jest.mock('expo-location', () => ({
-  requestForegroundPermissionsAsync: jest.fn(() =>
-    Promise.resolve({ status: 'granted' })
-  ),
-  getCurrentPositionAsync: jest.fn(() =>
-    Promise.resolve({
-      coords: { latitude: 0, longitude: 0 },
-    })
-  ),
-}));
-
-jest.mock('expo-notifications', () => ({
-  requestPermissionsAsync: jest.fn(() =>
-    Promise.resolve({ status: 'granted' })
-  ),
-  getExpoPushTokenAsync: jest.fn(() =>
-    Promise.resolve({ data: 'test-push-token' })
-  ),
-  setNotificationHandler: jest.fn(),
-  addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
-  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
-}));
-
-jest.mock('expo-local-authentication', () => ({
-  hasHardwareAsync: jest.fn(() => Promise.resolve(true)),
-  isEnrolledAsync: jest.fn(() => Promise.resolve(true)),
-  authenticateAsync: jest.fn(() =>
-    Promise.resolve({ success: true })
-  ),
-  SecurityLevel: {
-    BIOMETRIC_STRONG: 2,
-  },
-}));
-
-jest.mock('expo-calendar', () => ({
-  requestCalendarPermissionsAsync: jest.fn(() =>
-    Promise.resolve({ status: 'granted' })
-  ),
-  getCalendarsAsync: jest.fn(() => Promise.resolve([])),
-  createEventAsync: jest.fn(() => Promise.resolve('test-event-id')),
-  deleteEventAsync: jest.fn(() => Promise.resolve()),
-}));
-
-jest.mock('expo-device', () => ({
-  deviceName: 'Test Device',
-  modelName: 'Test Model',
-  osName: 'iOS',
-  osVersion: '17.0',
-}));
-
+// Mock Expo Constants to avoid importing expo-modules-core in Jest
 jest.mock('expo-constants', () => ({
   default: {
-    expoConfig: {
-      extra: {},
-    },
-    manifest: {},
+    expoConfig: { extra: {} },
+    platform: { android: null, ios: null, web: null },
+    manifest: null,
+    systemFonts: [],
   },
 }));
 
-jest.mock('expo-sharing', () => ({
-  isAvailableAsync: jest.fn(() => Promise.resolve(true)),
-  shareAsync: jest.fn(() => Promise.resolve()),
+// Mock Expo Device (native module) to avoid expo-modules-core dependency in Jest
+jest.mock('expo-device', () => ({
+  osName: 'iOS',
+  osVersion: '17.0',
+  modelName: 'iPhone',
+  brand: 'Apple',
 }));
 
-jest.mock('expo-file-system', () => ({
-  downloadAsync: jest.fn(() =>
-    Promise.resolve({ uri: 'file://test-path' })
-  ),
-  cacheDirectory: 'file://cache/',
-}));
-
-// Mock Clipboard
-jest.mock('@react-native-clipboard/clipboard', () => ({
-  setString: jest.fn(),
-  getString: jest.fn(() => Promise.resolve('')),
-}));
-
-// Mock Stripe
-jest.mock('@stripe/stripe-react-native', () => ({
-  StripeProvider: ({ children }) => children,
-  useStripe: () => ({
-    confirmPayment: jest.fn(() => Promise.resolve({ paymentIntent: { id: 'test-id' } })),
-    createPaymentMethod: jest.fn(() => Promise.resolve({ paymentMethod: { id: 'test-pm-id' } })),
-  }),
-  CardField: 'CardField',
-}));
-
-// Mock Mixpanel
-jest.mock('mixpanel-react-native', () => ({
-  Mixpanel: {
-    init: jest.fn(() => Promise.resolve()),
-    track: jest.fn(),
-    identify: jest.fn(),
-    getPeople: jest.fn(() => ({
-      set: jest.fn(),
-    })),
-  },
-}));
-
-// Mock Google Sign-In
-jest.mock('@react-native-google-signin/google-signin', () => ({
-  GoogleSignin: {
-    configure: jest.fn(),
-    hasPlayServices: jest.fn(() => Promise.resolve(true)),
-    signIn: jest.fn(() =>
-      Promise.resolve({
-        idToken: 'test-id-token',
-        user: { email: 'test@example.com' },
-      })
-    ),
-    signOut: jest.fn(() => Promise.resolve()),
-  },
-}));
-
-// Mock Apple Authentication
+// Mock Expo Apple Authentication (native module) for tests
 jest.mock('expo-apple-authentication', () => ({
-  isAvailableAsync: jest.fn(() => Promise.resolve(true)),
-  signInAsync: jest.fn(() =>
-    Promise.resolve({
-      identityToken: 'test-identity-token',
-      email: 'test@example.com',
-    })
-  ),
-  AppleAuthenticationScope: {
-    EMAIL: 'EMAIL',
-    FULL_NAME: 'FULL_NAME',
-  },
+  isAvailableAsync: jest.fn().mockResolvedValue(false),
+  signInAsync: jest.fn(),
+  AppleAuthenticationScope: { FULL_NAME: 'FULL_NAME', EMAIL: 'EMAIL' },
 }));
 
-// Silence console warnings during tests
-global.console = {
-  ...console,
-  warn: jest.fn(),
-  error: jest.fn(),
-};
+// Mock Expo Location (native module) for tests
+jest.mock('expo-location', () => ({
+  requestForegroundPermissionsAsync: jest
+    .fn()
+    .mockResolvedValue({ status: 'granted' }),
+  getCurrentPositionAsync: jest.fn().mockResolvedValue({
+    coords: {
+      latitude: 0,
+      longitude: 0,
+      accuracy: 0,
+      altitude: 0,
+      heading: 0,
+      speed: 0,
+    },
+    timestamp: Date.now(),
+  }),
+  watchPositionAsync: jest.fn().mockResolvedValue({ remove: () => {} }),
+}));
 
+// Mock Expo Calendar (native module) for tests
+jest.mock('expo-calendar', () => ({
+  requestCalendarPermissionsAsync: jest
+    .fn()
+    .mockResolvedValue({ status: 'granted' }),
+  getCalendarsAsync: jest
+    .fn()
+    .mockResolvedValue([
+      {
+        id: '1',
+        title: 'Default',
+        isPrimary: true,
+        allowsModifications: true,
+      },
+    ]),
+  createEventAsync: jest.fn().mockResolvedValue('event-1'),
+  updateEventAsync: jest.fn().mockResolvedValue(undefined),
+  deleteEventAsync: jest.fn().mockResolvedValue(undefined),
+  AlarmMethod: { ALERT: 'alert' },
+  EntityTypes: { EVENT: 'event' },
+}));
+
+// Make Supabase client query builder mockable in tests that expect jest.fn()
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { supabase } = require('./src/services/supabase');
+  if (supabase) {
+    // Replace `from` with a jest mock so tests can do (supabase.from as jest.Mock)...
+    // Individual tests will provide the return shape they need
+    supabase.from = jest.fn();
+
+    // Provide minimal auth mocks used by some utils during tests
+    supabase.auth = {
+      signInWithIdToken: jest.fn().mockResolvedValue({ data: { user: null, session: null }, error: null }),
+      signInWithPassword: jest.fn().mockResolvedValue({ data: { session: null, user: null }, error: null }),
+      signUp: jest.fn().mockResolvedValue({ data: { user: null, session: null }, error: null }),
+      signOut: jest.fn().mockResolvedValue({ error: null }),
+      getUser: jest.fn().mockResolvedValue({ data: { user: null }, error: null }),
+      updateUser: jest.fn().mockResolvedValue({ data: {}, error: null }),
+      resetPasswordForEmail: jest.fn().mockResolvedValue({ data: {}, error: null }),
+    };
+  }
+} catch (e) {
+  // If requiring supabase fails during setup, ignore; tests that import it will still work
+}

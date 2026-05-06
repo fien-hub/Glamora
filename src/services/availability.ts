@@ -104,7 +104,7 @@ export const checkProviderAvailability = async (
       // Check for time conflicts
       for (const booking of existingBookings) {
         const bookingTime = booking.scheduled_time;
-        const bookingDuration = booking.provider_services?.duration_minutes || 60;
+        const bookingDuration = (Array.isArray(booking.provider_services) ? booking.provider_services[0]?.duration_minutes : (booking.provider_services as any)?.duration_minutes) || 60;
         
         // Parse booking time
         const [bookingHours, bookingMinutes] = bookingTime.split(':').map(Number);
@@ -187,7 +187,7 @@ export const getAvailableTimeSlots = async (
 
     const bookedSlots = existingBookings?.map((booking) => {
       const [hours, minutes] = booking.scheduled_time.split(':').map(Number);
-      const duration = booking.provider_services?.duration_minutes || 60;
+      const duration = (Array.isArray(booking.provider_services) ? booking.provider_services[0]?.duration_minutes : (booking.provider_services as any)?.duration_minutes) || 60;
       return {
         start: hours * 60 + minutes,
         end: hours * 60 + minutes + duration,

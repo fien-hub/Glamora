@@ -45,16 +45,8 @@ interface AddServiceModalProps {
 const CUSTOM_SERVICE_ID = '550e8400-e29b-41d4-a716-446655440999';
 const PLATFORM_COMMISSION_RATE = 0.20;
 
-// Standard travel fees enforced by platform (in dollars, by miles)
-// Cost-based to fairly compensate providers for round-trip travel
-export const STANDARD_TRAVEL_FEES = {
-  '0-3 mi': 5,       // $5 for very close (6 mi round trip)
-  '3-5 mi': 8,       // $8 for nearby (10 mi round trip)
-  '5-8 mi': 12,      // $12 for medium distance (16 mi round trip)
-  '8-12 mi': 18,     // $18 for farther (24 mi round trip)
-  '12-15 mi': 22,    // $22 for far (30 mi round trip)
-  '15+ mi': 30,      // $30 for special requests (40+ mi round trip)
-};
+// Import shared travel fee table
+import { STANDARD_TRAVEL_FEES } from '../config/travelFees';
 
 // Calculate provider earnings (base price + travel fee)
 const calculateProviderEarnings = (basePrice: number, travelFee: number = 0): number => {

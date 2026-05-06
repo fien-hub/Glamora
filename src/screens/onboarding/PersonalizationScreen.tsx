@@ -5,13 +5,14 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,6 +20,8 @@ import { getCurrentLocation } from '../../services/location';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 import ScaleInView from '../../components/animations/ScaleInView';
+import FormCard from '../../components/FormCard';
+import ModernInput from '../../components/ModernInput';
 
 interface ServiceCategory {
   id: string;
@@ -26,8 +29,36 @@ interface ServiceCategory {
   icon: string;
 }
 
+const getCategoryIcon = (categoryName: string): keyof typeof Ionicons.glyphMap => {
+  const normalized = categoryName.toLowerCase();
+
+  if (normalized.includes('hair') || normalized.includes('braid') || normalized.includes('wig')) {
+    return 'cut-outline';
+  }
+  if (normalized.includes('nail') || normalized.includes('manicure') || normalized.includes('pedicure')) {
+    return 'hand-left-outline';
+  }
+  if (normalized.includes('makeup') || normalized.includes('cosmetic') || normalized.includes('beauty')) {
+    return 'color-palette-outline';
+  }
+  if (normalized.includes('lash') || normalized.includes('brow')) {
+    return 'eye-outline';
+  }
+  if (normalized.includes('facial') || normalized.includes('skin') || normalized.includes('spa')) {
+    return 'flower-outline';
+  }
+  if (normalized.includes('massage') || normalized.includes('body') || normalized.includes('wellness')) {
+    return 'body-outline';
+  }
+  if (normalized.includes('wax') || normalized.includes('thread')) {
+    return 'water-outline';
+  }
+
+  return 'sparkles-outline';
+};
+
 export default function PersonalizationScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { user, refreshOnboardingStatus } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -48,6 +79,14 @@ export default function PersonalizationScreen() {
 
   // Step 4: Budget
   const [budget, setBudget] = useState<string>('');
+
+  const totalSteps = 4;
+  const stepTitles = [
+    'Service Interests',
+    'Location',
+    'Booking Time',
+    'Budget',
+  ];
 
   useEffect(() => {
     fetchCategories();
@@ -189,8 +228,6 @@ export default function PersonalizationScreen() {
       console.log('[Personalization] Refreshing onboarding status...');
       await refreshOnboardingStatus();
       console.log('[Personalization] Onboarding status refreshed - navigation will auto-update');
-
-      // No manual navigation needed - AuthContext will handle it
       setLoading(false);
     } catch (error: any) {
       console.error('[Personalization] Error saving preferences:', error);
@@ -227,17 +264,19 @@ export default function PersonalizationScreen() {
   const renderProgressBar = () => (
     <FadeInView delay={0}>
       <View style={styles.progressContainer}>
-        {[1, 2, 3, 4].map((s) => (
-          <View
-            key={s}
-            style={[styles.progressDot, s <= step && styles.progressDotActive]}
-          />
-        ))}
+        <View style={styles.progressHeaderRow}>
+          <Text style={styles.progressStepText}>Step {step} of {totalSteps}</Text>
+          <Text style={styles.progressStepLabel}>{stepTitles[step - 1]}</Text>
+        </View>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${(step / totalSteps) * 100}%` }]} />
+        </View>
       </View>
     </FadeInView>
   );
 
   return (
+    <SafeAreaView style={styles.safeArea}>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -266,31 +305,48 @@ export default function PersonalizationScreen() {
               </Text>
             </FadeInView>
 
-            <View style={styles.categoriesGrid}>
-              {categories.map((category, index) => (
-                <ScaleInView
-                  key={category.id}
-                  delay={Math.min(index * 50, 300)}
-                  style={styles.categoryCardWrapper}
-                >
-                  <TouchableOpacity
-                    style={[
-                      styles.categoryCard,
-                      selectedCategories.includes(category.id) && styles.categoryCardSelected,
-                    ]}
-                    onPress={() => toggleCategory(category.id)}
+            <FormCard
+              title="Beauty Services"
+              subtitle="Choose one or more categories"
+              icon="✨"
+            >
+              <View style={styles.categoriesGrid}>
+                {categories.map((category, index) => (
+                  <ScaleInView
+                    key={category.id}
+                    delay={Math.min(index * 50, 300)}
+                    style={styles.categoryCardWrapper}
                   >
-                    <Text style={styles.categoryEmoji}>{category.icon}</Text>
-                    <Text style={styles.categoryName}>{category.name}</Text>
-                    {selectedCategories.includes(category.id) && (
-                      <View style={styles.checkmark}>
-                        <Text style={styles.checkmarkText}>✓</Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.categoryCard,
+                        selectedCategories.includes(category.id) && styles.categoryCardSelected,
+                      ]}
+                      onPress={() => toggleCategory(category.id)}
+                    >
+                      <View
+                        style={[
+                          styles.categoryIconContainer,
+                          selectedCategories.includes(category.id) && styles.categoryIconContainerSelected,
+                        ]}
+                      >
+                        <Ionicons
+                          name={getCategoryIcon(category.name)}
+                          size={28}
+                          color={selectedCategories.includes(category.id) ? colors.white : colors.primaryDarker}
+                        />
                       </View>
-                    )}
-                  </TouchableOpacity>
-                </ScaleInView>
-              ))}
-            </View>
+                      <Text style={styles.categoryName}>{category.name}</Text>
+                      {selectedCategories.includes(category.id) && (
+                        <View style={styles.checkmark}>
+                          <Text style={styles.checkmarkText}>✓</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  </ScaleInView>
+                ))}
+              </View>
+            </FormCard>
           </View>
         )}
 
@@ -305,55 +361,64 @@ export default function PersonalizationScreen() {
               </Text>
             </FadeInView>
 
-            <SlideUpView delay={150}>
-              <TouchableOpacity
-                style={styles.locationButton}
-                onPress={handleUseCurrentLocation}
-                disabled={loadingLocation}
-              >
-                {loadingLocation ? (
-                  <>
-                    <ActivityIndicator color={colors.primary} size="small" style={{ marginRight: 8 }} />
-                    <Text style={styles.locationButtonText}>Locating...</Text>
-                  </>
-                ) : (
-                  <Text style={styles.locationButtonText}>📍 Use Current Location</Text>
-                )}
-              </TouchableOpacity>
-            </SlideUpView>
+            <SlideUpView delay={150} direction="right">
+              <FormCard title="Where are you located?" subtitle="Used to find nearby providers" icon="📍">
+                <TouchableOpacity
+                  style={styles.locationButton}
+                  onPress={() => handleUseCurrentLocation()}
+                  disabled={loadingLocation}
+                >
+                  {loadingLocation ? (
+                    <>
+                      <ActivityIndicator color={colors.white} size="small" style={{ marginRight: 8 }} />
+                      <Text style={styles.locationButtonText}>Locating...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="locate" size={18} color={colors.white} style={{ marginRight: 8 }} />
+                      <Text style={styles.locationButtonText}>Use Current Location</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
 
-            <FadeInView delay={200}>
-              <Text style={styles.orText}>Or enter manually</Text>
-            </FadeInView>
+                <Text style={styles.orText}>Or enter manually</Text>
 
-            <SlideUpView delay={250}>
-              <TextInput
-                style={styles.input}
-                placeholder="Street Address"
-                value={address}
-                onChangeText={setAddress}
-              />
-              <View style={styles.row}>
-                <TextInput
-                  style={[styles.input, styles.inputHalf]}
-                  placeholder="City"
-                  value={city}
-                  onChangeText={setCity}
+                <ModernInput
+                  label="Street Address"
+                  value={address}
+                  onChangeText={setAddress}
+                  icon="home-outline"
+                  required
                 />
-                <TextInput
-                  style={[styles.input, styles.inputHalf]}
-                  placeholder="State"
-                  value={state}
-                  onChangeText={setState}
+                <View style={styles.row}>
+                  <View style={styles.inputHalf}>
+                    <ModernInput
+                      label="City"
+                      value={city}
+                      onChangeText={setCity}
+                      icon="location-outline"
+                      required
+                    />
+                  </View>
+                  <View style={styles.inputHalf}>
+                    <ModernInput
+                      label="State"
+                      value={state}
+                      onChangeText={setState}
+                      icon="map-outline"
+                      required
+                    />
+                  </View>
+                </View>
+                <ModernInput
+                  label="ZIP Code"
+                  value={zipCode}
+                  onChangeText={setZipCode}
+                  icon="mail-outline"
+                  keyboardType="numeric"
+                  required
                 />
-              </View>
-              <TextInput
-                style={styles.input}
-                placeholder="ZIP Code"
-                value={zipCode}
-                onChangeText={setZipCode}
-                keyboardType="numeric"
-              />
+              </FormCard>
             </SlideUpView>
           </View>
         )}
@@ -367,21 +432,27 @@ export default function PersonalizationScreen() {
               </Text>
             </FadeInView>
 
-            <View>
-              {['Weekday mornings', 'Weekday evenings', 'Weekends', 'Flexible'].map((time, index) => (
-                <SlideUpView key={time} delay={Math.min(index * 50, 300)}>
-                  <TouchableOpacity
-                    style={[styles.optionCard, bookingTime === time && styles.optionCardSelected]}
-                    onPress={() => setBookingTime(time)}
+            <FormCard title="Availability Preference" subtitle="Pick what best fits your routine" icon="⏰">
+              <View>
+                {['Weekday mornings', 'Weekday evenings', 'Weekends', 'Flexible'].map((time, index) => (
+                  <SlideUpView
+                    key={time}
+                    delay={Math.min(index * 50, 300)}
+                    direction={index % 2 === 0 ? 'right' : 'left'}
                   >
-                    <Text style={[styles.optionText, bookingTime === time && styles.optionTextSelected]}>
-                      {time}
-                    </Text>
-                    {bookingTime === time && <Text style={styles.checkIcon}>✓</Text>}
-                  </TouchableOpacity>
-                </SlideUpView>
-              ))}
-            </View>
+                    <TouchableOpacity
+                      style={[styles.optionCard, bookingTime === time && styles.optionCardSelected]}
+                      onPress={() => setBookingTime(time)}
+                    >
+                      <Text style={[styles.optionText, bookingTime === time && styles.optionTextSelected]}>
+                        {time}
+                      </Text>
+                      {bookingTime === time && <Text style={styles.checkIcon}>✓</Text>}
+                    </TouchableOpacity>
+                  </SlideUpView>
+                ))}
+              </View>
+            </FormCard>
           </View>
         )}
 
@@ -394,31 +465,33 @@ export default function PersonalizationScreen() {
               </Text>
             </FadeInView>
 
-            <View>
-              {[
-                { label: 'Budget-friendly', value: 'budget', icon: '$' },
-                { label: 'Mid-range', value: 'mid', icon: '$$' },
-                { label: 'Premium', value: 'premium', icon: '$$$' },
-                { label: 'No preference', value: 'any', icon: '💰' },
-              ].map((option, index) => (
-                <ScaleInView key={option.value} delay={Math.min(index * 50, 300)}>
-                  <TouchableOpacity
-                    style={[styles.optionCard, budget === option.value && styles.optionCardSelected]}
-                    onPress={() => setBudget(option.value)}
-                  >
-                    <View style={styles.optionContent}>
-                      <Text style={styles.optionIcon}>{option.icon}</Text>
-                      <Text
-                        style={[styles.optionText, budget === option.value && styles.optionTextSelected]}
-                      >
-                        {option.label}
-                      </Text>
-                    </View>
-                    {budget === option.value && <Text style={styles.checkIcon}>✓</Text>}
-                  </TouchableOpacity>
-                </ScaleInView>
-              ))}
-            </View>
+            <FormCard title="Price Comfort" subtitle="We tailor results to your budget" icon="💳">
+              <View>
+                {[
+                  { label: 'Budget-friendly', value: 'budget', icon: '$' },
+                  { label: 'Mid-range', value: 'mid', icon: '$$' },
+                  { label: 'Premium', value: 'premium', icon: '$$$' },
+                  { label: 'No preference', value: 'any', icon: '💰' },
+                ].map((option, index) => (
+                  <ScaleInView key={option.value} delay={Math.min(index * 50, 300)}>
+                    <TouchableOpacity
+                      style={[styles.optionCard, budget === option.value && styles.optionCardSelected]}
+                      onPress={() => setBudget(option.value)}
+                    >
+                      <View style={styles.optionContent}>
+                        <Text style={styles.optionIcon}>{option.icon}</Text>
+                        <Text
+                          style={[styles.optionText, budget === option.value && styles.optionTextSelected]}
+                        >
+                          {option.label}
+                        </Text>
+                      </View>
+                      {budget === option.value && <Text style={styles.checkIcon}>✓</Text>}
+                    </TouchableOpacity>
+                  </ScaleInView>
+                ))}
+              </View>
+            </FormCard>
           </View>
         )}
       </ScrollView>
@@ -444,19 +517,26 @@ export default function PersonalizationScreen() {
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: colors.white,
+  },
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundGray,
+    backgroundColor: colors.primarySubtle,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
     backgroundColor: colors.white,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -472,20 +552,34 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
   progressContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
     backgroundColor: colors.white,
-    gap: spacing.sm,
   },
-  progressDot: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
+  progressHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
+  progressStepText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontWeight: fontWeight.semibold,
+  },
+  progressStepLabel: {
+    fontSize: fontSize.sm,
+    color: colors.primaryDarker,
+    fontWeight: fontWeight.bold,
+  },
+  progressTrack: {
+    height: 6,
+    borderRadius: borderRadius.round,
     backgroundColor: colors.border,
+    overflow: 'hidden',
   },
-  progressDotActive: {
+  progressFill: {
+    height: '100%',
     backgroundColor: colors.primaryDarker,
   },
   content: {
@@ -496,12 +590,12 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: fontWeight.bold,
     color: colors.text,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   stepDescription: {
     fontSize: fontSize.md,
     color: colors.textSecondary,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   categoriesGrid: {
     flexDirection: 'row',
@@ -517,7 +611,7 @@ const styles = StyleSheet.create({
     minHeight: 120,
     backgroundColor: colors.white,
     padding: spacing.lg,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -528,9 +622,20 @@ const styles = StyleSheet.create({
     borderColor: colors.primaryDarker,
     backgroundColor: colors.primaryDarker + '10',
   },
-  categoryEmoji: {
-    fontSize: 40,
+  categoryIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.round,
+    backgroundColor: colors.primarySubtle,
+    borderWidth: 1,
+    borderColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: spacing.sm,
+  },
+  categoryIconContainerSelected: {
+    backgroundColor: colors.primaryDarker,
+    borderColor: colors.primaryDarker,
   },
   categoryName: {
     fontSize: fontSize.sm,
@@ -557,16 +662,16 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
   },
   locationButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDarker,
     padding: spacing.lg,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.xl,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     marginBottom: spacing.lg,
   },
   locationButtonText: {
-    color: colors.black,
+    color: colors.white,
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold,
   },
@@ -574,15 +679,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.textSecondary,
     marginBottom: spacing.lg,
-  },
-  input: {
-    backgroundColor: colors.white,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    fontSize: fontSize.md,
-    marginBottom: spacing.md,
   },
   row: {
     flexDirection: 'row',
@@ -594,7 +690,7 @@ const styles = StyleSheet.create({
   optionCard: {
     backgroundColor: colors.white,
     padding: spacing.lg,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.xl,
     borderWidth: 2,
     borderColor: colors.border,
     marginBottom: spacing.md,
@@ -638,7 +734,7 @@ const styles = StyleSheet.create({
   backButton: {
     flex: 1,
     padding: spacing.lg,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.xl,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
@@ -650,16 +746,16 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     flex: 2,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDarker,
     padding: spacing.lg,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.xl,
     alignItems: 'center',
   },
   nextButtonFull: {
     flex: 1,
   },
   nextButtonText: {
-    color: colors.black,
+    color: colors.white,
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold,
   },

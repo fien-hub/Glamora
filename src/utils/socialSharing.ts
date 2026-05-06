@@ -1,6 +1,10 @@
 import { Share, Platform, Linking, Alert } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
+import * as Clipboard from 'expo-clipboard';
+
+// expo-file-system v18+ moved cacheDirectory to the legacy API
+const cacheDirectory: string | null = (FileSystem as any).cacheDirectory ?? null;
 
 export interface ShareContent {
   title?: string;
@@ -75,7 +79,7 @@ export const shareImage = async (
     }
 
     // Download image to local file system
-    const fileUri = `${FileSystem.cacheDirectory}share_image_${Date.now()}.jpg`;
+    const fileUri = `${cacheDirectory}share_image_${Date.now()}.jpg`;
     const downloadResult = await FileSystem.downloadAsync(imageUrl, fileUri);
 
     if (downloadResult.status !== 200) {
@@ -208,7 +212,7 @@ export const shareToTwitter = async (message: string, url?: string): Promise<boo
 export const shareToInstagramStories = async (imageUrl: string): Promise<boolean> => {
   try {
     // Download image to local file system
-    const fileUri = `${FileSystem.cacheDirectory}instagram_story_${Date.now()}.jpg`;
+    const fileUri = `${cacheDirectory}instagram_story_${Date.now()}.jpg`;
     const downloadResult = await FileSystem.downloadAsync(imageUrl, fileUri);
 
     if (downloadResult.status !== 200) {
@@ -311,8 +315,7 @@ export const shareViaEmail = async (
  */
 export const copyToClipboard = async (text: string): Promise<boolean> => {
   try {
-    const Clipboard = require('@react-native-clipboard/clipboard').default;
-    Clipboard.setString(text);
+    await Clipboard.setStringAsync(text);
     Alert.alert('Copied!', 'Content copied to clipboard');
     return true;
   } catch (error: any) {

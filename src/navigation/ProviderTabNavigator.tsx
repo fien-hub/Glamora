@@ -3,10 +3,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../constants/theme';
 import CurvedHeader from '../components/CurvedHeader';
+import HomeHeader from '../components/HomeHeader';
 import FloatingTabBar from '../components/FloatingTabBar';
 
 // Provider Screens
-import ProviderHomeScreen from '../screens/provider/ProviderHomeScreen';
+import HomeScreen from '../screens/customer/HomeScreen';
 import AppointmentsScreen from '../screens/provider/AppointmentsScreen';
 import ServicesScreen from '../screens/provider/ServicesScreen';
 import MessagesScreen from '../screens/provider/MessagesScreen';
@@ -39,7 +40,34 @@ export default function ProviderTabNavigator() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
         headerShown: true,
-        header: ({ route }) => {
+        header: ({ route, navigation }) => {
+          if (route.name === 'Home') {
+            return (
+              <HomeHeader
+                onSearchPress={() => {
+                  const parentNavigation = navigation.getParent();
+                  if (parentNavigation) {
+                    (parentNavigation as any).navigate('Search');
+                  }
+                }}
+                onFilterPress={() => {
+                  const parentNavigation = navigation.getParent();
+                  if (parentNavigation) {
+                    (parentNavigation as any).navigate('Search');
+                  }
+                }}
+                onLocationPress={() => {
+                  const parentNavigation = navigation.getParent();
+                  if (parentNavigation) {
+                    (parentNavigation as any).navigate('EditProfile');
+                  } else {
+                    navigation.navigate('Profile');
+                  }
+                }}
+              />
+            );
+          }
+
           let title = 'Home';
           if (route.name === 'Appointments') title = 'Appointments';
           else if (route.name === 'Services') title = 'My Services';
@@ -52,7 +80,7 @@ export default function ProviderTabNavigator() {
     >
       <Tab.Screen
         name="Home"
-        component={ProviderHomeScreen}
+        component={HomeScreen}
       />
       <Tab.Screen
         name="Appointments"

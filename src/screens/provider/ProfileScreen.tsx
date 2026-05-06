@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Image, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, dbService } from '../../services/supabase';
 import { uploadProfilePicture, pickImage, requestImagePermissions } from '../../utils/imageUpload';
@@ -12,6 +13,7 @@ import { TOTAL_HEADER_HEIGHT } from '../../components/CurvedHeader';
 import ScaleInView from '../../components/animations/ScaleInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 import StaggeredList from '../../components/animations/StaggeredList';
+import CachedImage, { CachedAvatarImage, CachedContentImage } from '../../components/CachedImage';
 
 interface DashboardStats {
   totalBookings: number;
@@ -33,11 +35,12 @@ interface PortfolioItem {
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
-  const { user, signOut } = useAuth();
+  const { user, signOut, switchRole } = useAuth();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [switchingRole, setSwitchingRole] = useState(false);
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [stats, setStats] = useState<DashboardStats>({
     totalBookings: 0,
@@ -266,6 +269,29 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleSwitchToCustomer = () => {
+    Alert.alert(
+      'Switch to Customer Mode',
+      'You will switch to customer mode so you can browse services and book providers as a customer.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Switch',
+          onPress: async () => {
+            try {
+              setSwitchingRole(true);
+              await switchRole('customer');
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'Failed to switch to customer mode');
+            } finally {
+              setSwitchingRole(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -284,7 +310,7 @@ export default function ProfileScreen() {
         <View style={styles.content}>
           <View style={styles.avatarContainer}>
             {avatarUrl ? (
-              <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+              <CachedAvatarImage uri={avatarUrl} style={styles.avatarImage} />
             ) : (
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>👤</Text>
@@ -390,7 +416,7 @@ export default function ProfileScreen() {
                   onPress={() => navigation.navigate('Portfolio' as never)}
                   activeOpacity={0.8}
                 >
-                  <Image source={{ uri: item.image_url }} style={styles.portfolioImage} />
+                  <CachedContentImage uri={item.image_url} style={styles.portfolioImage} />
                   <View style={styles.portfolioOverlay}>
                     <View style={styles.portfolioStats}>
                       <Text style={styles.portfolioStatText}>❤️ {item.like_count}</Text>
@@ -441,7 +467,7 @@ export default function ProfileScreen() {
         >
           <View style={styles.verificationButtonContent}>
             <Text style={styles.secondaryButtonText}>
-              {verificationStatus === 'approved' ? '✓' : '🆔'} Identity Verification
+              {verificationStatus === 'approved' ? '✓' : '🆔'} KYC Verification
             </Text>
             {verificationStatus === 'pending' && (
               <View style={styles.pendingBadge}>
@@ -535,6 +561,45 @@ export default function ProfileScreen() {
           onPress={() => navigation.navigate('MyCustomerBookings' as never)}
         >
           <Text style={styles.primaryButtonText}>📅 My Bookings</Text>
+        </TouchableOpacity>
+
+        <View style={styles.modeSwitchCard}>
+          <Text style={styles.modeSwitchTitle}>Switch to Customer Mode</Text>
+          <Text style={styles.modeSwitchSubtitle}>
+            Browse services, save providers, and book appointments using the customer experience.
+          </Text>
+          <TouchableOpacity
+            style={[styles.modeSwitchButton, switchingRole && styles.modeSwitchButtonDisabled]}
+            onPress={handleSwitchToCustomer}
+            disabled={switchingRole}
+          >
+            {switchingRole ? (
+              <ActivityIndicator size="small" color={colors.white} />
+            ) : (
+              <>
+                <Ionicons name="swap-horizontal" size={18} color={colors.white} />
+                <Text style={styles.modeSwitchButtonText}>Switch to Customer</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Account Settings */}
+      <View style={styles.menuSection}>
+        <Text style={styles.menuSectionTitle}>Account</Text>
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => navigation.navigate('AccountSettings' as never)}
+        >
+          <Text style={styles.secondaryButtonText}>⚙️ Account Settings</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => navigation.navigate('HelpSupport' as never)}
+        >
+          <Text style={styles.secondaryButtonText}>❓ Help & Support</Text>
         </TouchableOpacity>
       </View>
 
@@ -691,6 +756,43 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     marginBottom: spacing.md,
+  },
+  modeSwitchCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.primaryLight,
+    ...shadows.sm,
+  },
+  modeSwitchTitle: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  modeSwitchSubtitle: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: spacing.md,
+  },
+  modeSwitchButton: {
+    backgroundColor: colors.primaryDarker,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  modeSwitchButtonDisabled: {
+    opacity: 0.7,
+  },
+  modeSwitchButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
   },
   primaryButton: {
     backgroundColor: colors.primary,

@@ -89,7 +89,7 @@ export default function TwoFactorVerificationScreen() {
     setLoading(true);
     try {
       const identifier = method === 'email' ? email! : phone!;
-      const result = await verifyOTPCode(identifier, code, method);
+      const result = await verifyOTPCode(identifier, code, method as 'email' | 'sms');
 
       if (result.success) {
         Alert.alert('Success', 'Verification successful!', [

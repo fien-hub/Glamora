@@ -1,21 +1,16 @@
 /**
  * Integration Tests for Payment Flow
- * Tests the complete payment flow including Stripe integration
+ * Tests the complete payment flow including legacy direct-card integration behavior
  */
 
 import { supabase } from '../../services/supabase';
 
-// Mock Stripe
-const mockStripe = {
+// Mock legacy direct-card billing provider
+const mockBillingProvider = {
   createPaymentMethod: jest.fn(),
   confirmPayment: jest.fn(),
   handleCardAction: jest.fn(),
 };
-
-jest.mock('@stripe/stripe-react-native', () => ({
-  useStripe: () => mockStripe,
-  CardField: 'CardField',
-}));
 
 // Mock Supabase
 jest.mock('../../services/supabase', () => ({
@@ -78,7 +73,7 @@ describe('Payment Flow Integration Tests', () => {
   describe('Process Payment', () => {
     it('should successfully process a payment', async () => {
       // Mock payment method creation
-      mockStripe.createPaymentMethod.mockResolvedValue({
+      mockBillingProvider.createPaymentMethod.mockResolvedValue({
         paymentMethod: {
           id: 'pm_123',
           card: { last4: '4242' },
@@ -87,7 +82,7 @@ describe('Payment Flow Integration Tests', () => {
       });
 
       // Mock payment confirmation
-      mockStripe.confirmPayment.mockResolvedValue({
+      mockBillingProvider.confirmPayment.mockResolvedValue({
         paymentIntent: {
           id: 'pi_123',
           status: 'succeeded',
@@ -96,7 +91,7 @@ describe('Payment Flow Integration Tests', () => {
       });
 
       // Create payment method
-      const pmResult = await mockStripe.createPaymentMethod({
+      const pmResult = await mockBillingProvider.createPaymentMethod({
         paymentMethodType: 'Card',
       });
 
@@ -104,7 +99,7 @@ describe('Payment Flow Integration Tests', () => {
       expect(pmResult.error).toBeNull();
 
       // Confirm payment
-      const confirmResult = await mockStripe.confirmPayment('secret_123', {
+      const confirmResult = await mockBillingProvider.confirmPayment('secret_123', {
         paymentMethodType: 'Card',
       });
 
@@ -113,12 +108,12 @@ describe('Payment Flow Integration Tests', () => {
     });
 
     it('should handle payment method creation errors', async () => {
-      mockStripe.createPaymentMethod.mockResolvedValue({
+      mockBillingProvider.createPaymentMethod.mockResolvedValue({
         paymentMethod: null,
         error: { message: 'Invalid card details' },
       });
 
-      const result = await mockStripe.createPaymentMethod({
+      const result = await mockBillingProvider.createPaymentMethod({
         paymentMethodType: 'Card',
       });
 
@@ -126,12 +121,12 @@ describe('Payment Flow Integration Tests', () => {
     });
 
     it('should handle payment confirmation errors', async () => {
-      mockStripe.confirmPayment.mockResolvedValue({
+      mockBillingProvider.confirmPayment.mockResolvedValue({
         paymentIntent: null,
         error: { message: 'Insufficient funds' },
       });
 
-      const result = await mockStripe.confirmPayment('secret_123', {
+      const result = await mockBillingProvider.confirmPayment('secret_123', {
         paymentMethodType: 'Card',
       });
 
@@ -140,7 +135,7 @@ describe('Payment Flow Integration Tests', () => {
 
     it('should handle 3D Secure authentication', async () => {
       // Mock payment requiring authentication
-      mockStripe.confirmPayment.mockResolvedValue({
+      mockBillingProvider.confirmPayment.mockResolvedValue({
         paymentIntent: {
           id: 'pi_123',
           status: 'requires_action',
@@ -149,7 +144,7 @@ describe('Payment Flow Integration Tests', () => {
       });
 
       // Mock card action handling
-      mockStripe.handleCardAction.mockResolvedValue({
+      mockBillingProvider.handleCardAction.mockResolvedValue({
         paymentIntent: {
           id: 'pi_123',
           status: 'succeeded',
@@ -158,14 +153,14 @@ describe('Payment Flow Integration Tests', () => {
       });
 
       // Confirm payment
-      const confirmResult = await mockStripe.confirmPayment('secret_123', {
+      const confirmResult = await mockBillingProvider.confirmPayment('secret_123', {
         paymentMethodType: 'Card',
       });
 
       expect(confirmResult.paymentIntent?.status).toBe('requires_action');
 
       // Handle card action
-      const actionResult = await mockStripe.handleCardAction('secret_123');
+      const actionResult = await mockBillingProvider.handleCardAction('secret_123');
 
       expect(actionResult.paymentIntent?.status).toBe('succeeded');
     });

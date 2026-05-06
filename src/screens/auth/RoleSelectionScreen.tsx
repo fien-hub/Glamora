@@ -9,6 +9,8 @@ import {
   ScrollView,
   ImageBackground,
   StatusBar,
+  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
@@ -17,6 +19,8 @@ import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserRole } from '../../types';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
+import { soundService } from '../../services/soundService';
+import { useAuth } from '../../contexts/AuthContext';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 import ScaleInView from '../../components/animations/ScaleInView';
@@ -60,10 +64,15 @@ const roleOptions: RoleOption[] = [
 
 export default function RoleSelectionScreen() {
   const navigation = useNavigation<any>();
+  const { height } = useWindowDimensions();
+  const { signInWithGoogle, signInWithApple } = useAuth();
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+  const [loading, setLoading] = useState(false);
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
+  const isSmallPhone = height <= 780;
 
-  const handleRoleSelect = (role: UserRole) => {
+  const handleRoleSelect = async (role: UserRole) => {
+    await soundService.playClick();
     setSelectedRole(role);
     
     // Animate selection
@@ -81,32 +90,37 @@ export default function RoleSelectionScreen() {
     ]).start();
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    await soundService.playClick();
     if (selectedRole) {
       navigation.navigate('Signup', { preselectedRole: selectedRole });
     }
   };
 
-  const handleSignIn = () => {
+  const handleSignIn = async () => {
+    await soundService.playClick();
     navigation.navigate('Login');
   };
 
-  const handleResetOnboarding = async () => {
+  const handleGoogleSignIn = async () => {
+    if (!selectedRole) return;
+    setLoading(true);
     try {
-      await AsyncStorage.removeItem('hasSeenOnboarding');
-      Alert.alert('Success', 'Onboarding reset! The app will now restart.', [
-        {
-          text: 'OK',
-          onPress: () => {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Splash' }],
-            });
-          },
-        },
-      ]);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to reset onboarding');
+      await signInWithGoogle(selectedRole);
+    } catch (error: any) {
+      Alert.alert('Google Sign-In Failed', error.message || 'Could not sign in with Google');
+      setLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    if (!selectedRole) return;
+    setLoading(true);
+    try {
+      await signInWithApple(selectedRole);
+    } catch (error: any) {
+      Alert.alert('Apple Sign-In Failed', error.message || 'Could not sign in with Apple');
+      setLoading(false);
     }
   };
 
@@ -122,14 +136,6 @@ export default function RoleSelectionScreen() {
           colors={['rgba(0,0,0,0.75)', 'rgba(0,0,0,0.85)']}
           style={styles.gradient}
         >
-          {/* Debug button - remove in production */}
-          <TouchableOpacity
-            style={styles.debugButton}
-            onPress={handleResetOnboarding}
-          >
-            <Text style={styles.debugButtonText}>🔄 Reset Onboarding</Text>
-          </TouchableOpacity>
-
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
@@ -137,41 +143,49 @@ export default function RoleSelectionScreen() {
           >
             {/* Header fades in */}
             <FadeInView delay={0}>
-              <View style={styles.header}>
+              <View style={[styles.header, isSmallPhone && styles.headerCompact]}>
                 <Text style={styles.title}>Join Glamora</Text>
                 <Text style={styles.subtitle}>Choose how you want to use Glamora</Text>
               </View>
             </FadeInView>
 
         {/* Role cards scale in with stagger */}
-        <View style={styles.rolesContainer}>
+        <View style={[styles.rolesContainer, isSmallPhone && styles.rolesContainerCompact]}>
           {roleOptions.map((option, index) => (
             <ScaleInView key={option.role} delay={100 + index * 100}>
               <TouchableOpacity
                 style={[
                   styles.roleCard,
+                  isSmallPhone && styles.roleCardCompact,
                   selectedRole === option.role && styles.roleCardSelected,
                 ]}
                 onPress={() => handleRoleSelect(option.role)}
                 activeOpacity={0.7}
               >
                 <View style={styles.roleHeader}>
-                  <View style={styles.roleIconContainer}>
-                    <Ionicons name={option.icon} size={40} color={colors.primary} />
+                  <View style={[styles.roleIconContainer, isSmallPhone && styles.roleIconContainerCompact]}>
+                    <Ionicons name={option.icon} size={isSmallPhone ? 24 : 28} color={colors.primary} />
                   </View>
                   <View style={styles.radioButton}>
                     {selectedRole === option.role && <View style={styles.radioButtonInner} />}
                   </View>
                 </View>
 
-                <Text style={styles.roleTitle}>{option.title}</Text>
-                <Text style={styles.roleDescription}>{option.description}</Text>
+                <Text style={[styles.roleTitle, isSmallPhone && styles.roleTitleCompact]}>{option.title}</Text>
+                <Text
+                  style={[styles.roleDescription, isSmallPhone && styles.roleDescriptionCompact]}
+                  numberOfLines={2}
+                >
+                  {option.description}
+                </Text>
 
                 <View style={styles.featuresContainer}>
                   {option.features.map((feature, idx) => (
                     <View key={idx} style={styles.featureItem}>
                       <Text style={styles.featureIcon}>✓</Text>
-                      <Text style={styles.featureText}>{feature}</Text>
+                      <Text style={[styles.featureText, isSmallPhone && styles.featureTextCompact]} numberOfLines={1}>
+                        {feature}
+                      </Text>
                     </View>
                   ))}
                 </View>
@@ -181,7 +195,7 @@ export default function RoleSelectionScreen() {
         </View>
 
         {/* Footer buttons slide up */}
-        <View style={styles.footer}>
+        <View style={[styles.footer, isSmallPhone && styles.footerCompact]}>
           <SlideUpView delay={300}>
             <TouchableOpacity
               style={[styles.continueButton, !selectedRole && styles.continueButtonDisabled]}
@@ -191,6 +205,42 @@ export default function RoleSelectionScreen() {
               <Text style={styles.continueButtonText}>Continue</Text>
             </TouchableOpacity>
           </SlideUpView>
+
+          {selectedRole && (
+            <SlideUpView delay={350}>
+              <View style={styles.socialButtonsContainer}>
+                <TouchableOpacity
+                  style={[styles.socialButton, loading && styles.continueButtonDisabled]}
+                  onPress={handleGoogleSignIn}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color={colors.text} />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-google" size={22} color={colors.error} />
+                      <Text style={styles.socialButtonText}>Google</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.socialButton, loading && styles.continueButtonDisabled]}
+                  onPress={handleAppleSignIn}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color={colors.text} />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-apple" size={22} color={colors.text} />
+                      <Text style={styles.socialButtonText}>Apple</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </SlideUpView>
+          )}
 
           <SlideUpView delay={400}>
             <TouchableOpacity style={styles.signInButton} onPress={handleSignIn}>
@@ -229,7 +279,11 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     paddingTop: spacing.xxl * 2,
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.lg,
+  },
+  headerCompact: {
+    paddingTop: spacing.xxl + spacing.lg,
+    paddingBottom: spacing.md,
   },
   title: {
     fontSize: fontSize.xxxl,
@@ -249,12 +303,16 @@ const styles = StyleSheet.create({
   rolesContainer: {
     flex: 1,
     paddingHorizontal: spacing.xl,
-    gap: spacing.lg,
+    gap: spacing.md,
+  },
+  rolesContainerCompact: {
+    gap: spacing.sm,
   },
   roleCard: {
     backgroundColor: colors.white,
     borderRadius: borderRadius.xl,
-    padding: spacing.xl,
+    padding: spacing.lg,
+    minHeight: 212,
     borderWidth: 2,
     borderColor: colors.border,
     shadowColor: colors.black,
@@ -262,6 +320,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+  roleCardCompact: {
+    padding: spacing.md,
+    minHeight: 196,
   },
   roleCardSelected: {
     borderColor: colors.primary,
@@ -275,12 +337,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   roleIconContainer: {
-    width: 64,
-    height: 64,
+    width: 52,
+    height: 52,
     borderRadius: borderRadius.lg,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  roleIconContainerCompact: {
+    width: 44,
+    height: 44,
   },
   radioButton: {
     width: 24,
@@ -299,37 +365,50 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   roleTitle: {
-    fontSize: fontSize.xl,
+    fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
     color: colors.text,
     marginBottom: spacing.xs,
   },
-  roleDescription: {
+  roleTitleCompact: {
     fontSize: fontSize.md,
+  },
+  roleDescription: {
+    fontSize: fontSize.sm,
     color: colors.textSecondary,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  roleDescriptionCompact: {
+    marginBottom: spacing.sm,
   },
   featuresContainer: {
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   featureItem: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   featureIcon: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
     color: colors.black,
     marginRight: spacing.sm,
     fontWeight: fontWeight.bold,
   },
   featureText: {
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     color: colors.text,
+    flex: 1,
+  },
+  featureTextCompact: {
+    fontSize: fontSize.xs,
   },
   footer: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxl,
-    marginTop: spacing.xxl,
+    marginTop: spacing.lg,
+  },
+  footerCompact: {
+    marginTop: spacing.md,
   },
   continueButton: {
     backgroundColor: colors.primary,
@@ -351,6 +430,29 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
   },
+  socialButtonsContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  socialButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.lg,
+    minHeight: 56,
+    paddingVertical: spacing.lg,
+    gap: spacing.xs,
+  },
+  socialButtonText: {
+    fontSize: fontSize.md,
+    color: colors.text,
+    fontWeight: fontWeight.semibold,
+  },
   signInButton: {
     alignItems: 'center',
     paddingVertical: spacing.sm,
@@ -364,23 +466,6 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: fontWeight.bold,
     opacity: 1,
-  },
-  debugButton: {
-    position: 'absolute',
-    top: 50,
-    right: spacing.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    zIndex: 1000,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  debugButtonText: {
-    fontSize: fontSize.xs,
-    color: colors.white,
-    fontWeight: fontWeight.semibold,
   },
 });
 

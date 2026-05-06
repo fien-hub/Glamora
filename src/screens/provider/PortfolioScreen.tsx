@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   TextInput,
   Modal,
+  Dimensions,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +28,11 @@ import { useScreenTracking } from '../../hooks/useScreenTracking';
 import SharePortfolioModal from '../../components/SharePortfolioModal';
 import FadeInView from '../../components/animations/FadeInView';
 import StaggeredList from '../../components/animations/StaggeredList';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const MASONRY_HORIZONTAL_PADDING = spacing.sm;
+const MASONRY_COLUMN_GAP = spacing.sm;
+const MASONRY_COLUMN_WIDTH = (SCREEN_WIDTH - MASONRY_HORIZONTAL_PADDING * 2 - MASONRY_COLUMN_GAP) / 2;
 
 interface PortfolioItem {
   id: string;
@@ -83,6 +89,7 @@ export default function PortfolioScreen() {
   const [providerServices, setProviderServices] = useState<ProviderService[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [uploadCaption, setUploadCaption] = useState('');
+  const [itemAspectRatios, setItemAspectRatios] = useState<Record<string, number>>({});
 
   // Video playback state
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
@@ -102,6 +109,77 @@ export default function PortfolioScreen() {
       fetchPortfolio();
     }, [])
   );
+
+  useEffect(() => {
+    const fetchMissingAspectRatios = async () => {
+      const missingItems = portfolioItems.filter((item) => !itemAspectRatios[item.id]);
+      if (missingItems.length === 0) return;
+
+      const results = await Promise.all(
+        missingItems.map(
+          (item) =>
+            new Promise<{ id: string; aspectRatio: number } | null>((resolve) => {
+              const mediaUrl = item.media_type === 'video' ? item.thumbnail_url || item.image_url : item.image_url;
+              if (!mediaUrl) {
+                resolve(null);
+                return;
+              }
+
+              Image.getSize(
+                mediaUrl,
+                (width, height) => {
+                  if (!width || !height) {
+                    resolve(null);
+                    return;
+                  }
+                  resolve({ id: item.id, aspectRatio: width / height });
+                },
+                () => resolve(null)
+              );
+            })
+        )
+      );
+
+      const resolved = results.filter((r): r is { id: string; aspectRatio: number } => !!r);
+      if (resolved.length > 0) {
+        setItemAspectRatios((prev) => {
+          const next = { ...prev };
+          resolved.forEach((result) => {
+            next[result.id] = result.aspectRatio;
+          });
+          return next;
+        });
+      }
+    };
+
+    fetchMissingAspectRatios();
+  }, [portfolioItems, itemAspectRatios]);
+
+  const { leftColumnItems, rightColumnItems } = useMemo(() => {
+    const left: PortfolioItem[] = [];
+    const right: PortfolioItem[] = [];
+    let leftHeight = 0;
+    let rightHeight = 0;
+
+    portfolioItems.forEach((item) => {
+      const aspectRatio = itemAspectRatios[item.id] || (item.media_type === 'video' ? 9 / 16 : 1);
+      const mediaHeight = MASONRY_COLUMN_WIDTH / aspectRatio;
+      const estimatedCardHeight = mediaHeight + 110;
+
+      if (leftHeight <= rightHeight) {
+        left.push(item);
+        leftHeight += estimatedCardHeight;
+      } else {
+        right.push(item);
+        rightHeight += estimatedCardHeight;
+      }
+    });
+
+    return {
+      leftColumnItems: left,
+      rightColumnItems: right,
+    };
+  }, [portfolioItems, itemAspectRatios]);
 
   const fetchProviderInfo = async () => {
     try {
@@ -475,6 +553,109 @@ export default function PortfolioScreen() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const renderPortfolioCard = (item: PortfolioItem) => {
+    const index = portfolioItems.findIndex((p) => p.id === item.id);
+    const aspectRatio = itemAspectRatios[item.id] || (item.media_type === 'video' ? 9 / 16 : 1);
+
+    return (
+      <View key={item.id} style={styles.portfolioItem}>
+        {item.media_type === 'video' ? (
+          <TouchableOpacity
+            style={styles.videoContainer}
+            onPress={() => setPlayingVideoId(playingVideoId === item.id ? null : item.id)}
+          >
+            {playingVideoId === item.id ? (
+              <Video
+                ref={videoRef}
+                source={{ uri: item.video_url || '' }}
+                style={[styles.portfolioImage, { aspectRatio }]}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay
+                isLooping
+                useNativeControls
+              />
+            ) : (
+              <>
+                <Image
+                  source={{ uri: item.thumbnail_url || item.image_url }}
+                  style={[styles.portfolioImage, { aspectRatio }]}
+                  resizeMode="cover"
+                />
+                <View style={styles.videoOverlay}>
+                  <Ionicons name="play-circle" size={48} color={colors.white} />
+                </View>
+                {item.video_duration_seconds && (
+                  <View style={styles.durationBadge}>
+                    <Text style={styles.durationText}>
+                      {formatDuration(item.video_duration_seconds)}
+                    </Text>
+                  </View>
+                )}
+              </>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <Image
+            source={{ uri: item.image_url }}
+            style={[styles.portfolioImage, { aspectRatio }]}
+            resizeMode="cover"
+          />
+        )}
+
+        <View style={styles.reorderControls}>
+          {index > 0 && (
+            <TouchableOpacity
+              style={styles.reorderButton}
+              onPress={() => moveItem(item.id, 'up')}
+            >
+              <Text style={styles.reorderButtonText}>⬆️</Text>
+            </TouchableOpacity>
+          )}
+          {index < portfolioItems.length - 1 && (
+            <TouchableOpacity
+              style={styles.reorderButton}
+              onPress={() => moveItem(item.id, 'down')}
+            >
+              <Text style={styles.reorderButtonText}>⬇️</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => {
+              setSelectedItem(item);
+              setShowShareModal(true);
+            }}
+          >
+            <Text style={styles.actionButtonText}>📤</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleEditCaption(item)}
+          >
+            <Text style={styles.actionButtonText}>✏️</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.deleteButton]}
+            onPress={() => handleDeleteItem(item.id)}
+          >
+            <Text style={styles.actionButtonText}>🗑️</Text>
+          </TouchableOpacity>
+        </View>
+
+        {item.caption && (
+          <View style={styles.captionContainer}>
+            <Text style={styles.captionText} numberOfLines={2}>
+              {item.caption}
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -504,108 +685,13 @@ export default function PortfolioScreen() {
             </Text>
           </View>
         ) : (
-          <View style={styles.grid}>
-            {portfolioItems.map((item, index) => (
-              <View key={item.id} style={styles.portfolioItem}>
-                {/* Media Display */}
-                {item.media_type === 'video' ? (
-                  <TouchableOpacity
-                    style={styles.videoContainer}
-                    onPress={() => setPlayingVideoId(playingVideoId === item.id ? null : item.id)}
-                  >
-                    {playingVideoId === item.id ? (
-                      <Video
-                        ref={videoRef}
-                        source={{ uri: item.video_url || '' }}
-                        style={styles.portfolioImage}
-                        resizeMode={ResizeMode.COVER}
-                        shouldPlay
-                        isLooping
-                        useNativeControls
-                      />
-                    ) : (
-                      <>
-                        <Image
-                          source={{ uri: item.thumbnail_url || item.image_url }}
-                          style={styles.portfolioImage}
-                          resizeMode="cover"
-                        />
-                        <View style={styles.videoOverlay}>
-                          <Ionicons name="play-circle" size={48} color={colors.white} />
-                        </View>
-                        {item.video_duration_seconds && (
-                          <View style={styles.durationBadge}>
-                            <Text style={styles.durationText}>
-                              {formatDuration(item.video_duration_seconds)}
-                            </Text>
-                          </View>
-                        )}
-                      </>
-                    )}
-                  </TouchableOpacity>
-                ) : (
-                  <Image
-                    source={{ uri: item.image_url }}
-                    style={styles.portfolioImage}
-                    resizeMode="cover"
-                  />
-                )}
-
-                {/* Reorder Controls */}
-                <View style={styles.reorderControls}>
-                  {index > 0 && (
-                    <TouchableOpacity
-                      style={styles.reorderButton}
-                      onPress={() => moveItem(item.id, 'up')}
-                    >
-                      <Text style={styles.reorderButtonText}>⬆️</Text>
-                    </TouchableOpacity>
-                  )}
-                  {index < portfolioItems.length - 1 && (
-                    <TouchableOpacity
-                      style={styles.reorderButton}
-                      onPress={() => moveItem(item.id, 'down')}
-                    >
-                      <Text style={styles.reorderButtonText}>⬇️</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Action Buttons */}
-                <View style={styles.actionButtons}>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => {
-                      setSelectedItem(item);
-                      setShowShareModal(true);
-                    }}
-                  >
-                    <Text style={styles.actionButtonText}>📤</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() => handleEditCaption(item)}
-                  >
-                    <Text style={styles.actionButtonText}>✏️</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.deleteButton]}
-                    onPress={() => handleDeleteItem(item.id)}
-                  >
-                    <Text style={styles.actionButtonText}>🗑️</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Caption */}
-                {item.caption && (
-                  <View style={styles.captionContainer}>
-                    <Text style={styles.captionText} numberOfLines={2}>
-                      {item.caption}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            ))}
+          <View style={styles.masonryGrid}>
+            <View style={styles.masonryColumn}>
+              {leftColumnItems.map((item) => renderPortfolioCard(item))}
+            </View>
+            <View style={styles.masonryColumn}>
+              {rightColumnItems.map((item) => renderPortfolioCard(item))}
+            </View>
           </View>
         )}
 
@@ -881,14 +967,16 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  grid: {
+  masonryGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: spacing.sm,
+    paddingHorizontal: MASONRY_HORIZONTAL_PADDING,
+    gap: MASONRY_COLUMN_GAP,
+  },
+  masonryColumn: {
+    flex: 1,
   },
   portfolioItem: {
-    width: '48%',
-    margin: '1%',
+    marginBottom: spacing.sm,
     backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
     overflow: 'hidden',
@@ -897,13 +985,11 @@ const styles = StyleSheet.create({
   },
   portfolioImage: {
     width: '100%',
-    height: 150,
     backgroundColor: colors.border,
   },
   videoContainer: {
     position: 'relative',
     width: '100%',
-    height: 150,
   },
   videoOverlay: {
     ...StyleSheet.absoluteFillObject,

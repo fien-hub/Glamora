@@ -45,23 +45,19 @@ export default function VerificationBadge({
 }
 
 interface VerificationStatusCardProps {
-  phoneVerified: boolean;
   emailVerified: boolean;
   paymentVerified?: boolean;
-  onVerifyPhone?: () => void;
   onVerifyEmail?: () => void;
   onVerifyPayment?: () => void;
 }
 
 export function VerificationStatusCard({
-  phoneVerified,
   emailVerified,
   paymentVerified,
-  onVerifyPhone,
   onVerifyEmail,
   onVerifyPayment,
 }: VerificationStatusCardProps) {
-  const allVerified = phoneVerified && emailVerified && (paymentVerified !== false);
+  const allVerified = emailVerified && (paymentVerified !== false);
 
   return (
     <View style={styles.card}>
@@ -81,16 +77,10 @@ export function VerificationStatusCard({
           verified={emailVerified}
           onVerify={!emailVerified ? onVerifyEmail : undefined}
         />
-        <VerificationItem
-          icon="phone-portrait-outline"
-          label="Phone"
-          verified={phoneVerified}
-          onVerify={!phoneVerified ? onVerifyPhone : undefined}
-        />
         {paymentVerified !== undefined && (
           <VerificationItem
             icon="card-outline"
-            label="Payment"
+            label="Payment Method"
             verified={paymentVerified}
             onVerify={!paymentVerified ? onVerifyPayment : undefined}
           />

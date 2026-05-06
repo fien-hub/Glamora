@@ -24,7 +24,7 @@ type FilterType = 'all' | 'unread';
 
 interface Conversation {
   id: string;
-  booking_id: string;
+  booking_id: string | null;
   other_user_id: string;
   other_user_name: string;
   other_user_avatar: string | null;
@@ -32,6 +32,7 @@ interface Conversation {
   last_message_time: string;
   unread_count: number;
   service_name?: string;
+  is_support?: boolean;
 }
 
 export default function MessagesScreen() {
@@ -125,17 +126,19 @@ export default function MessagesScreen() {
           is_read
         `)
         .or(`sender_id.eq.${authUserId},receiver_id.eq.${authUserId}`)
-        .not('booking_id', 'is', null)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      // Group messages by booking_id and get the latest message for each
+      // Group messages by booking_id (or support thread key for booking_id = null)
       const conversationMap = new Map<string, any>();
 
       for (const msg of messages || []) {
-        if (!conversationMap.has(msg.booking_id)) {
-          const otherAuthUserId = msg.sender_id === authUserId ? msg.receiver_id : msg.sender_id;
+        const otherAuthUserId = msg.sender_id === authUserId ? msg.receiver_id : msg.sender_id;
+        const conversationKey = msg.booking_id || `support-${otherAuthUserId}`;
+        const isSupportConversation = !msg.booking_id;
+
+        if (!conversationMap.has(conversationKey)) {
 
           // Get other user's profile info using their auth user_id
           const { data: otherProfile } = await supabase
@@ -144,32 +147,45 @@ export default function MessagesScreen() {
             .eq('user_id', otherAuthUserId)
             .single();
 
-          // Get booking info for service name
-          const { data: booking } = await supabase
-            .from('bookings')
-            .select('service:services(name)')
-            .eq('id', msg.booking_id)
-            .single();
+          // Get booking info for service name (for non-support chats only)
+          let serviceName: string | null = null;
+          if (msg.booking_id) {
+            const { data: booking } = await supabase
+              .from('bookings')
+              .select('service:services(name)')
+              .eq('id', msg.booking_id)
+              .single();
+
+            serviceName = (booking?.service as any)?.name || null;
+          }
 
           // Count unread messages
           const unreadCount = messages.filter(
-            m => m.booking_id === msg.booking_id &&
+            m =>
+                 (msg.booking_id
+                   ? m.booking_id === msg.booking_id
+                   : !m.booking_id &&
+                     ((m.sender_id === otherAuthUserId && m.receiver_id === authUserId) ||
+                      (m.sender_id === authUserId && m.receiver_id === otherAuthUserId))) &&
                  m.receiver_id === authUserId &&
                  !m.is_read
           ).length;
 
-          conversationMap.set(msg.booking_id, {
-            id: msg.booking_id,
+          conversationMap.set(conversationKey, {
+            id: conversationKey,
             booking_id: msg.booking_id,
-            other_user_id: otherProfile?.id || otherAuthUserId, // Use profile ID for navigation
-            other_user_name: otherProfile
-              ? `${otherProfile.first_name} ${otherProfile.last_name}`
-              : 'Unknown User',
+            other_user_id: isSupportConversation ? otherAuthUserId : (otherProfile?.id || otherAuthUserId),
+            other_user_name: isSupportConversation
+              ? 'Glamora Support'
+              : (otherProfile
+                  ? `${otherProfile.first_name} ${otherProfile.last_name}`
+                  : 'Unknown User'),
             other_user_avatar: otherProfile?.avatar_url || null,
             last_message: msg.message,
             last_message_time: msg.created_at,
             unread_count: unreadCount,
-            service_name: (booking?.service as any)?.name || null,
+            service_name: isSupportConversation ? 'Support' : serviceName,
+            is_support: isSupportConversation,
           });
         }
       }
@@ -190,11 +206,12 @@ export default function MessagesScreen() {
   };
 
   const handleConversationPress = (conversation: Conversation) => {
-    navigation.navigate('Chat' as never, {
+    (navigation as any).navigate('Chat', {
       bookingId: conversation.booking_id,
       otherUserId: conversation.other_user_id,
       otherUserName: conversation.other_user_name,
-    } as never);
+      isSupportChat: !!conversation.is_support,
+    });
   };
 
   const formatTime = (timestamp: string) => {
@@ -293,16 +310,24 @@ export default function MessagesScreen() {
       >
         <View style={styles.avatarContainer}>
           <Image
-            source={{ uri: item.other_user_avatar || 'https://via.placeholder.com/50' }}
+            source={item.other_user_avatar ? { uri: item.other_user_avatar } : require('../../../assets/icon.png')}
             style={styles.avatar}
           />
         </View>
 
         <View style={styles.conversationContent}>
           <View style={styles.conversationHeader}>
-            <Text style={[styles.userName, hasUnread && styles.userNameUnread]} numberOfLines={1}>
-              {item.other_user_name}
-            </Text>
+            <View style={styles.userNameRow}>
+              <Text style={[styles.userName, hasUnread && styles.userNameUnread]} numberOfLines={1}>
+                {item.other_user_name}
+              </Text>
+              {item.is_support && (
+                <View style={styles.supportBadge}>
+                  <Ionicons name="headset-outline" size={12} color={colors.primary} />
+                  <Text style={styles.supportBadgeText}>Support</Text>
+                </View>
+              )}
+            </View>
             <Text style={[styles.time, hasUnread && styles.timeUnread]}>
               {formatTime(item.last_message_time)}
             </Text>
@@ -646,12 +671,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 2,
   },
+  userNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: spacing.sm,
+  },
   userName: {
     fontSize: fontSize.md,
     fontWeight: fontWeight.medium,
     color: colors.text,
-    flex: 1,
-    marginRight: spacing.sm,
+    flexShrink: 1,
+  },
+  supportBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+    backgroundColor: colors.primarySubtle,
+    marginLeft: spacing.xs,
+  },
+  supportBadgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.semibold,
+    color: colors.primary,
   },
   userNameUnread: {
     fontWeight: fontWeight.bold,

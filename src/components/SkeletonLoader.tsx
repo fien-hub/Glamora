@@ -15,36 +15,26 @@ export default function SkeletonLoader({
   borderRadius: customBorderRadius = borderRadius.md,
   style,
 }: SkeletonLoaderProps) {
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const shimmerAnim = useRef(new Animated.Value(-1)).current;
 
   useEffect(() => {
     const shimmer = Animated.loop(
-      Animated.sequence([
-        Animated.timing(shimmerAnim, {
-          toValue: 1,
-          duration: 1200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(shimmerAnim, {
-          toValue: 0,
-          duration: 1200,
-          useNativeDriver: true,
-        }),
-      ])
+      Animated.timing(shimmerAnim, {
+        toValue: 1,
+        duration: 1300,
+        useNativeDriver: true,
+      })
     );
     shimmer.start();
 
     return () => shimmer.stop();
   }, []);
 
-  const translateX = shimmerAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-300, 300],
-  });
+  const shimmerTravel = typeof width === 'number' ? width + 140 : 420;
 
-  const opacity = shimmerAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0.2, 0.5, 0.2],
+  const translateX = shimmerAnim.interpolate({
+    inputRange: [-1, 1],
+    outputRange: [-shimmerTravel, shimmerTravel],
   });
 
   return (
@@ -52,8 +42,8 @@ export default function SkeletonLoader({
       style={[
         styles.skeleton,
         {
-          width,
-          height,
+          width: width as any,
+          height: height as any,
           borderRadius: customBorderRadius,
         },
         style,
@@ -64,7 +54,6 @@ export default function SkeletonLoader({
           styles.shimmer,
           {
             transform: [{ translateX }],
-            opacity,
           },
         ]}
       />
@@ -139,9 +128,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   shimmer: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.primary,
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: '55%',
+    backgroundColor: colors.primaryLighter,
+    opacity: 0.55,
   },
   feedCard: {
     flex: 1,

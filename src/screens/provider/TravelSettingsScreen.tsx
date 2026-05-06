@@ -21,7 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, fontSize, borderRadius, fontWeight } from '../../constants/theme';
-import { STANDARD_TRAVEL_FEES } from '../../components/AddServiceModal';
+import { STANDARD_TRAVEL_FEES } from '../../config/travelFees';
 
 export default function TravelSettingsScreen() {
   const navigation = useNavigation();

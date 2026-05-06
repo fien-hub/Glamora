@@ -49,7 +49,7 @@ const slides: OnboardingSlide[] = [
     id: '3',
     title: 'Easy Booking',
     description: 'Browse services, check availability, and book appointments in just a few taps.',
-    image: { uri: 'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=1080&h=1920&fit=crop&q=80' },
+    image: require('../../../assets/onboarding-slide-3.jpg'),
     gradientColors: ['rgba(0,0,0,0.7)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.7)'],
   },
   {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,15 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Linking,
+  TextInput,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import PhoneInput from 'react-native-phone-number-input';
 import { useAuth } from '../../contexts/AuthContext';
 import { UserRole } from '../../types';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
-import { isAppleAuthAvailable, isGoogleSignInAvailable } from '../../utils/socialAuth';
-import { validateEmail, getPasswordStrength, validateName } from '../../utils/validation';
-import PasswordStrengthIndicator from '../../components/PasswordStrengthIndicator';
+import { validateEmail, validateName } from '../../utils/validation';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 import ModernInput from '../../components/ModernInput';
@@ -35,15 +35,14 @@ export default function SignupScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [formattedPhone, setFormattedPhone] = useState('');
   const [role, setRole] = useState<UserRole>(preselectedRole || 'customer');
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
-  const [googleSignInAvailable, setGoogleSignInAvailable] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const lastNameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmPasswordRef = useRef<TextInput>(null);
 
   // Validation errors
   const [emailError, setEmailError] = useState('');
@@ -51,12 +50,6 @@ export default function SignupScreen() {
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [firstNameError, setFirstNameError] = useState('');
   const [lastNameError, setLastNameError] = useState('');
-
-  // Check if Apple Auth and Google Sign-In are available
-  useEffect(() => {
-    isAppleAuthAvailable().then(setAppleAuthAvailable);
-    setGoogleSignInAvailable(isGoogleSignInAvailable());
-  }, []);
 
   // Validate email on change
   useEffect(() => {
@@ -126,19 +119,9 @@ export default function SignupScreen() {
       return;
     }
 
-    if (getPasswordStrength(password) === 'weak') {
-      Alert.alert('Weak Password', 'Please use a stronger password with a mix of letters, numbers, and special characters');
-      return;
-    }
-
-    if (!acceptedTerms) {
-      Alert.alert('Terms & Conditions', 'Please accept the terms and conditions to continue');
-      return;
-    }
-
     setLoading(true);
     try {
-      await signUp(email, password, role, firstName, lastName, formattedPhone || phone);
+      await signUp(email, password, role, firstName, lastName);
       // Success! Auth system will automatically navigate to complete profile
       // No alert needed - navigation happens automatically
     } catch (error: any) {
@@ -147,26 +130,36 @@ export default function SignupScreen() {
     }
   };
 
-  const handleGoogleSignUp = async () => {
+  const handleOpenTerms = () => {
+    const termsUrl = 'https://www.termsfeed.com/live/6bfa6e5e-f1d2-4c95-a306-7e4f4e3b3cc5';
+    Linking.openURL(termsUrl).catch(err => 
+      Alert.alert('Error', 'Unable to open Terms & Conditions')
+    );
+  };
+
+  const handleOpenPrivacy = () => {
+    const privacyUrl = 'https://www.freeprivacypolicy.com/live/b955f068-3a35-49fa-a6de-46a938bf6b71';
+    Linking.openURL(privacyUrl).catch(err => 
+      Alert.alert('Error', 'Unable to open Privacy Policy')
+    );
+  };
+
+  const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
       await signInWithGoogle(role);
-      // Success! Auth system will automatically navigate to complete profile
-      // No alert needed - navigation happens automatically
     } catch (error: any) {
-      Alert.alert('Google Sign-Up Failed', error.message || 'Could not sign up with Google');
+      Alert.alert('Google Sign-In Failed', error.message || 'Could not sign in with Google');
       setLoading(false);
     }
   };
 
-  const handleAppleSignUp = async () => {
+  const handleAppleSignIn = async () => {
     setLoading(true);
     try {
       await signInWithApple(role);
-      // Success! Auth system will automatically navigate to complete profile
-      // No alert needed - navigation happens automatically
     } catch (error: any) {
-      Alert.alert('Apple Sign-Up Failed', error.message || 'Could not sign up with Apple');
+      Alert.alert('Apple Sign-In Failed', error.message || 'Could not sign in with Apple');
       setLoading(false);
     }
   };
@@ -177,6 +170,15 @@ export default function SignupScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Back button to change role */}
+        <TouchableOpacity
+          style={styles.backButtonTop}
+          onPress={() => navigation.navigate('RoleSelection')}
+          disabled={loading}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+        </TouchableOpacity>
+
         {/* Header fades in */}
         <FadeInView delay={0}>
           <View style={styles.header}>
@@ -185,6 +187,7 @@ export default function SignupScreen() {
           </View>
         </FadeInView>
 
+        <View style={styles.formWrapper}>
         <View style={styles.form}>
           {/* Role indicator slides up */}
           <SlideUpView delay={100}>
@@ -208,10 +211,17 @@ export default function SignupScreen() {
                   required
                   editable={!loading}
                   autoCapitalize="words"
+                  autoCorrect={false}
+                  textContentType="givenName"
+                  autoComplete="name-given"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => lastNameRef.current?.focus()}
                 />
               </View>
               <View style={styles.halfWidth}>
                 <ModernInput
+                  ref={lastNameRef}
                   label="Last Name"
                   value={lastName}
                   onChangeText={setLastName}
@@ -220,6 +230,12 @@ export default function SignupScreen() {
                   required
                   editable={!loading}
                   autoCapitalize="words"
+                  autoCorrect={false}
+                  textContentType="familyName"
+                  autoComplete="name-family"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => emailRef.current?.focus()}
                 />
               </View>
             </View>
@@ -228,6 +244,7 @@ export default function SignupScreen() {
           {/* Email field slides up */}
           <SlideUpView delay={200}>
             <ModernInput
+              ref={emailRef}
               label="Email"
               value={email}
               onChangeText={setEmail}
@@ -235,34 +252,21 @@ export default function SignupScreen() {
               error={emailError}
               required
               autoCapitalize="none"
+              autoCorrect={false}
               keyboardType="email-address"
+              textContentType="emailAddress"
+              autoComplete="email"
               editable={!loading}
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={() => passwordRef.current?.focus()}
             />
           </SlideUpView>
 
-          {/* Phone field slides up */}
-          <SlideUpView delay={250}>
-            <View style={styles.phoneWrapper}>
-              <Text style={styles.phoneLabel}>Phone Number <Text style={styles.optionalText}>(optional)</Text></Text>
-              <PhoneInput
-                defaultCode="US"
-                layout="first"
-                value={phone}
-                onChangeText={setPhone}
-                onChangeFormattedText={setFormattedPhone}
-                containerStyle={styles.phoneContainer}
-                textContainerStyle={styles.phoneTextContainer}
-                textInputStyle={styles.phoneInput}
-                codeTextStyle={styles.phoneCodeText}
-                flagButtonStyle={styles.flagButton}
-                disabled={loading}
-              />
-            </View>
-          </SlideUpView>
-
           {/* Password field slides up */}
-          <SlideUpView delay={300}>
+          <SlideUpView delay={250}>
             <ModernInput
+              ref={passwordRef}
               label="Password"
               value={password}
               onChangeText={setPassword}
@@ -271,15 +275,21 @@ export default function SignupScreen() {
               onRightIconPress={() => setShowPassword(!showPassword)}
               required
               secureTextEntry={!showPassword}
+              textContentType="newPassword"
+              autoComplete="new-password"
+              passwordRules="minlength: 8;"
               editable={!loading}
               hint="Minimum 8 characters"
+              returnKeyType="next"
+              blurOnSubmit={false}
+              onSubmitEditing={() => confirmPasswordRef.current?.focus()}
             />
-            <PasswordStrengthIndicator password={password} />
           </SlideUpView>
 
           {/* Confirm password field slides up */}
           <SlideUpView delay={350}>
             <ModernInput
+              ref={confirmPasswordRef}
               label="Confirm Password"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
@@ -289,24 +299,26 @@ export default function SignupScreen() {
               error={confirmPasswordError}
               required
               secureTextEntry={!showConfirmPassword}
+              textContentType="none"
+              autoComplete="off"
               editable={!loading}
+              returnKeyType="done"
+              onSubmitEditing={handleSignup}
             />
           </SlideUpView>
 
-          {/* Terms checkbox slides up */}
           <SlideUpView delay={400}>
-            <TouchableOpacity
-              style={styles.checkboxContainer}
-              onPress={() => setAcceptedTerms(!acceptedTerms)}
-              disabled={loading}
-            >
-              <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
-                {acceptedTerms && <Text style={styles.checkboxIcon}>✓</Text>}
-              </View>
-              <Text style={styles.checkboxLabel}>
-                I agree to the <Text style={styles.linkTextBold}>Terms & Conditions</Text> and <Text style={styles.linkTextBold}>Privacy Policy</Text>
+            <Text style={styles.termsNotice}>
+              By creating an account, you agree to the{' '}
+              <Text style={styles.linkTextBold} onPress={handleOpenTerms}>
+                Terms & Conditions
               </Text>
-            </TouchableOpacity>
+              {' '}and{' '}
+              <Text style={styles.linkTextBold} onPress={handleOpenPrivacy}>
+                Privacy Policy
+              </Text>
+              .
+            </Text>
           </SlideUpView>
 
           {/* Create account button slides up */}
@@ -324,38 +336,33 @@ export default function SignupScreen() {
             </TouchableOpacity>
           </SlideUpView>
 
-          {/* Social Login Divider - Only show if social auth is available */}
-          {(googleSignInAvailable || appleAuthAvailable) && (
+          <FadeInView delay={500}>
             <View style={styles.dividerContainer}>
               <View style={styles.divider} />
-              <Text style={styles.dividerText}>OR</Text>
+              <Text style={styles.dividerText}>or continue with</Text>
               <View style={styles.divider} />
             </View>
-          )}
 
-          {/* Social Login Buttons */}
-          {googleSignInAvailable && (
-            <TouchableOpacity
-              style={[styles.socialButton, styles.googleButton, loading && styles.buttonDisabled]}
-              onPress={handleGoogleSignUp}
-              disabled={loading}
-            >
-              <Text style={styles.socialButtonIcon}>G</Text>
-              <Text style={styles.socialButtonText}>Sign up with Google</Text>
-            </TouchableOpacity>
-          )}
+            <View style={styles.socialButtonsContainer}>
+              <TouchableOpacity
+                style={[styles.socialButton, loading && styles.buttonDisabled]}
+                onPress={handleGoogleSignIn}
+                disabled={loading}
+              >
+                <Ionicons name="logo-google" size={20} color={colors.error} />
+                <Text style={styles.socialButtonText}>Google</Text>
+              </TouchableOpacity>
 
-          {/* Apple Sign-In temporarily disabled - requires Apple Developer account setup */}
-          {false && appleAuthAvailable && (
-            <TouchableOpacity
-              style={[styles.socialButton, styles.appleButton, loading && styles.buttonDisabled]}
-              onPress={handleAppleSignUp}
-              disabled={loading}
-            >
-              <Text style={styles.socialButtonIcon}></Text>
-              <Text style={[styles.socialButtonText, styles.appleButtonText]}>Sign up with Apple</Text>
-            </TouchableOpacity>
-          )}
+              <TouchableOpacity
+                style={[styles.socialButton, loading && styles.buttonDisabled]}
+                onPress={handleAppleSignIn}
+                disabled={loading}
+              >
+                <Ionicons name="logo-apple" size={20} color={colors.text} />
+                <Text style={styles.socialButtonText}>Apple</Text>
+              </TouchableOpacity>
+            </View>
+          </FadeInView>
 
           <TouchableOpacity
             style={styles.linkButton}
@@ -366,6 +373,7 @@ export default function SignupScreen() {
               Already have an account? <Text style={styles.linkTextBold}>Sign In</Text>
             </Text>
           </TouchableOpacity>
+        </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -379,13 +387,25 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxl,
+  },
+  backButtonTop: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+    marginTop: spacing.xl,
   },
   header: {
     alignItems: 'center',
-    marginTop: spacing.xxl * 2,
+    marginTop: spacing.md,
     marginBottom: spacing.xl,
+  },
+  formWrapper: {
+    width: '90%',
+    maxWidth: 328,
+    alignSelf: 'center',
   },
   title: {
     fontSize: fontSize.xxl,
@@ -505,36 +525,26 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: fontWeight.medium,
   },
+  socialButtonsContainer: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
   socialButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: spacing.md,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.md,
     backgroundColor: colors.white,
-  },
-  googleButton: {
-    borderColor: '#DB4437',
-  },
-  appleButton: {
-    backgroundColor: colors.text,
-    borderColor: colors.text,
-  },
-  socialButtonIcon: {
-    fontSize: fontSize.xl,
-    marginRight: spacing.sm,
-    fontWeight: fontWeight.bold,
+    gap: spacing.xs,
   },
   socialButtonText: {
-    fontSize: fontSize.md,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
     color: colors.text,
-    fontWeight: fontWeight.medium,
-  },
-  appleButtonText: {
-    color: colors.white,
   },
   linkButton: {
     marginTop: spacing.md,
@@ -555,8 +565,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     marginBottom: spacing.lg,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   roleIndicatorText: {
     fontSize: fontSize.sm,
@@ -575,84 +583,13 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     marginTop: spacing.xs,
   },
-  phoneWrapper: {
-    marginBottom: spacing.lg,
-  },
-  phoneLabel: {
-    fontSize: fontSize.sm,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-    marginLeft: spacing.sm,
-    fontWeight: fontWeight.medium,
-  },
-  requiredStar: {
-    color: '#EF4444',
-    fontWeight: fontWeight.bold,
-  },
-  optionalText: {
-    color: colors.textSecondary,
-    fontWeight: fontWeight.regular,
-    fontSize: fontSize.xs,
-  },
-  phoneContainer: {
-    width: '100%',
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderRadius: borderRadius.xl,
-    backgroundColor: colors.white,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  phoneTextContainer: {
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.xl,
-    paddingVertical: spacing.xs,
-  },
-  phoneInput: {
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  phoneCodeText: {
-    fontSize: fontSize.md,
-    color: colors.text,
-  },
-  flagButton: {
-    width: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  termsNotice: {
     marginTop: spacing.md,
     marginBottom: spacing.sm,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 2,
-    borderColor: colors.border,
-    borderRadius: 4,
-    marginRight: spacing.sm,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  checkboxIcon: {
-    color: colors.black,
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-  },
-  checkboxLabel: {
-    flex: 1,
     fontSize: fontSize.sm,
     color: colors.text,
+    lineHeight: fontSize.sm * 1.5,
+    textAlign: 'center',
   },
 });
 

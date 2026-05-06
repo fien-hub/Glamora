@@ -21,6 +21,7 @@ import RescheduleModal from '../../components/RescheduleModal';
 import AnimatedCard from '../../components/AnimatedCard';
 import { SkeletonBookingList } from '../../components/SkeletonCards';
 import BrandedRefreshControl from '../../components/BrandedRefreshControl';
+import { sendRemotePushToProfile } from '../../utils/notifications';
 
 interface Booking {
   id: string;
@@ -114,7 +115,11 @@ export default function MyCustomerBookingsScreen() {
         .order('scheduled_date', { ascending: false });
 
       if (error) throw error;
-      setBookings(data || []);
+      setBookings((data || []).map((b: any) => ({
+        ...b,
+        provider_profiles: Array.isArray(b.provider_profiles) ? b.provider_profiles[0] : b.provider_profiles,
+        provider_services: Array.isArray(b.provider_services) ? b.provider_services[0] : b.provider_services,
+      })));
     } catch (error) {
       console.error('Error fetching bookings:', error);
     } finally {
@@ -185,6 +190,21 @@ export default function MyCustomerBookingsScreen() {
                 .eq('id', booking.id);
 
               if (error) throw error;
+
+              sendRemotePushToProfile(
+                booking.provider_id,
+                'Booking Cancelled',
+                `A customer cancelled their ${booking.provider_services?.services?.name || 'service'} booking.`,
+                {
+                  type: 'booking',
+                  bookingId: booking.id,
+                  status: 'cancelled',
+                },
+                'booking'
+              ).catch((pushError) => {
+                console.error('[MyBookings] Failed to send provider push:', pushError);
+              });
+
               Alert.alert('Success', 'Booking has been cancelled.');
               fetchBookings();
             } catch (error) {
@@ -276,9 +296,9 @@ export default function MyCustomerBookingsScreen() {
       <View style={styles.tabsContainer}>
         <PillTabs
           tabs={[
-            { key: 'all', label: 'All' },
-            { key: 'upcoming', label: 'Upcoming' },
-            { key: 'past', label: 'Past' },
+            { id: 'all', label: 'All' },
+            { id: 'upcoming', label: 'Upcoming' },
+            { id: 'past', label: 'Past' },
           ]}
           activeTab={filter}
           onTabChange={(tab) => setFilter(tab as 'all' | 'upcoming' | 'past')}
@@ -302,7 +322,7 @@ export default function MyCustomerBookingsScreen() {
           </View>
         ) : (
           filteredBookings.map((booking, index) => (
-            <AnimatedCard key={booking.id} delay={index * 100}>
+            <AnimatedCard key={booking.id} entranceDelay={index * 100}>
               <View style={styles.bookingCard}>
                 <View style={styles.bookingHeader}>
                   <Text style={styles.serviceName}>
@@ -419,11 +439,13 @@ export default function MyCustomerBookingsScreen() {
               setReviewModalVisible(false);
               setSelectedBooking(null);
             }}
-            bookingId={selectedBooking.id}
-            providerId={selectedBooking.provider_id}
-            providerName={selectedBooking.provider_profiles?.business_name || 'Provider'}
-            serviceName={selectedBooking.provider_services?.services?.name || selectedBooking.services?.name || 'Service'}
-            onReviewSubmitted={() => {
+            booking={{
+              id: selectedBooking.id,
+              provider_id: selectedBooking.provider_id,
+              provider_profiles: { business_name: selectedBooking.provider_profiles?.business_name || 'Provider' },
+              services: { name: selectedBooking.provider_services?.services?.name || selectedBooking.services?.name || 'Service' },
+            }}
+            onSuccess={() => {
               setReviewModalVisible(false);
               setSelectedBooking(null);
               fetchBookings();
@@ -450,12 +472,7 @@ export default function MyCustomerBookingsScreen() {
               setReportIssueModalVisible(false);
               setSelectedBooking(null);
             }}
-            bookingId={selectedBooking.id}
-            onIssueReported={() => {
-              setReportIssueModalVisible(false);
-              setSelectedBooking(null);
-              Alert.alert('Success', 'Your issue has been reported. We will review it shortly.');
-            }}
+            booking={selectedBooking}
           />
 
           <RescheduleModal
@@ -466,9 +483,10 @@ export default function MyCustomerBookingsScreen() {
             }}
             bookingId={selectedBooking.id}
             providerId={selectedBooking.provider_id}
+            serviceDuration={(selectedBooking.provider_services as any)?.duration_minutes || 60}
             currentDate={selectedBooking.scheduled_date}
             currentTime={selectedBooking.scheduled_time}
-            onRescheduleSuccess={() => {
+            onSuccess={() => {
               setRescheduleModalVisible(false);
               setSelectedBooking(null);
               fetchBookings();

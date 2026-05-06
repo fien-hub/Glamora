@@ -8,7 +8,9 @@ import {
   ActivityIndicator,
   TextInput,
   Alert,
+  Modal,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
@@ -35,10 +37,28 @@ export default function ServiceSelectionScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [showPricingGuide, setShowPricingGuide] = useState(false);
 
   useEffect(() => {
     fetchServices();
+    checkPricingGuide();
   }, [user]);
+
+  const checkPricingGuide = async () => {
+    if (!user) return;
+    const key = `glamora_pricing_guide_seen_${user.id}`;
+    const seen = await AsyncStorage.getItem(key);
+    if (!seen) {
+      setShowPricingGuide(true);
+    }
+  };
+
+  const dismissPricingGuide = async () => {
+    if (!user) return;
+    const key = `glamora_pricing_guide_seen_${user.id}`;
+    await AsyncStorage.setItem(key, 'true');
+    setShowPricingGuide(false);
+  };
 
   const fetchServices = async () => {
     if (!user) return;
@@ -98,15 +118,17 @@ export default function ServiceSelectionScreen() {
   };
 
   const handleSaveService = async (data: {
-    price: number;
+    price?: number;
+    basePrice?: number;
     duration: number;
     customDescription: string;
     customServiceName: string;
     isActive: boolean;
-    maxTravelDistance: number;
-    travelFee0to10: number;
-    travelFee11to15: number;
-    travelFee16to25: number;
+    maxTravelDistance?: number;
+    travelFee0to10?: number;
+    travelFee11to15?: number;
+    travelFee16to25?: number;
+    acceptsOver25km?: boolean;
   }) => {
     if (!user || !selectedService) return;
 
@@ -124,7 +146,7 @@ export default function ServiceSelectionScreen() {
         .insert({
           provider_id: profile.id,
           service_id: selectedService.id,
-          base_price: data.price,
+          base_price: data.price ?? data.basePrice,
           duration_minutes: data.duration,
           description: data.customDescription || null,
           custom_service_name: data.customServiceName || null,
@@ -254,6 +276,125 @@ export default function ServiceSelectionScreen() {
         )}
       </ScrollView>
 
+      {/* Pricing Guide Modal */}
+      <Modal
+        visible={showPricingGuide}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View style={styles.guideBackdrop}>
+          <View style={styles.guideCard}>
+            <View style={styles.guideHeader}>
+              <Text style={styles.guideHeaderIcon}>💡</Text>
+              <Text style={styles.guideHeaderTitle}>How Pricing Works</Text>
+            </View>
+
+            <ScrollView style={styles.guideScroll} showsVerticalScrollIndicator={false}>
+
+              {/* Base Price */}
+              <View style={styles.guideSection}>
+                <View style={styles.guideSectionTitleRow}>
+                  <Text style={styles.guideSectionIcon}>💰</Text>
+                  <Text style={styles.guideSectionTitle}>Base Price</Text>
+                </View>
+                <Text style={styles.guideSectionBody}>
+                  This is the price you charge for the service itself. Customers will see
+                  this clearly before booking.
+                </Text>
+                <View style={styles.guideNote}>
+                  <Text style={styles.guideNoteText}>
+                    📌  Glamora retains a{' '}
+                    <Text style={styles.guideNoteHighlight}>20% platform commission</Text>{' '}
+                    from every booking. You keep the remaining 80%.
+                  </Text>
+                </View>
+                <Text style={styles.guideExample}>
+                  Example: Base price $100 → You earn $80, Glamora earns $20.
+                </Text>
+              </View>
+
+              {/* Divider */}
+              <View style={styles.guideDivider} />
+
+              {/* Travel Fee */}
+              <View style={styles.guideSection}>
+                <View style={styles.guideSectionTitleRow}>
+                  <Text style={styles.guideSectionIcon}>🚗</Text>
+                  <Text style={styles.guideSectionTitle}>Travel Fee</Text>
+                </View>
+                <Text style={styles.guideSectionBody}>
+                  Since Glamora is a mobile beauty platform, you travel to your clients.
+                  You can set different travel fees based on distance:
+                </Text>
+
+                <View style={styles.guideTierList}>
+                  <View style={styles.guideTierRow}>
+                    <View style={styles.guideTierBadge}>
+                      <Text style={styles.guideTierBadgeText}>0 – 10 km</Text>
+                    </View>
+                    <Text style={styles.guideTierDesc}>
+                      Short distance fee — e.g. $5 to $10
+                    </Text>
+                  </View>
+                  <View style={styles.guideTierRow}>
+                    <View style={[styles.guideTierBadge, styles.guideTierBadgeMid]}>
+                      <Text style={styles.guideTierBadgeText}>11 – 15 km</Text>
+                    </View>
+                    <Text style={styles.guideTierDesc}>
+                      Medium distance fee — e.g. $12 to $18
+                    </Text>
+                  </View>
+                  <View style={styles.guideTierRow}>
+                    <View style={[styles.guideTierBadge, styles.guideTierBadgeFar]}>
+                      <Text style={styles.guideTierBadgeText}>16 – 25 km</Text>
+                    </View>
+                    <Text style={styles.guideTierDesc}>
+                      Long distance fee — e.g. $20 to $30
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={[styles.guideSectionBody, { marginTop: 8 }]}>
+                  You can also choose a{' '}
+                  <Text style={styles.bold}>maximum travel distance</Text>. Bookings
+                  beyond that limit will not be shown to you. For distances over 25 km
+                  you can opt in separately.
+                </Text>
+
+                <View style={styles.guideNote}>
+                  <Text style={styles.guideNoteText}>
+                    📌  Travel fees are charged{' '}
+                    <Text style={styles.guideNoteHighlight}>on top of the base price</Text>{' '}
+                    and go entirely to you — Glamora does not take commission on travel fees.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Divider */}
+              <View style={styles.guideDivider} />
+
+              {/* Quick Tips */}
+              <View style={styles.guideSection}>
+                <View style={styles.guideSectionTitleRow}>
+                  <Text style={styles.guideSectionIcon}>⭐</Text>
+                  <Text style={styles.guideSectionTitle}>Quick Tips</Text>
+                </View>
+                <Text style={styles.guideTip}>• Set competitive base prices to attract more bookings.</Text>
+                <Text style={styles.guideTip}>• Keep travel fees reasonable — high fees may discourage far-away clients.</Text>
+                <Text style={styles.guideTip}>• You can edit your prices at any time from My Services.</Text>
+                <Text style={styles.guideTip}>• Leaving a travel tier at $0 means no extra charge for that range.</Text>
+              </View>
+
+            </ScrollView>
+
+            <TouchableOpacity style={styles.guideDismissBtn} onPress={dismissPricingGuide}>
+              <Text style={styles.guideDismissBtnText}>Got it, let's go! 🚀</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Add Service Modal */}
       <AddServiceModal
         visible={modalVisible}
@@ -380,6 +521,151 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: spacing.xl,
+  },
+
+  // ── Pricing Guide Modal ──────────────────────────────────────────────────────
+  guideBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  guideCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    width: '100%',
+    maxHeight: '88%',
+    overflow: 'hidden',
+    ...shadows.lg,
+  },
+  guideHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.primarySubtle,
+  },
+  guideHeaderIcon: {
+    fontSize: 26,
+  },
+  guideHeaderTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  guideScroll: {
+    paddingHorizontal: spacing.lg,
+  },
+  guideSection: {
+    paddingVertical: spacing.lg,
+  },
+  guideSectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  guideSectionIcon: {
+    fontSize: 20,
+  },
+  guideSectionTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  guideSectionBody: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    lineHeight: 22,
+  },
+  guideNote: {
+    backgroundColor: colors.primarySubtle,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+    borderRadius: borderRadius.sm,
+    padding: spacing.md,
+    marginTop: spacing.md,
+  },
+  guideNoteText: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  guideNoteHighlight: {
+    fontWeight: fontWeight.bold,
+    color: colors.primary,
+  },
+  guideExample: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: spacing.sm,
+  },
+  guideDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginHorizontal: -spacing.lg,
+  },
+  guideTierList: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  guideTierRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  guideTierBadge: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    minWidth: 90,
+    alignItems: 'center',
+  },
+  guideTierBadgeMid: {
+    backgroundColor: '#FFF3E0',
+  },
+  guideTierBadgeFar: {
+    backgroundColor: '#FCE4EC',
+  },
+  guideTierBadgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  guideTierDesc: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  guideTip: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 22,
+    marginBottom: spacing.xs,
+  },
+  bold: {
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  guideDismissBtn: {
+    backgroundColor: colors.primary,
+    margin: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  guideDismissBtnText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.white,
   },
 });
 

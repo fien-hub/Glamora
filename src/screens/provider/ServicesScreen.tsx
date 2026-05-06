@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,8 +7,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Switch
+  Switch,
+  Image,
+  Modal,
+  Dimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSize } from '../../constants/theme';
@@ -42,15 +46,51 @@ interface ProviderService {
   service: Service;
 }
 
+interface ServiceMediaItem {
+  id: string;
+  provider_service_id: string | null;
+  image_url: string;
+  thumbnail_url: string | null;
+  media_type: 'image' | 'video';
+  created_at: string;
+}
+
 const PLATFORM_COMMISSION_RATE = 0.20; // 20% commission
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const getServicesTourCompletedKey = (userId: string) => `glamora_provider_services_tour_completed_${userId}`;
+
+interface SpotlightRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface TourStep {
+  key: string;
+  title: string;
+  description: string;
+  targetRef?: React.RefObject<View | null>;
+  staticRect?: SpotlightRect;
+}
 
 export default function ServicesScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
   const [myServices, setMyServices] = useState<ProviderService[]>([]);
+  const [providerProfileId, setProviderProfileId] = useState<string | null>(null);
+  const [serviceMediaMap, setServiceMediaMap] = useState<Record<string, ServiceMediaItem[]>>({});
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingService, setEditingService] = useState<ProviderService | null>(null);
+  const [shouldAutoStartTour, setShouldAutoStartTour] = useState(false);
+  const [showTour, setShowTour] = useState(false);
+  const [tourStepIndex, setTourStepIndex] = useState(0);
+  const [tourSpotlightRect, setTourSpotlightRect] = useState<SpotlightRect | null>(null);
+  const addButtonRef = useRef<View>(null);
+  const emptyStateRef = useRef<View>(null);
+  const firstServiceCardRef = useRef<View>(null);
+  const firstMediaButtonRef = useRef<View>(null);
 
   // Track screen view
   useScreenTracking('Provider Services');
@@ -66,6 +106,307 @@ export default function ServicesScreen() {
     }, [user])
   );
 
+  useFocusEffect(
+    React.useCallback(() => {
+      let isActive = true;
+
+      const checkTourStatus = async () => {
+        if (!user?.id) return;
+
+        try {
+          const tourCompleted = await AsyncStorage.getItem(getServicesTourCompletedKey(user.id));
+          if (isActive && tourCompleted !== 'true') {
+            setShouldAutoStartTour(true);
+          }
+        } catch (error) {
+          console.warn('[ServicesScreen] Failed to load services tour status:', error);
+        }
+      };
+
+      checkTourStatus();
+
+      return () => {
+        isActive = false;
+      };
+    }, [user?.id])
+  );
+
+  const tourSteps = useMemo<TourStep[]>(() => {
+    if (myServices.length === 0) {
+      return [
+        {
+          key: 'add-service',
+          title: 'Add your first service ✨',
+          description: 'Tap here to create a service customers can book from your profile.',
+          targetRef: addButtonRef,
+        },
+        {
+          key: 'empty-state',
+          title: 'Build your menu 💅',
+          description: 'Once you add services, they will appear here for quick editing and availability control.',
+          targetRef: emptyStateRef,
+        },
+      ];
+    }
+
+    return [
+      {
+        key: 'add-service',
+        title: 'Add more services ✨',
+        description: 'Use this button anytime you want to expand your service menu.',
+        targetRef: addButtonRef,
+      },
+      {
+        key: 'manage-service',
+        title: 'Manage each service 🛠️',
+        description: 'Here you can review pricing, duration, travel settings, and turn availability on or off.',
+        targetRef: firstServiceCardRef,
+      },
+      {
+        key: 'add-service-media',
+        title: 'Show your work 📸',
+        description: 'Add photos or videos directly under a service so clients can book from that exact work.',
+        targetRef: firstMediaButtonRef,
+      },
+    ];
+  }, [myServices.length]);
+
+  const measureSpotlightTarget = (targetRef: React.RefObject<View | null>) => new Promise<SpotlightRect | null>((resolve) => {
+    const node = targetRef.current as any;
+    if (!node || typeof node.measureInWindow !== 'function') {
+      resolve(null);
+      return;
+    }
+
+    node.measureInWindow((x: number, y: number, width: number, height: number) => {
+      if (!Number.isFinite(x) || !Number.isFinite(y) || width <= 0 || height <= 0) {
+        resolve(null);
+        return;
+      }
+
+      resolve({ x, y, width, height });
+    });
+  });
+
+  const completeTour = async () => {
+    setShowTour(false);
+    setTourStepIndex(0);
+    setTourSpotlightRect(null);
+    setShouldAutoStartTour(false);
+
+    if (!user?.id) {
+      return;
+    }
+
+    try {
+      await AsyncStorage.setItem(getServicesTourCompletedKey(user.id), 'true');
+    } catch (error) {
+      console.warn('[ServicesScreen] Failed to persist services tour completion:', error);
+    }
+  };
+
+  const startTourIfNeeded = async () => {
+    if (!user?.id || tourSteps.length === 0) {
+      return;
+    }
+
+    try {
+      const tourCompleted = await AsyncStorage.getItem(getServicesTourCompletedKey(user.id));
+      if (tourCompleted === 'true') {
+        return;
+      }
+
+      setTourStepIndex(0);
+      setShowTour(true);
+    } catch (error) {
+      console.warn('[ServicesScreen] Failed to start services tour:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!shouldAutoStartTour || loading) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      startTourIfNeeded();
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [shouldAutoStartTour, loading, myServices.length]);
+
+  useEffect(() => {
+    if (!showTour) {
+      setTourSpotlightRect(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const updateSpotlight = async () => {
+      const step = tourSteps[tourStepIndex];
+
+      if (!step) {
+        await completeTour();
+        return;
+      }
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 120);
+      });
+
+      const measured = step.targetRef ? await measureSpotlightTarget(step.targetRef) : null;
+      if (cancelled) {
+        return;
+      }
+
+      if (measured) {
+        setTourSpotlightRect(measured);
+        return;
+      }
+
+      if (step.staticRect) {
+        setTourSpotlightRect(step.staticRect);
+        return;
+      }
+
+      setTourSpotlightRect({
+        x: SCREEN_WIDTH / 2 - 52,
+        y: SCREEN_HEIGHT / 2 - 52,
+        width: 104,
+        height: 104,
+      });
+    };
+
+    updateSpotlight();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showTour, tourStepIndex, tourSteps]);
+
+  const handleTourNext = () => {
+    if (tourStepIndex >= tourSteps.length - 1) {
+      completeTour();
+      return;
+    }
+
+    setTourStepIndex((prev) => prev + 1);
+  };
+
+  const renderServicesTourModal = () => {
+    if (!showTour) {
+      return null;
+    }
+
+    const step = tourSteps[tourStepIndex];
+    if (!step) {
+      return null;
+    }
+
+    const spotlight = tourSpotlightRect ?? {
+      x: SCREEN_WIDTH / 2 - 52,
+      y: SCREEN_HEIGHT / 2 - 52,
+      width: 104,
+      height: 104,
+    };
+
+    const spotlightInset = 12;
+    const holeLeft = Math.max(0, spotlight.x - spotlightInset);
+    const holeTop = Math.max(0, spotlight.y - spotlightInset);
+    const holeRight = Math.min(SCREEN_WIDTH, spotlight.x + spotlight.width + spotlightInset);
+    const holeBottom = Math.min(SCREEN_HEIGHT, spotlight.y + spotlight.height + spotlightInset);
+    const holeWidth = Math.max(0, holeRight - holeLeft);
+    const holeHeight = Math.max(0, holeBottom - holeTop);
+
+    const topBlockHeight = holeTop;
+    const leftBlockWidth = holeLeft;
+    const rightBlockStart = holeRight;
+    const bottomBlockStart = holeBottom;
+
+    const tooltipHeight = 172;
+    const hasRoomBelow = SCREEN_HEIGHT - bottomBlockStart > tooltipHeight + spacing.lg;
+    const tooltipTop = hasRoomBelow
+      ? Math.min(SCREEN_HEIGHT - tooltipHeight - spacing.lg, bottomBlockStart + spacing.md)
+      : Math.max(spacing.xl, topBlockHeight - tooltipHeight - spacing.md);
+
+    return (
+      <Modal visible transparent animationType="fade" onRequestClose={completeTour}>
+        <View style={styles.tourBackdrop}>
+          <View style={[styles.tourOverlayBlock, { top: 0, left: 0, right: 0, height: topBlockHeight }]} />
+          <View
+            style={[
+              styles.tourOverlayBlock,
+              {
+                top: topBlockHeight,
+                left: 0,
+                width: leftBlockWidth,
+                height: holeHeight,
+              },
+            ]}
+          />
+          <View
+            style={[
+              styles.tourOverlayBlock,
+              {
+                top: topBlockHeight,
+                left: rightBlockStart,
+                right: 0,
+                height: holeHeight,
+              },
+            ]}
+          />
+          <View
+            style={[
+              styles.tourOverlayBlock,
+              {
+                top: bottomBlockStart,
+                left: 0,
+                right: 0,
+                bottom: 0,
+              },
+            ]}
+          />
+
+          <View
+            pointerEvents="none"
+            style={[
+              styles.tourSpotlight,
+              {
+                width: holeWidth,
+                height: holeHeight,
+                left: holeLeft,
+                top: holeTop,
+              },
+            ]}
+          >
+            <View style={[styles.tourSpotlightCorner, styles.tourSpotlightCornerTopLeft]} />
+            <View style={[styles.tourSpotlightCorner, styles.tourSpotlightCornerTopRight]} />
+            <View style={[styles.tourSpotlightCorner, styles.tourSpotlightCornerBottomLeft]} />
+            <View style={[styles.tourSpotlightCorner, styles.tourSpotlightCornerBottomRight]} />
+          </View>
+
+          <View style={[styles.tourTooltipCard, { top: tooltipTop }]}> 
+            <Text style={styles.tourProgressLabel}>Step {tourStepIndex + 1} of {tourSteps.length}</Text>
+            <Text style={styles.tourTitle}>{step.title}</Text>
+            <Text style={styles.tourDescription}>{step.description}</Text>
+
+            <View style={styles.tourActionsRow}>
+              <TouchableOpacity style={styles.tourSecondaryButton} onPress={completeTour} activeOpacity={0.85}>
+                <Text style={styles.tourSecondaryButtonText}>Skip 🙂</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.tourPrimaryButton} onPress={handleTourNext} activeOpacity={0.9}>
+                <Text style={styles.tourPrimaryButtonText}>
+                  {tourStepIndex >= tourSteps.length - 1 ? 'Done 😎' : 'Next 😊'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   const fetchServices = async () => {
     if (!user) return;
 
@@ -78,6 +419,7 @@ export default function ServicesScreen() {
         .single();
 
       if (profileError) throw profileError;
+      setProviderProfileId(profile.id);
 
       // Fetch provider's services
       const { data: providerServices, error: psError } = await supabase
@@ -124,6 +466,7 @@ export default function ServicesScreen() {
       })) || [];
 
       setMyServices(formattedServices);
+      await fetchServiceMedia(profile.id);
 
     } catch (error) {
       console.error('Error fetching services:', error);
@@ -131,6 +474,46 @@ export default function ServicesScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchServiceMedia = async (profileId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('portfolio_items')
+        .select('id, provider_service_id, image_url, thumbnail_url, media_type, created_at')
+        .eq('provider_id', profileId)
+        .not('provider_service_id', 'is', null)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const grouped = (data || []).reduce((acc, item: any) => {
+        const key = item.provider_service_id;
+        if (!key) return acc;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push({
+          id: item.id,
+          provider_service_id: item.provider_service_id,
+          image_url: item.image_url,
+          thumbnail_url: item.thumbnail_url,
+          media_type: item.media_type || 'image',
+          created_at: item.created_at,
+        });
+        return acc;
+      }, {} as Record<string, ServiceMediaItem[]>);
+
+      setServiceMediaMap(grouped);
+    } catch (error) {
+      console.error('Error fetching service media:', error);
+    }
+  };
+
+  const handleAddMediaToService = (providerService: ProviderService) => {
+    (navigation as any).navigate('CreatePost', {
+      preselectedProviderServiceId: providerService.id,
+      preselectedServiceName: providerService.custom_service_name || providerService.service.name,
+      sourceScreen: 'Services',
+    });
   };
 
   const handleEditService = (providerService: ProviderService) => {
@@ -244,26 +627,33 @@ export default function ServicesScreen() {
               <Text style={styles.title}>My Services</Text>
               <Text style={styles.subtitle}>{myServices.length} services offered</Text>
             </View>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => (navigation as any).navigate('ServiceSelection')}
-            >
-              <Ionicons name="add-circle" size={24} color={colors.primary} />
-              <Text style={styles.addButtonText}>Add Service</Text>
-            </TouchableOpacity>
+            <View ref={addButtonRef} collapsable={false}>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => (navigation as any).navigate('ServiceSelection')}
+              >
+                <Ionicons name="add-circle" size={24} color={colors.primary} />
+                <Text style={styles.addButtonText}>Add Service</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </FadeInView>
 
         {/* My Services List */}
         {myServices.length === 0 ? (
-          <View style={styles.emptyState}>
+          <View ref={emptyStateRef} collapsable={false} style={styles.emptyState}>
             <Text style={styles.emptyText}>No services added yet</Text>
             <Text style={styles.emptySubtext}>Add services to start receiving bookings</Text>
           </View>
         ) : (
           <StaggeredList animationType="scale" staggerDelay={50}>
-            {myServices.map((ps) => (
-              <View key={ps.id} style={styles.serviceCard}>
+            {myServices.map((ps, index) => (
+              <View
+                key={ps.id}
+                ref={index === 0 ? firstServiceCardRef : undefined}
+                collapsable={false}
+                style={styles.serviceCard}
+              >
                 <View style={styles.serviceHeader}>
                   <View style={styles.serviceInfo}>
                     <Text style={styles.serviceName}>
@@ -304,6 +694,14 @@ export default function ServicesScreen() {
                   </View>
                 </View>
                 <View style={styles.serviceButtons}>
+                  <View ref={index === 0 ? firstMediaButtonRef : undefined} collapsable={false} style={styles.tourMeasureWrap}>
+                    <TouchableOpacity
+                      style={styles.mediaButton}
+                      onPress={() => handleAddMediaToService(ps)}
+                    >
+                      <Text style={styles.mediaButtonText}>📸 Add Media</Text>
+                    </TouchableOpacity>
+                  </View>
                   <TouchableOpacity
                     style={styles.editButton}
                     onPress={() => handleEditService(ps)}
@@ -316,6 +714,33 @@ export default function ServicesScreen() {
                   >
                     <Text style={styles.deleteButtonText}>🗑️ Remove</Text>
                   </TouchableOpacity>
+                </View>
+
+                <View style={styles.serviceMediaSection}>
+                  <Text style={styles.serviceMediaTitle}>Service Photos</Text>
+                  {(serviceMediaMap[ps.id] || []).length > 0 ? (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.serviceMediaList}
+                    >
+                      {(serviceMediaMap[ps.id] || []).map((item) => (
+                        <View key={item.id} style={styles.serviceMediaItemWrap}>
+                          <Image
+                            source={{ uri: item.thumbnail_url || item.image_url }}
+                            style={styles.serviceMediaItem}
+                          />
+                          {item.media_type === 'video' && (
+                            <View style={styles.videoBadge}>
+                              <Ionicons name="play" size={12} color={colors.white} />
+                            </View>
+                          )}
+                        </View>
+                      ))}
+                    </ScrollView>
+                  ) : (
+                    <Text style={styles.noServiceMediaText}>No media added for this service yet.</Text>
+                  )}
                 </View>
               </View>
             ))}
@@ -344,6 +769,8 @@ export default function ServicesScreen() {
           onSave={handleSaveService}
         />
       )}
+
+      {renderServicesTourModal()}
     </View>
   );
 }
@@ -458,6 +885,24 @@ const styles = StyleSheet.create({
   serviceButtons: {
     flexDirection: 'row',
     gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  tourMeasureWrap: {
+    flex: 1,
+  },
+  mediaButton: {
+    backgroundColor: colors.backgroundGray,
+    padding: spacing.sm,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  mediaButtonText: {
+    color: colors.primary,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
   },
   editButton: {
     flex: 1,
@@ -560,6 +1005,155 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.primary,
     fontWeight: '700',
+  },
+  serviceMediaSection: {
+    marginTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
+  },
+  serviceMediaTitle: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
+  },
+  serviceMediaList: {
+    paddingRight: spacing.sm,
+  },
+  serviceMediaItemWrap: {
+    marginRight: spacing.sm,
+    position: 'relative',
+  },
+  serviceMediaItem: {
+    width: 84,
+    height: 84,
+    borderRadius: 10,
+    backgroundColor: colors.backgroundGray,
+  },
+  noServiceMediaText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  videoBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  tourBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.18)',
+  },
+  tourOverlayBlock: {
+    position: 'absolute',
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+  },
+  tourSpotlight: {
+    position: 'absolute',
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: 'transparent',
+  },
+  tourSpotlightCorner: {
+    position: 'absolute',
+    width: 18,
+    height: 18,
+    borderColor: colors.white,
+  },
+  tourSpotlightCornerTopLeft: {
+    top: -2,
+    left: -2,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderTopLeftRadius: 14,
+  },
+  tourSpotlightCornerTopRight: {
+    top: -2,
+    right: -2,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderTopRightRadius: 14,
+  },
+  tourSpotlightCornerBottomLeft: {
+    bottom: -2,
+    left: -2,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderBottomLeftRadius: 14,
+  },
+  tourSpotlightCornerBottomRight: {
+    bottom: -2,
+    right: -2,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderBottomRightRadius: 14,
+  },
+  tourTooltipCard: {
+    position: 'absolute',
+    left: spacing.lg,
+    right: spacing.lg,
+    backgroundColor: colors.white,
+    borderRadius: 24,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+  },
+  tourProgressLabel: {
+    fontSize: fontSize.xs,
+    fontWeight: '700',
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.xs,
+  },
+  tourTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  tourDescription: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    lineHeight: 22,
+    marginBottom: spacing.lg,
+  },
+  tourActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  tourSecondaryButton: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tourSecondaryButtonText: {
+    fontSize: fontSize.md,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  tourPrimaryButton: {
+    flex: 1,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tourPrimaryButtonText: {
+    fontSize: fontSize.md,
+    fontWeight: '700',
+    color: colors.black,
   },
 });
 

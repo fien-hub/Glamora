@@ -26,6 +26,8 @@ export const configureGoogleSignIn = () => {
       // iOS client ID from Google Cloud Console
       iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '',
       // Android client ID from Google Cloud Console
+      androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '',
+      // Web client ID from Google Cloud Console
       webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
       offlineAccess: true,
     });

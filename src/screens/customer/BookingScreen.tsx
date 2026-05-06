@@ -20,7 +20,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { analytics } from '../../services/analytics';
 import BookingConfirmationModal from '../../components/BookingConfirmationModal';
 import { getCurrentLocation, reverseGeocode } from '../../services/location';
-import { useStripe } from '@stripe/stripe-react-native';
+import { purchaseBookingProduct, verifyRevenueCatBookingPayment } from '../../services/revenuecat';
+import { trackMetaInitiatedCheckout, trackMetaPurchase } from '../../services/metaAds';
+import { sendRemotePushToProfile } from '../../utils/notifications';
 
 interface Service {
   id: string;
@@ -45,7 +47,6 @@ export default function BookingScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { user } = useAuth();
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const providerId = route.params?.providerId;
   const portfolioItemId = route.params?.portfolioItemId;
   const preSelectedServiceId = route.params?.serviceId; // Pre-selected service from tagged post
@@ -100,7 +101,7 @@ export default function BookingScreen() {
         setIsProvider(!!providerProfile);
       }
     } catch (error) {
-      console.log('[Booking] Error checking provider status:', error);
+      console.error('[Booking] Error checking provider status:', error);
     }
   };
 
@@ -108,7 +109,7 @@ export default function BookingScreen() {
     try {
       setLoading(true);
 
-      console.log('[Booking] Loading booking data for provider:', providerId);
+      if (__DEV__) console.log('[Booking] Loading booking data for provider:', providerId);
 
       // Get provider info with profile data
       const { data: providerData, error: providerError } = await supabase
@@ -117,6 +118,7 @@ export default function BookingScreen() {
           id,
           business_name,
           profiles (
+            user_id,
             avatar_url
           )
         `)
@@ -128,13 +130,40 @@ export default function BookingScreen() {
         throw providerError;
       }
 
-      console.log('[Booking] Provider data:', providerData);
+      if (__DEV__) console.log('[Booking] Provider data:', providerData);
+
+      let providerUserId: string | undefined;
+      if (Array.isArray((providerData as any).profiles)) {
+        providerUserId = (providerData as any).profiles?.[0]?.user_id;
+      } else {
+        providerUserId = (providerData as any).profiles?.user_id;
+      }
+
+      if (providerUserId) {
+        const { data: activeUser, error: activeUserError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', providerUserId)
+          .eq('is_active', true)
+          .single();
+
+        if (activeUserError || !activeUser) {
+          throw new Error('This provider is currently unavailable for booking.');
+        }
+      }
 
       // Flatten the provider data structure
+      let avatarUrl: string | undefined;
+      if (Array.isArray((providerData as any).profiles)) {
+        avatarUrl = (providerData as any).profiles?.[0]?.avatar_url;
+      } else {
+        avatarUrl = (providerData as any).profiles?.avatar_url;
+      }
+
       const flatProvider = {
         id: providerData.id,
         business_name: providerData.business_name,
-        avatar_url: providerData.profiles?.avatar_url,
+        avatar_url: avatarUrl,
       };
       setProvider(flatProvider);
 
@@ -163,7 +192,7 @@ export default function BookingScreen() {
         throw servicesError;
       }
 
-      console.log('[Booking] Services data:', servicesData);
+      if (__DEV__) console.log('[Booking] Services data:', servicesData);
 
       // Transform services data to match expected format
       // Use the lowest price (0-10km) as the starting price
@@ -182,7 +211,7 @@ export default function BookingScreen() {
         };
       }) || [];
 
-      console.log('[Booking] Transformed services:', transformedServices);
+      if (__DEV__) console.log('[Booking] Transformed services:', transformedServices);
 
       // If coming from a tagged post with a specific service, only show that service
       if (preSelectedServiceId && transformedServices.length > 0) {
@@ -191,7 +220,7 @@ export default function BookingScreen() {
         );
 
         if (preSelectedService) {
-          console.log('[Booking] Pre-selecting service from tagged post:', preSelectedService.name);
+          if (__DEV__) console.log('[Booking] Pre-selecting service from tagged post:', preSelectedService.name);
           // Only show the tagged service, not all services
           setServices([preSelectedService]);
           setSelectedService(preSelectedService);
@@ -338,7 +367,7 @@ export default function BookingScreen() {
 
     try {
       setSubmitting(true);
-      console.log('[Booking] Starting booking submission...');
+      if (__DEV__) console.log('[Booking] Starting booking submission...');
 
       // Get customer profile ID and address
       const { data: profileData, error: profileError } = await supabase
@@ -357,7 +386,7 @@ export default function BookingScreen() {
         return;
       }
 
-      console.log('[Booking] Profile ID:', profileData.id);
+      if (__DEV__) console.log('[Booking] Profile ID:', profileData.id);
 
       // Ensure customer_profiles record exists (required for RLS policy)
       const { data: existingCustomerProfile } = await supabase
@@ -367,7 +396,7 @@ export default function BookingScreen() {
         .maybeSingle();
 
       if (!existingCustomerProfile) {
-        console.log('[Booking] Creating customer_profiles record...');
+        if (__DEV__) console.log('[Booking] Creating customer_profiles record...');
         const { error: createCustomerError } = await supabase
           .from('customer_profiles')
           .insert({ id: profileData.id });
@@ -377,9 +406,9 @@ export default function BookingScreen() {
           Alert.alert('Error', 'Failed to set up your customer profile. Please try again.');
           return;
         }
-        console.log('[Booking] Customer profile created successfully');
+        if (__DEV__) console.log('[Booking] Customer profile created successfully');
       } else {
-        console.log('[Booking] Customer profile already exists:', existingCustomerProfile.id);
+        if (__DEV__) console.log('[Booking] Customer profile already exists:', existingCustomerProfile.id);
       }
 
       // Validate address fields from form
@@ -388,7 +417,7 @@ export default function BookingScreen() {
         return;
       }
 
-      console.log('[Booking] Service address:', { address, city, state, zipCode });
+      if (__DEV__) console.log('[Booking] Service address:', { address, city, state, zipCode });
 
       // Parse date and time
       const bookingDate = new Date(selectedDate);
@@ -400,10 +429,10 @@ export default function BookingScreen() {
       // Format time as HH:MM:SS
       const scheduledTime = `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}:00`;
 
-      console.log('[Booking] Scheduled date:', scheduledDate);
-      console.log('[Booking] Scheduled time:', scheduledTime);
-      console.log('[Booking] Provider service ID:', selectedService.provider_service_id);
-      console.log('[Booking] Total price:', selectedService.price);
+      if (__DEV__) console.log('[Booking] Scheduled date:', scheduledDate);
+      if (__DEV__) console.log('[Booking] Scheduled time:', scheduledTime);
+      if (__DEV__) console.log('[Booking] Provider service ID:', selectedService.provider_service_id);
+      if (__DEV__) console.log('[Booking] Total price:', selectedService.price);
 
       // Get provider location
       const { data: providerData } = await supabase
@@ -416,6 +445,28 @@ export default function BookingScreen() {
       const totalPrice = pricingData?.pricing?.total_cents || selectedService.price_0_10km;
       const distanceKm = pricingData?.distance_km || null;
       const distanceTier = pricingData?.distance_tier || '0-10km';
+
+      // Process payment before creating the booking record
+      setPaymentProcessing(true);
+      if (__DEV__) console.log('[Booking] Starting RevenueCat payment processing...');
+      void trackMetaInitiatedCheckout(totalPrice / 100, {
+        providerId,
+        serviceId: selectedService.provider_service_id,
+        source: 'booking_screen',
+      });
+
+      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+      if (sessionError || !session) {
+        console.error('[Booking] Session refresh error:', sessionError);
+        throw new Error('Session expired. Please log in again.');
+      }
+
+      const purchasePayload = await purchaseBookingProduct(user.id);
+      const verification = await verifyRevenueCatBookingPayment(session.access_token, purchasePayload);
+
+      if (!verification?.success) {
+        throw new Error('Payment verification failed');
+      }
 
       // Create booking with address from form
       const { data: bookingData, error: bookingError } = await supabase
@@ -435,8 +486,10 @@ export default function BookingScreen() {
           city: city,
           state: state,
           zip_code: zipCode,
-          status: 'pending',
+          status: 'confirmed',
           notes: notes || null,
+          payment_intent_id: verification?.paymentReference || `rc_${purchasePayload.transactionId}`,
+          payment_status: 'paid',
         })
         .select()
         .single();
@@ -446,116 +499,28 @@ export default function BookingScreen() {
         throw bookingError;
       }
 
-      console.log('[Booking] Booking created successfully:', bookingData);
+      if (__DEV__) console.log('[Booking] Booking created successfully:', bookingData);
+      void trackMetaPurchase(totalPrice / 100, 'USD', {
+        bookingId: bookingData.id,
+        providerId,
+        source: 'booking_screen',
+      });
 
-      // PAYMENT PROCESSING - Pay at booking
-      setPaymentProcessing(true);
-      console.log('[Booking] Starting payment processing...');
-
-      // Get session token for API calls
-      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
-      if (sessionError || !session) {
-        console.error('[Booking] Session refresh error:', sessionError);
-        // Cancel the booking since payment can't proceed
-        await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingData.id);
-        throw new Error('Session expired. Please log in again.');
-      }
-
-      // Create payment intent
-      console.log('[Booking] Creating payment intent...');
-      const paymentResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/payments/create-intent`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
+      // Notify provider of new paid booking (non-blocking)
+      sendRemotePushToProfile(
+        providerId,
+        'New Booking Request',
+        `${selectedService.name} booking requested for ${scheduledDate} at ${selectedTime}`,
+        {
+          type: 'booking',
           bookingId: bookingData.id,
-          amount: totalPrice,
-        }),
-      });
-
-      if (!paymentResponse.ok) {
-        const errorData = await paymentResponse.json();
-        console.error('[Booking] Payment intent creation failed:', errorData);
-        // Cancel the booking since payment failed
-        await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingData.id);
-        throw new Error(errorData.error || 'Failed to create payment intent');
-      }
-
-      const { clientSecret, ephemeralKey, customer } = await paymentResponse.json();
-      console.log('[Booking] Payment intent created successfully');
-
-      // Initialize Payment Sheet
-      console.log('[Booking] Initializing Payment Sheet...');
-      const { error: initError } = await initPaymentSheet({
-        merchantDisplayName: provider?.business_name || 'Glamora',
-        customerId: customer,
-        customerEphemeralKeySecret: ephemeralKey,
-        paymentIntentClientSecret: clientSecret,
-        defaultBillingDetails: {
-          email: user?.email,
-          address: {
-            line1: address,
-            city: city,
-            state: state,
-            postalCode: zipCode,
-            country: 'US',
-          },
+          providerId,
+          serviceId: selectedService.provider_service_id,
         },
-        allowsDelayedPaymentMethods: false,
+        'booking'
+      ).catch((pushError) => {
+        console.error('[Booking] Failed to send provider push:', pushError);
       });
-
-      if (initError) {
-        console.error('[Booking] Payment Sheet init error:', initError);
-        await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingData.id);
-        throw new Error(initError.message);
-      }
-
-      // Present Payment Sheet
-      console.log('[Booking] Presenting Payment Sheet...');
-      const { error: presentError } = await presentPaymentSheet();
-
-      if (presentError) {
-        console.error('[Booking] Payment cancelled or failed:', presentError);
-        // Cancel the booking since payment was cancelled/failed
-        await supabase.from('bookings').update({ status: 'cancelled' }).eq('id', bookingData.id);
-
-        if (presentError.code === 'Canceled') {
-          Alert.alert('Payment Cancelled', 'Your booking has been cancelled. No payment was processed.');
-        } else {
-          Alert.alert('Payment Failed', presentError.message || 'Payment could not be processed.');
-        }
-        return;
-      }
-
-      // Payment successful - confirm with backend
-      console.log('[Booking] Payment successful! Confirming with backend...');
-      const paymentIntentId = clientSecret.split('_secret_')[0];
-
-      try {
-        const confirmResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL}/api/payments/confirm`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            paymentIntentId,
-            bookingId: bookingData.id,
-          }),
-        });
-
-        if (!confirmResponse.ok) {
-          console.error('[Booking] Payment confirmation failed:', await confirmResponse.text());
-          // Payment succeeded, booking should still be confirmed
-        } else {
-          console.log('[Booking] Payment confirmed on backend');
-        }
-      } catch (confirmError) {
-        console.error('[Booking] Error confirming payment:', confirmError);
-        // Payment succeeded, booking should still be confirmed
-      }
 
       // Track analytics with tagged post information
       analytics.track('booking_completed', {
@@ -568,6 +533,7 @@ export default function BookingScreen() {
         distance_km: distanceKm,
         distance_tier: distanceTier,
         payment_status: 'paid',
+        payment_provider: 'revenuecat',
       }, user?.id);
 
       // Track specific event for bookings from tagged posts
@@ -587,9 +553,14 @@ export default function BookingScreen() {
 
       // Show confirmation modal
       setShowConfirmation(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating booking:', error);
-      Alert.alert('Error', 'Failed to create booking. Please try again.');
+      const message = error?.message || 'Failed to create booking. Please try again.';
+      if (message.toLowerCase().includes('cancel')) {
+        Alert.alert('Payment Cancelled', 'Your booking was not created because payment was cancelled.');
+      } else {
+        Alert.alert('Error', message);
+      }
     } finally {
       setSubmitting(false);
       setPaymentProcessing(false);

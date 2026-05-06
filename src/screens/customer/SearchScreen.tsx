@@ -9,7 +9,7 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, fontSize, fontWeight, borderRadius, lineHeight } from '../../constants/theme';
@@ -19,13 +19,16 @@ import { useAuth } from '../../contexts/AuthContext';
 import AnimatedCard from '../../components/AnimatedCard';
 import AnimatedHeart from '../../components/AnimatedHeart';
 import { SkeletonProviderList } from '../../components/SkeletonCards';
-import BookingModal from '../../components/BookingModal';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 import { getProviderAvailability } from '../../utils/availability';
+import { useVerificationGuard } from '../../hooks/useVerificationGuard';
+import { calculateDistance, formatTravelTimeDistance, LocationCoords, geocodeAddress } from '../../services/location';
+import { TOTAL_HEADER_HEIGHT } from '../../components/CurvedHeader';
 
 const RECENT_SEARCHES_KEY = 'glamora_recent_searches';
 const MAX_RECENT_SEARCHES = 10;
+const CLOSE_DISTANCE_KM = 10;
 
 interface ProviderService {
   id: string;
@@ -49,8 +52,17 @@ interface ProviderService {
     rating: number;
     total_reviews: number;
     is_verified: boolean;
+    city?: string | null;
+    state?: string | null;
+    location_city?: string | null;
+    location_state?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    current_latitude?: number | null;
+    current_longitude?: number | null;
   };
   finalPrice: number;
+  distanceKm?: number | null;
   availability?: {
     displayText: string;
     urgency: string;
@@ -62,6 +74,7 @@ interface Filters {
   maxDistance: number | null;
   rating: number | null;
   availableNow: boolean;
+  verifiedOnly: boolean;
 }
 
 const DEFAULT_FILTERS: Filters = {
@@ -69,11 +82,15 @@ const DEFAULT_FILTERS: Filters = {
   maxDistance: null,
   rating: null,
   availableNow: false,
+  verifiedOnly: false,
 };
 
 export default function SearchScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const { user } = useAuth();
+  const { requireVerification } = useVerificationGuard();
+  const disableHeaderOffset = route.params?.disableHeaderOffset === true;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
@@ -81,18 +98,84 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [favoriteServices, setFavoriteServices] = useState<Set<string>>(new Set());
-  const [bookingModalVisible, setBookingModalVisible] = useState(false);
-  const [selectedService, setSelectedService] = useState<ProviderService | null>(null);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [activeFiltersCount, setActiveFiltersCount] = useState(0);
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const [userLocation, setUserLocation] = useState<LocationCoords | null>(null);
 
   useScreenTracking('Search', {});
 
   useEffect(() => {
     loadRecentSearches();
-    if (user) fetchFavorites();
-  }, []);
+    if (user) {
+      fetchProfileId();
+      fetchUserLocation();
+    }
+  }, [user]);
+
+  const fetchUserLocation = async () => {
+    if (!user) return;
+
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profileError || !profileData?.id) {
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('customer_profiles')
+        .select('latitude, longitude, current_latitude, current_longitude')
+        .eq('id', profileData.id)
+        .single();
+
+      if (error) {
+        return;
+      }
+
+      const resolvedLatitude = data?.latitude ?? data?.current_latitude;
+      const resolvedLongitude = data?.longitude ?? data?.current_longitude;
+
+      if (resolvedLatitude != null && resolvedLongitude != null) {
+        setUserLocation({
+          latitude: Number(resolvedLatitude),
+          longitude: Number(resolvedLongitude),
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching customer location:', error);
+    }
+  };
+
+  // Fetch profile ID from profiles table (needed for favorite_providers)
+  const fetchProfileId = async () => {
+    if (!user) return;
+    try {
+      const { data: profileData, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) {
+        console.error('Error fetching profile ID:', error);
+        return;
+      }
+
+      if (profileData) {
+        setProfileId(profileData.id);
+        // Now fetch favorites with the correct profile ID
+        fetchFavorites(profileData.id);
+      }
+    } catch (error) {
+      console.error('Error fetching profile ID:', error);
+    }
+  };
 
   const loadRecentSearches = async () => {
     try {
@@ -140,29 +223,37 @@ export default function SearchScreen() {
     }
   };
 
-  const fetchFavorites = async () => {
-    if (!user) return;
+  const fetchFavorites = async (customerProfileId?: string) => {
+    const idToUse = customerProfileId || profileId;
+    if (!idToUse) return;
     try {
       const { data } = await supabase
         .from('favorite_providers')
         .select('provider_id')
-        .eq('customer_id', user.id);
+        .eq('customer_id', idToUse);
       setFavoriteServices(new Set(data?.map(f => f.provider_id) || []));
     } catch (error) {
       console.error('Error fetching favorites:', error);
     }
   };
 
-  const handleSearch = async (query?: string) => {
-    const searchTerm = query || searchQuery;
-    if (!searchTerm.trim()) return;
+  const handleSearch = async (query?: string, saveToRecent = true) => {
+    const searchTerm = (query || searchQuery).trim();
+    if (!searchTerm) {
+      setHasSearched(false);
+      setSearchResults([]);
+      return;
+    }
 
     setLoading(true);
     setHasSearched(true);
-    saveRecentSearch(searchTerm);
+    if (saveToRecent) {
+      saveRecentSearch(searchTerm);
+    }
 
     try {
-      // Search services by name or provider business name (only show verified providers)
+      // Search services by name or provider business name
+      // Show all active services, but prioritize verified providers
       const { data, error } = await supabase
         .from('provider_services')
         .select(`
@@ -173,23 +264,60 @@ export default function SearchScreen() {
           platform_commission_rate,
           duration_minutes,
           is_active,
+          custom_service_name,
+          custom_service_status,
           service:services!inner(id, name, description, base_duration_minutes, category_id),
-          provider:provider_profiles!inner(id, business_name, avatar_url, rating, total_reviews, is_verified, identity_verification_status)
+          provider:provider_profiles!inner(id, business_name, avatar_url, rating, total_reviews, is_verified, identity_verification_status, city, state, location_city, location_state, latitude, longitude, current_latitude, current_longitude, profiles!inner(user_id))
         `)
         .eq('is_active', true)
-        .eq('provider.identity_verification_status', 'approved');
+        .eq('provider.identity_verification_status', 'approved')
+        .or('custom_service_name.is.null,custom_service_status.eq.approved');
 
       if (error) throw error;
 
-      // Filter by search term (service name or provider name)
-      const filtered = (data || []).filter((ps: any) =>
-        ps.service.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ps.provider.business_name.toLowerCase().includes(searchTerm.toLowerCase())
+      let activeProviderData = data || [];
+      const providerUserIds = Array.from(
+        new Set(
+          activeProviderData
+            .map((ps: any) => ps?.provider?.profiles?.user_id)
+            .filter((id: any) => typeof id === 'string' && id.length > 0)
+        )
       );
 
+      if (providerUserIds.length > 0) {
+        const { data: activeUsers, error: activeUsersError } = await supabase
+          .from('users')
+          .select('id')
+          .in('id', providerUserIds)
+          .eq('is_active', true);
+
+        if (!activeUsersError) {
+          const activeUserIds = new Set((activeUsers || []).map((row: any) => row.id));
+          activeProviderData = activeProviderData.filter((ps: any) => {
+            const userId = ps?.provider?.profiles?.user_id;
+            return !!userId && activeUserIds.has(userId);
+          });
+        } else {
+          console.warn('Unable to filter deactivated providers:', activeUsersError.message);
+        }
+      }
+
+      // Filter by search term (service name or provider name)
+      const normalizedSearchTerm = searchTerm.toLowerCase();
+      const filtered = activeProviderData.filter((ps: any) =>
+        ps.service.name.toLowerCase().includes(normalizedSearchTerm) ||
+        ps.provider.business_name.toLowerCase().includes(normalizedSearchTerm)
+      );
+
+      // All results are already identity-approved; sort by rating
+      const sorted = filtered.sort((a: any, b: any) => {
+        return (b.provider.rating || 0) - (a.provider.rating || 0);
+      });
+
       // Add final price and availability
+      const geocodeCache: Record<string, LocationCoords | null> = {};
       const resultsWithDetails = await Promise.all(
-        filtered.map(async (ps: any) => {
+        sorted.map(async (ps: any) => {
           const basePrice = Number(ps.base_price);
           const commissionRate = Number(ps.platform_commission_rate) || 0.20;
           const finalPrice = Math.round(basePrice * (1 + commissionRate));
@@ -201,11 +329,87 @@ export default function SearchScreen() {
             availability = { displayText: 'Check availability', urgency: 'unknown' };
           }
 
-          return { ...ps, finalPrice, availability };
+          let distanceKm: number | null = null;
+          const providerLatitude = ps.provider?.latitude ?? ps.provider?.current_latitude;
+          const providerLongitude = ps.provider?.longitude ?? ps.provider?.current_longitude;
+          const providerCity = ps.provider?.city ?? ps.provider?.location_city;
+          const providerState = ps.provider?.state ?? ps.provider?.location_state;
+
+          if (userLocation && providerLatitude != null && providerLongitude != null) {
+            distanceKm = calculateDistance(userLocation, {
+              latitude: Number(providerLatitude),
+              longitude: Number(providerLongitude),
+            });
+          } else if (userLocation && providerCity && providerState) {
+            const locationKey = `${String(providerCity).trim().toLowerCase()}|${String(providerState).trim().toLowerCase()}`;
+
+            if (!(locationKey in geocodeCache)) {
+              geocodeCache[locationKey] = await geocodeAddress(`${providerCity}, ${providerState}`);
+            }
+
+            const estimatedCoords = geocodeCache[locationKey];
+            if (estimatedCoords) {
+              distanceKm = calculateDistance(userLocation, estimatedCoords);
+            }
+          }
+
+          return { ...ps, finalPrice, availability, distanceKm };
         })
       );
 
-      setSearchResults(resultsWithDetails);
+      // Apply client-side filters
+      let filteredResults = resultsWithDetails;
+
+      // Optional: platform-verified badge filter
+      if (filters.verifiedOnly) {
+        filteredResults = filteredResults.filter((r: any) => r.provider?.is_verified === true);
+      }
+
+      // Minimum rating
+      if (filters.rating) {
+        filteredResults = filteredResults.filter((r: any) => (r.provider?.rating || 0) >= (filters.rating as number));
+      }
+
+      // Price range
+      if (filters.priceRange) {
+        const [min, max] = filters.priceRange;
+        filteredResults = filteredResults.filter((r: any) => r.finalPrice >= min && r.finalPrice <= max);
+      }
+
+      // Max distance
+      if (filters.maxDistance) {
+        filteredResults = filteredResults.filter((r: any) =>
+          typeof r.distanceKm === 'number' && r.distanceKm <= (filters.maxDistance as number)
+        );
+      }
+
+      // Available now
+      if (filters.availableNow) {
+        filteredResults = filteredResults.filter((r: any) => r.availability?.urgency === 'immediate');
+      }
+
+      // Prioritize nearby providers first, then farther, then unknown distance
+      filteredResults = filteredResults.sort((a: any, b: any) => {
+        const aHasDistance = typeof a.distanceKm === 'number';
+        const bHasDistance = typeof b.distanceKm === 'number';
+
+        if (aHasDistance && bHasDistance) {
+          const aClose = a.distanceKm <= CLOSE_DISTANCE_KM;
+          const bClose = b.distanceKm <= CLOSE_DISTANCE_KM;
+
+          if (aClose !== bClose) return aClose ? -1 : 1;
+          if (a.distanceKm !== b.distanceKm) return a.distanceKm - b.distanceKm;
+        }
+
+        if (aHasDistance !== bHasDistance) {
+          return aHasDistance ? -1 : 1;
+        }
+
+        // Fallback ranking
+        return (b.provider.rating || 0) - (a.provider.rating || 0);
+      });
+
+      setSearchResults(filteredResults);
     } catch (error: any) {
       console.error('Error searching services:', error);
       Alert.alert('Error', 'Failed to search services');
@@ -216,37 +420,137 @@ export default function SearchScreen() {
 
   const handleRecentSearchTap = (query: string) => {
     setSearchQuery(query);
-    handleSearch(query);
   };
 
+  useEffect(() => {
+    const trimmedQuery = searchQuery.trim();
+
+    if (!trimmedQuery) {
+      setHasSearched(false);
+      setSearchResults([]);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      handleSearch(trimmedQuery, false);
+    }, 250);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery]);
+
   const toggleFavorite = async (providerId: string) => {
+    // Check verification before allowing favorites
+    if (!requireVerification('favorite')) {
+      return;
+    }
+
     if (!user) {
       Alert.alert('Login Required', 'Please login to save favorites');
+      return;
+    }
+    if (!profileId) {
+      Alert.alert('Error', 'Profile not loaded. Please try again.');
       return;
     }
     const isFavorite = favoriteServices.has(providerId);
     try {
       if (isFavorite) {
         await supabase.from('favorite_providers').delete()
-          .eq('customer_id', user.id).eq('provider_id', providerId);
+          .eq('customer_id', profileId).eq('provider_id', providerId);
         setFavoriteServices(prev => { const s = new Set(prev); s.delete(providerId); return s; });
       } else {
-        await supabase.from('favorite_providers').insert({ customer_id: user.id, provider_id: providerId });
+        await supabase.from('favorite_providers').insert({ customer_id: profileId, provider_id: providerId });
         setFavoriteServices(prev => new Set(prev).add(providerId));
       }
     } catch (error) {
+      console.error('Error updating favorites:', error);
       Alert.alert('Error', 'Failed to update favorites');
     }
   };
 
   const handleBookNow = (ps: ProviderService) => {
-    setSelectedService(ps);
-    setBookingModalVisible(true);
+    // Navigate to unified booking flow (same as feed posts)
+    // Pass the provider_service_id (ps.id) so the booking screen can pre-select the service
+    console.log('[Search] Booking service:', { provider_id: ps.provider_id, provider_service_id: ps.id, service_name: ps.service.name });
+    (navigation as any).navigate('Booking', {
+      providerId: ps.provider_id,
+      serviceId: ps.id, // This is the provider_services.id, not service.id
+    });
   };
 
   const handleViewPortfolio = (providerId: string) => {
     navigation.navigate('ProviderPortfolio', { providerId });
   };
+
+  const renderSearchResultCard = (ps: ProviderService) => (
+    <AnimatedCard key={ps.id}>
+      <View style={styles.serviceCard}>
+        <TouchableOpacity style={styles.providerRow} onPress={() => handleViewPortfolio(ps.provider_id)}>
+          {ps.provider.avatar_url ? (
+            <Image source={{ uri: ps.provider.avatar_url }} style={styles.avatar} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Text style={styles.avatarInitial}>{ps.provider.business_name.charAt(0)}</Text>
+            </View>
+          )}
+          <View style={styles.providerInfo}>
+            <View style={styles.nameRow}>
+              <Text style={styles.providerName}>{ps.provider.business_name}</Text>
+              {ps.provider.is_verified && (
+                <View style={styles.verifiedBadge}><Text style={styles.verifiedText}>✓</Text></View>
+              )}
+            </View>
+            <View style={styles.ratingRow}>
+              <Ionicons name="star" size={14} color={colors.warning} />
+              <Text style={styles.ratingText}>{ps.provider.rating.toFixed(1)}</Text>
+              <Text style={styles.reviewsText}>({ps.provider.total_reviews})</Text>
+              <Text style={styles.distanceText}>
+                • {typeof ps.distanceKm === 'number' ? formatTravelTimeDistance(ps.distanceKm) : 'N/A'}
+              </Text>
+            </View>
+          </View>
+          <AnimatedHeart
+            isFavorite={favoriteServices.has(ps.provider_id)}
+            onPress={() => toggleFavorite(ps.provider_id)}
+            size={24}
+          />
+        </TouchableOpacity>
+
+        <View style={styles.serviceInfoSection}>
+          <Text style={styles.serviceName}>{ps.service.name}</Text>
+          <Text style={styles.serviceDescription} numberOfLines={2}>{ps.service.description}</Text>
+          <View style={styles.serviceMeta}>
+            <Text style={styles.priceText}>${ps.finalPrice}</Text>
+            <View style={styles.durationContainer}>
+              <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+              <Text style={styles.durationText}>{ps.duration_minutes || ps.service.base_duration_minutes} min</Text>
+            </View>
+          </View>
+          {ps.availability && (
+            <View style={[styles.availabilityBadge, ps.availability.urgency === 'immediate' && styles.availabilityImmediate]}>
+              <Ionicons
+                name={ps.availability.urgency === 'immediate' ? 'flash' : 'time'}
+                size={14}
+                color={ps.availability.urgency === 'immediate' ? colors.white : colors.success}
+              />
+              <Text style={[styles.availabilityText, ps.availability.urgency === 'immediate' && styles.availabilityTextImmediate]}>
+                {ps.availability.displayText}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.cardActions}>
+          <TouchableOpacity style={styles.viewProfileBtn} onPress={() => handleViewPortfolio(ps.provider_id)}>
+            <Text style={styles.viewProfileText}>View Portfolio</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.bookNowBtn} onPress={() => handleBookNow(ps)}>
+            <Text style={styles.bookNowText}>Book Now</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </AnimatedCard>
+  );
 
   const applyFilters = (newFilters: Filters) => {
     setFilters(newFilters);
@@ -256,6 +560,7 @@ export default function SearchScreen() {
     if (newFilters.maxDistance) count++;
     if (newFilters.rating) count++;
     if (newFilters.availableNow) count++;
+    if (newFilters.verifiedOnly) count++;
     setActiveFiltersCount(count);
     setShowFilterModal(false);
     // Re-run search with filters if already searched
@@ -269,7 +574,7 @@ export default function SearchScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.contentWrapper}>
+      <View style={[styles.contentWrapper, !disableHeaderOffset && styles.contentWrapperWithHeaderOffset]}>
         {/* Search Bar */}
         <FadeInView delay={0}>
           <View style={styles.searchContainer}>
@@ -357,103 +662,35 @@ export default function SearchScreen() {
               <Text style={styles.sectionTitle}>
                 {searchResults.length} Result{searchResults.length !== 1 ? 's' : ''}
               </Text>
-              {searchResults.map((ps) => (
-                <AnimatedCard key={ps.id}>
-                  <View style={styles.serviceCard}>
-                    {/* Provider Header */}
-                    <TouchableOpacity style={styles.providerRow} onPress={() => handleViewPortfolio(ps.provider_id)}>
-                      {ps.provider.avatar_url ? (
-                        <Image source={{ uri: ps.provider.avatar_url }} style={styles.avatar} />
-                      ) : (
-                        <View style={styles.avatarPlaceholder}>
-                          <Text style={styles.avatarInitial}>{ps.provider.business_name.charAt(0)}</Text>
-                        </View>
-                      )}
-                      <View style={styles.providerInfo}>
-                        <View style={styles.nameRow}>
-                          <Text style={styles.providerName}>{ps.provider.business_name}</Text>
-                          {ps.provider.is_verified && (
-                            <View style={styles.verifiedBadge}><Text style={styles.verifiedText}>✓</Text></View>
-                          )}
-                        </View>
-                        <View style={styles.ratingRow}>
-                          <Ionicons name="star" size={14} color={colors.warning} />
-                          <Text style={styles.ratingText}>{ps.provider.rating.toFixed(1)}</Text>
-                          <Text style={styles.reviewsText}>({ps.provider.total_reviews})</Text>
-                        </View>
-                      </View>
-                      <AnimatedHeart
-                        isFavorite={favoriteServices.has(ps.provider_id)}
-                        onPress={() => toggleFavorite(ps.provider_id)}
-                        size={24}
-                      />
-                    </TouchableOpacity>
+              {(() => {
+                const closeResults = searchResults.filter(
+                  (result) => typeof result.distanceKm === 'number' && result.distanceKm <= CLOSE_DISTANCE_KM
+                );
+                const fartherResults = searchResults.filter(
+                  (result) => !(typeof result.distanceKm === 'number' && result.distanceKm <= CLOSE_DISTANCE_KM)
+                );
 
-                    {/* Service Info */}
-                    <View style={styles.serviceInfoSection}>
-                      <Text style={styles.serviceName}>{ps.service.name}</Text>
-                      <Text style={styles.serviceDescription} numberOfLines={2}>{ps.service.description}</Text>
-                      <View style={styles.serviceMeta}>
-                        <Text style={styles.priceText}>${ps.finalPrice}</Text>
-                        <View style={styles.durationContainer}>
-                          <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
-                          <Text style={styles.durationText}>{ps.duration_minutes || ps.service.base_duration_minutes} min</Text>
-                        </View>
-                      </View>
-                      {ps.availability && (
-                        <View style={[styles.availabilityBadge, ps.availability.urgency === 'immediate' && styles.availabilityImmediate]}>
-                          <Ionicons
-                            name={ps.availability.urgency === 'immediate' ? 'flash' : 'time'}
-                            size={14}
-                            color={ps.availability.urgency === 'immediate' ? colors.white : colors.success}
-                          />
-                          <Text style={[styles.availabilityText, ps.availability.urgency === 'immediate' && styles.availabilityTextImmediate]}>
-                            {ps.availability.displayText}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Actions */}
-                    <View style={styles.cardActions}>
-                      <TouchableOpacity style={styles.viewProfileBtn} onPress={() => handleViewPortfolio(ps.provider_id)}>
-                        <Text style={styles.viewProfileText}>View Portfolio</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.bookNowBtn} onPress={() => handleBookNow(ps)}>
-                        <Text style={styles.bookNowText}>Book Now</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </AnimatedCard>
-              ))}
+                return (
+                  <>
+                    {closeResults.length > 0 && (
+                      <>
+                        <Text style={styles.groupTitle}>Close Results</Text>
+                        {closeResults.map(renderSearchResultCard)}
+                      </>
+                    )}
+                    {fartherResults.length > 0 && (
+                      <>
+                        <Text style={styles.groupTitle}>Far Results</Text>
+                        {fartherResults.map(renderSearchResultCard)}
+                      </>
+                    )}
+                  </>
+                );
+              })()}
             </View>
           )}
         </ScrollView>
       </View>
-
-      {/* Booking Modal */}
-      {selectedService && (
-        <BookingModal
-          visible={bookingModalVisible}
-          onClose={() => setBookingModalVisible(false)}
-          service={{
-            id: selectedService.service_id,
-            name: selectedService.service.name,
-            description: selectedService.service.description,
-            base_duration_minutes: selectedService.duration_minutes || selectedService.service.base_duration_minutes,
-          }}
-          provider={{
-            id: selectedService.provider_id,
-            user_id: selectedService.provider_id,
-            business_name: selectedService.provider.business_name,
-            price: selectedService.finalPrice,
-          }}
-          onSuccess={() => {
-            setBookingModalVisible(false);
-            Alert.alert('Success', 'Booking confirmed!');
-          }}
-        />
-      )}
 
       {/* Filter Modal */}
       {showFilterModal && (
@@ -556,6 +793,19 @@ export default function SearchScreen() {
                   </View>
                 </TouchableOpacity>
               </View>
+
+              {/* Verified providers only */}
+              <View style={styles.filterSection}>
+                <TouchableOpacity
+                  style={styles.filterToggle}
+                  onPress={() => setFilters(prev => ({ ...prev, verifiedOnly: !prev.verifiedOnly }))}
+                >
+                  <Text style={styles.filterLabel}>Verified providers only</Text>
+                  <View style={[styles.toggle, filters.verifiedOnly && styles.toggleActive]}>
+                    <View style={[styles.toggleKnob, filters.verifiedOnly && styles.toggleKnobActive]} />
+                  </View>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
 
             <View style={styles.filterModalFooter}>
@@ -580,6 +830,9 @@ const styles = StyleSheet.create({
   },
   contentWrapper: {
     flex: 1,
+  },
+  contentWrapperWithHeaderOffset: {
+    paddingTop: TOTAL_HEADER_HEIGHT,
   },
   scrollContent: {
     paddingBottom: 100, // Space for floating tab bar
@@ -814,6 +1067,13 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.cardMargin,
     lineHeight: fontSize.title * lineHeight.tight,
+  },
+  groupTitle: {
+    fontSize: fontSize.body,
+    fontWeight: fontWeight.semibold,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+    marginTop: spacing.md,
   },
   emptyText: {
     fontSize: fontSize.body,

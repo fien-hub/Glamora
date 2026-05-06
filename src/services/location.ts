@@ -14,6 +14,8 @@ export interface Address {
   country: string;
 }
 
+const KM_TO_MILES = 0.621371;
+
 /**
  * Request location permissions from the user
  */
@@ -141,6 +143,53 @@ function toRadians(degrees: number): number {
  * Format distance for display
  */
 export function formatDistance(distanceKm: number): string {
+  return formatTravelTimeDistance(distanceKm);
+}
+
+const estimateDrivingMinutes = (distanceMiles: number): number => {
+  if (distanceMiles <= 0) return 1;
+  if (distanceMiles < 1) return Math.max(2, Math.round(distanceMiles * 6));
+  if (distanceMiles < 5) return Math.round(4 + distanceMiles * 3);
+  if (distanceMiles < 20) return Math.round(10 + distanceMiles * 2);
+  return Math.round(30 + distanceMiles * 1.4);
+};
+
+const formatMinutesAway = (minutes: number): string => {
+  if (minutes < 60) {
+    return `${minutes} min away`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  if (remainingMinutes === 0) {
+    return `${hours} hr away`;
+  }
+
+  return `${hours} hr ${remainingMinutes} min away`;
+};
+
+const formatMilesLabel = (distanceMiles: number): string => {
+  if (distanceMiles < 0.1) return '0.1 mi';
+  if (distanceMiles < 10) return `${distanceMiles.toFixed(1)} mi`;
+  return `${Math.round(distanceMiles)} mi`;
+};
+
+export function formatTravelTimeDistance(distanceKm: number): string {
+  if (!Number.isFinite(distanceKm) || distanceKm < 0) {
+    return 'N/A';
+  }
+
+  const distanceMiles = Math.max(0, distanceKm * KM_TO_MILES);
+  const etaMinutes = estimateDrivingMinutes(distanceMiles);
+
+  return `${formatMinutesAway(etaMinutes)} · ${formatMilesLabel(distanceMiles)}`;
+}
+
+/**
+ * Legacy metric-only formatter kept for screens that still need km.
+ */
+export function formatDistanceMetric(distanceKm: number): string {
   if (distanceKm < 1) {
     return `${Math.round(distanceKm * 1000)}m away`;
   } else if (distanceKm < 10) {

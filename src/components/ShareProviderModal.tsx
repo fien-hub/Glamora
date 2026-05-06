@@ -10,14 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-
-// Try to import Clipboard, but make it optional for Expo Go
-let Clipboard: any = null;
-try {
-  Clipboard = require('@react-native-clipboard/clipboard').default;
-} catch (error) {
-  console.warn('Clipboard not available in Expo Go');
-}
+import * as Clipboard from 'expo-clipboard';
 import { supabase } from '../services/supabase';
 import { colors, spacing, fontSize, borderRadius } from '../constants/theme';
 import {
@@ -152,15 +145,11 @@ export default function ShareProviderModal({
     }
   };
 
-  const copyReferralCode = () => {
+  const copyReferralCode = async () => {
     if (referralCode) {
-      if (Clipboard) {
-        Clipboard.setString(referralCode);
-        trackReferralCodeCopied(referralCode);
-        Alert.alert('Copied!', 'Referral code copied to clipboard');
-      } else {
-        Alert.alert('Copied!', `Referral code: ${referralCode}`);
-      }
+      await Clipboard.setStringAsync(referralCode);
+      trackReferralCodeCopied(referralCode);
+      Alert.alert('Copied!', 'Referral code copied to clipboard');
     }
   };
 

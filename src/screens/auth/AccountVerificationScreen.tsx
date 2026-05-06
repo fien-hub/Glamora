@@ -12,6 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { supabase } from '../../services/supabase';
@@ -22,15 +23,74 @@ import ScaleInView from '../../components/animations/ScaleInView';
 type VerificationStep = 'intro' | 'verify';
 
 export default function AccountVerificationScreen() {
-  const { user, refreshVerificationStatus } = useAuth();
+  const navigation = useNavigation<any>();
+  const { user, userRole, needsOnboarding, refreshVerificationStatus, signOut } = useAuth();
   const [step, setStep] = useState<VerificationStep>('intro');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
-  // Get user's email from auth
   const userEmail = user?.email || '';
+
+  const isEmailNotFoundError = (message: string) => {
+    const normalized = message.toLowerCase();
+    return (
+      normalized.includes('user not found') ||
+      normalized.includes('email not found') ||
+      normalized.includes('no user found') ||
+      normalized.includes('does not exist') ||
+      normalized.includes('invalid login credentials')
+    );
+  };
+
+  const getVerificationSendErrorMessage = (errorMessage?: string) => {
+    if (!errorMessage) {
+      return 'Failed to send verification code';
+    }
+
+    if (isEmailNotFoundError(errorMessage)) {
+      return 'This email address does not exist. Please check your email or create an account first.';
+    }
+
+    return errorMessage;
+  };
+
+  const promptSignOutToChangeEmail = () => {
+    Alert.alert(
+      'Use a Different Email?',
+      'Sign out and go back to login so you can sign in or create an account with a different email address.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+            } catch {
+              Alert.alert('Error', 'Unable to sign out right now. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const getVerificationCheckErrorMessage = (errorMessage?: string) => {
+    if (!errorMessage) {
+      return 'Invalid code';
+    }
+
+    if (isEmailNotFoundError(errorMessage)) {
+      return 'This email address does not exist. Please check your email or create an account first.';
+    }
+
+    return errorMessage;
+  };
 
   React.useEffect(() => {
     if (countdown > 0) {
@@ -39,7 +99,50 @@ export default function AccountVerificationScreen() {
     }
   }, [countdown]);
 
+  const navigateToNextStep = () => {
+    if (userRole === 'customer' && needsOnboarding) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Personalization' }],
+      });
+      return;
+    }
+
+    if (userRole === 'provider' && needsOnboarding) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'ProviderOnboarding' }],
+      });
+      return;
+    }
+
+    if (userRole === 'customer') {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'CustomerMain' }],
+      });
+      return;
+    }
+
+    if (userRole === 'provider') {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'ProviderMain' }],
+      });
+      return;
+    }
+
+    navigation.navigate('RoleSelection');
+  };
+
   const sendVerificationCode = async () => {
+    if (sending) return;
+
+    if (!userEmail) {
+      Alert.alert('Email Required', 'No email address was found for this account. Please sign in again.');
+      return;
+    }
+
     setSending(true);
     try {
       const { error } = await supabase.auth.signInWithOtp({
@@ -52,7 +155,15 @@ export default function AccountVerificationScreen() {
       setCountdown(60);
       Alert.alert('Code Sent', 'A verification code has been sent to your email.');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to send verification code');
+      const friendlyMessage = getVerificationSendErrorMessage(error?.message);
+      if (isEmailNotFoundError(error?.message || '')) {
+        Alert.alert('Email Not Found', friendlyMessage, [
+          { text: 'OK', style: 'cancel' },
+          { text: 'Use Different Email', onPress: promptSignOutToChangeEmail },
+        ]);
+      } else {
+        Alert.alert('Error', friendlyMessage);
+      }
     } finally {
       setSending(false);
     }
@@ -74,7 +185,6 @@ export default function AccountVerificationScreen() {
 
       if (result.error) throw result.error;
 
-      // Update profile verification status
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ email_verified: true })
@@ -83,18 +193,61 @@ export default function AccountVerificationScreen() {
       if (updateError) throw updateError;
 
       Alert.alert('Success', 'Your email has been verified!', [
-        { text: 'OK', onPress: () => refreshVerificationStatus?.() },
+        {
+          text: 'OK',
+          onPress: async () => {
+            await refreshVerificationStatus?.();
+            navigateToNextStep();
+          },
+        },
       ]);
     } catch (error: any) {
-      Alert.alert('Verification Failed', error.message || 'Invalid code');
+      Alert.alert('Verification Failed', getVerificationCheckErrorMessage(error?.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDevVerifyWithoutEmail = async () => {
+    if (!__DEV__) return;
+
+    if (!user?.id) {
+      Alert.alert('Error', 'No active user found. Please sign in again.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ email_verified: true })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      Alert.alert('Dev Success', 'Email verification was marked as complete for this account.', [
+        {
+          text: 'Continue',
+          onPress: async () => {
+            await refreshVerificationStatus?.();
+            navigateToNextStep();
+          },
+        },
+      ]);
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to mark email as verified.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleResend = () => {
-    if (countdown > 0) return;
+    if (countdown > 0 || sending) return;
     sendVerificationCode();
+  };
+
+  const handleGoBack = () => {
+    promptSignOutToChangeEmail();
   };
 
   const maskedEmail = userEmail.replace(/(.{2})(.*)(@.*)/, '$1***$3');
@@ -103,6 +256,15 @@ export default function AccountVerificationScreen() {
     return (
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
+          <TouchableOpacity
+            style={styles.backButtonTop}
+            onPress={() => {
+              setStep('intro');
+              setCode('');
+            }}
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
           <ScaleInView delay={0}>
             <View style={styles.header}>
               <View style={styles.iconContainer}>
@@ -110,7 +272,7 @@ export default function AccountVerificationScreen() {
               </View>
               <Text style={styles.title}>Enter Verification Code</Text>
               <Text style={styles.subtitle}>
-                We sent a 6-digit code to{'\n'}
+                We sent a 6-digit code to{`\n`}
                 {maskedEmail}
               </Text>
             </View>
@@ -136,7 +298,7 @@ export default function AccountVerificationScreen() {
               onPress={handleVerify}
               disabled={loading || code.length !== 6}
             >
-              {loading ? <ActivityIndicator color={colors.black} /> : <Text style={styles.primaryButtonText}>Verify</Text>}
+              {loading ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryButtonText}>Verify</Text>}
             </TouchableOpacity>
           </SlideUpView>
 
@@ -149,7 +311,13 @@ export default function AccountVerificationScreen() {
           </FadeInView>
 
           <FadeInView delay={250}>
-            <TouchableOpacity style={styles.backButton} onPress={() => { setStep('intro'); setCode(''); }}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => {
+                setStep('intro');
+                setCode('');
+              }}
+            >
               <Text style={styles.backButtonText}>← Go back</Text>
             </TouchableOpacity>
           </FadeInView>
@@ -158,18 +326,18 @@ export default function AccountVerificationScreen() {
     );
   }
 
-  // Email verification intro screen
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      <TouchableOpacity style={styles.backButtonTop} onPress={handleGoBack}>
+        <Ionicons name="arrow-back" size={24} color={colors.text} />
+      </TouchableOpacity>
       <ScaleInView delay={0}>
         <View style={styles.header}>
           <View style={styles.iconContainer}>
             <Ionicons name="mail" size={50} color={colors.primaryDarker} />
           </View>
           <Text style={styles.title}>Verify Your Email</Text>
-          <Text style={styles.subtitle}>
-            For your security, please verify your email address to continue.
-          </Text>
+          <Text style={styles.subtitle}>For your security, please verify your email address to continue.</Text>
         </View>
       </ScaleInView>
 
@@ -191,21 +359,35 @@ export default function AccountVerificationScreen() {
           onPress={sendVerificationCode}
           disabled={sending}
         >
-          {sending ? (
-            <ActivityIndicator color={colors.black} />
-          ) : (
-            <Text style={styles.primaryButtonText}>Send Verification Code</Text>
-          )}
+          {sending ? <ActivityIndicator color={colors.white} /> : <Text style={styles.primaryButtonText}>Send Verification Code</Text>}
         </TouchableOpacity>
       </SlideUpView>
+
+      {__DEV__ && (
+        <FadeInView delay={170}>
+          <TouchableOpacity
+            style={[styles.devBypassButton, loading && styles.buttonDisabled]}
+            onPress={handleDevVerifyWithoutEmail}
+            disabled={loading}
+          >
+            <Text style={styles.devBypassButtonText}>{loading ? 'Processing...' : 'Dev: Verify Without Email'}</Text>
+          </TouchableOpacity>
+        </FadeInView>
+      )}
 
       <FadeInView delay={200}>
         <View style={styles.infoBox}>
           <Ionicons name="information-circle" size={20} color={colors.primaryDarker} />
           <Text style={styles.infoText}>
-            We'll send a 6-digit code to your email. Enter it on the next screen to verify your account.
+            We&apos;ll send a 6-digit code to your email. Enter it on the next screen to verify your account.
           </Text>
         </View>
+      </FadeInView>
+
+      <FadeInView delay={220}>
+        <TouchableOpacity style={styles.changeEmailButton} onPress={promptSignOutToChangeEmail}>
+          <Text style={styles.changeEmailText}>Use a different email</Text>
+        </TouchableOpacity>
       </FadeInView>
     </ScrollView>
   );
@@ -219,6 +401,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     padding: spacing.xl,
+  },
+  backButtonTop: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    marginTop: spacing.lg,
   },
   header: {
     alignItems: 'center',
@@ -294,18 +484,32 @@ const styles = StyleSheet.create({
     letterSpacing: 8,
   },
   primaryButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.primaryDarker,
     paddingVertical: spacing.lg,
     borderRadius: borderRadius.xl,
     alignItems: 'center',
     marginBottom: spacing.md,
     ...shadows.md,
   },
+  skipButton: {
+    backgroundColor: colors.background,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.xl,
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  skipButtonText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.medium,
+  },
   buttonDisabled: {
     opacity: 0.6,
   },
   primaryButtonText: {
-    color: colors.black,
+    color: colors.white,
     fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
   },
@@ -329,15 +533,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     color: colors.textSecondary,
   },
-  loadingOverlay: {
-    alignItems: 'center',
-    marginVertical: spacing.lg,
-  },
-  loadingText: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: fontSize.sm,
-  },
   infoBox: {
     flexDirection: 'row',
     backgroundColor: colors.primarySubtle,
@@ -351,5 +546,30 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.text,
     lineHeight: 20,
+  },
+  changeEmailButton: {
+    alignSelf: 'center',
+    marginTop: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  changeEmailText: {
+    color: colors.primaryDarker,
+    fontSize: fontSize.sm,
+    fontWeight: fontWeight.semibold,
+  },
+  devBypassButton: {
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.primaryDarker,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.xl,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  devBypassButtonText: {
+    color: colors.primaryDarker,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
   },
 });

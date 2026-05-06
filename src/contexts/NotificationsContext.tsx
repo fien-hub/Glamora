@@ -7,8 +7,11 @@ import {
   unregisterDeviceToken,
   addNotificationReceivedListener,
   addNotificationResponseListener,
+  initializeNotificationHandler,
   NotificationData,
 } from '../utils/notifications';
+import { navigate, isNavigationReady } from '../navigation/RootNavigation';
+import { supabase } from '../services/supabase';
 
 interface NotificationsContextType {
   expoPushToken: string | null;
@@ -27,23 +30,31 @@ export const useNotifications = () => useContext(NotificationsContext);
 export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notifications.Notification | null>(
     null
   );
   const [isRegistered, setIsRegistered] = useState(false);
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
+  const lastRegisteredRef = useRef<{ userId: string; token: string } | null>(null);
+  // Initialize refs with null to satisfy React 19 types
+  const notificationListener = useRef<Notifications.Subscription | null>(null);
+  const responseListener = useRef<Notifications.Subscription | null>(null);
+  const handledNotificationIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    initializeNotificationHandler();
+
     if (user) {
       registerForPushNotifications();
     } else {
-      // Unregister when user logs out
-      if (expoPushToken && user) {
-        unregisterDeviceToken(user.id, expoPushToken);
+      // On logout, attempt to unregister previous token if we know it
+      if (lastRegisteredRef.current) {
+        unregisterDeviceToken(lastRegisteredRef.current.userId, lastRegisteredRef.current.token)
+          .catch((error) => console.error('[Notifications] Failed to unregister previous token:', error));
+        lastRegisteredRef.current = null;
       }
+
       setExpoPushToken(null);
       setIsRegistered(false);
     }
@@ -56,15 +67,32 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
     responseListener.current = addNotificationResponseListener((response) => {
       console.log('Notification response:', response);
-      handleNotificationResponse(response);
+      handleNotificationResponse(response).catch((error) => {
+        console.error('[Notifications] Failed to handle notification tap:', error);
+      });
     });
+
+    // Handle cold-start notification tap
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => {
+        if (response) {
+          handleNotificationResponse(response).catch((error) => {
+            console.error('[Notifications] Failed to handle last notification response:', error);
+          });
+        }
+      })
+      .catch((error) => {
+        console.error('[Notifications] Failed to fetch last notification response:', error);
+      });
 
     return () => {
       if (notificationListener.current) {
         notificationListener.current.remove();
+        notificationListener.current = null;
       }
       if (responseListener.current) {
         responseListener.current.remove();
+        responseListener.current = null;
       }
     };
   }, [user]);
@@ -81,6 +109,26 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (token) {
         console.log('[Notifications] ✅ Push token received:', token);
+
+        // If user switched or token changed, clean up old registration first
+        if (
+          lastRegisteredRef.current &&
+          (lastRegisteredRef.current.userId !== user.id || lastRegisteredRef.current.token !== token)
+        ) {
+          await unregisterDeviceToken(lastRegisteredRef.current.userId, lastRegisteredRef.current.token);
+          lastRegisteredRef.current = null;
+        }
+
+        // Avoid duplicate upsert noise if already registered in this session
+        if (
+          lastRegisteredRef.current?.userId === user.id &&
+          lastRegisteredRef.current?.token === token
+        ) {
+          setExpoPushToken(token);
+          setIsRegistered(true);
+          return;
+        }
+
         setExpoPushToken(token);
 
         console.log('[Notifications] Registering token with backend...');
@@ -88,6 +136,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
         setIsRegistered(success);
 
         if (success) {
+          lastRegisteredRef.current = { userId: user.id, token };
           console.log('[Notifications] ✅ Push token registered successfully!');
           console.log('[Notifications] You will now receive notifications');
         } else {
@@ -103,30 +152,92 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const handleNotificationResponse = (response: Notifications.NotificationResponse) => {
+  const resolveDisplayNameFromAuthUserId = async (authUserId: string): Promise<string> => {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .eq('user_id', authUserId)
+        .maybeSingle();
+
+      if (!profile) return 'User';
+
+      const { data: providerProfile } = await supabase
+        .from('provider_profiles')
+        .select('business_name')
+        .eq('id', profile.id)
+        .maybeSingle();
+
+      return providerProfile?.business_name || profile.full_name || 'User';
+    } catch (error) {
+      console.error('[Notifications] Failed to resolve sender name:', error);
+      return 'User';
+    }
+  };
+
+  const routeToBookings = (bookingId?: string) => {
+    if (!isNavigationReady()) return;
+
+    if (userRole === 'customer') {
+      navigate('CustomerMain', {
+        screen: 'Bookings',
+        params: bookingId ? { openBookingId: bookingId } : undefined,
+      });
+    } else if (userRole === 'provider') {
+      navigate('ProviderMain', {
+        screen: 'Appointments',
+        params: bookingId ? { openBookingId: bookingId } : undefined,
+      });
+    }
+  };
+
+  const routeToMessage = async (data: NotificationData) => {
+    if (!isNavigationReady()) return;
+
+    const bookingId = (data.bookingId as string) || (data.conversationId as string);
+    const senderId = data.senderId as string | undefined;
+
+    if (!bookingId || !senderId) {
+      if (userRole === 'customer') {
+        navigate('CustomerMain', { screen: 'Messages' });
+      } else if (userRole === 'provider') {
+        navigate('ProviderMain', { screen: 'Messages' });
+      }
+      return;
+    }
+
+    const senderName = await resolveDisplayNameFromAuthUserId(senderId);
+
+    navigate('Chat', {
+      bookingId,
+      otherUserId: senderId,
+      otherUserName: senderName,
+    });
+  };
+
+  const handleNotificationResponse = async (response: Notifications.NotificationResponse) => {
+    const notificationId = response.notification.request.identifier;
+    if (handledNotificationIdsRef.current.has(notificationId)) {
+      return;
+    }
+    handledNotificationIdsRef.current.add(notificationId);
+
     const data = response.notification.request.content.data as NotificationData;
 
     // Handle different notification types
     switch (data.type) {
       case 'booking':
-        // Navigate to booking details
-        console.log('Navigate to booking:', data.bookingId);
+      case 'reminder':
+      case 'payment':
+        routeToBookings(data.bookingId as string | undefined);
         break;
       case 'message':
-        // Navigate to chat
-        console.log('Navigate to message:', data.messageId);
+        await routeToMessage(data);
         break;
       case 'review':
-        // Navigate to review
-        console.log('Navigate to review:', data.reviewId);
-        break;
-      case 'payment':
-        // Navigate to payment details
-        console.log('Navigate to payment');
-        break;
-      case 'reminder':
-        // Navigate to booking
-        console.log('Navigate to booking reminder:', data.bookingId);
+        if (userRole === 'provider') {
+          navigate('Reviews');
+        }
         break;
       default:
         console.log('Unknown notification type:', data.type);

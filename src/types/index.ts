@@ -127,7 +127,8 @@ export type PaymentStatus = 'pending' | 'succeeded' | 'failed' | 'refunded';
 export interface Payment {
   id: string;
   booking_id: string;
-  stripe_payment_intent_id: string;
+  payment_reference?: string;
+  legacy_payment_intent_id?: string;
   amount: number;
   currency: string;
   status: PaymentStatus;

@@ -3,17 +3,17 @@ import { Animated, AccessibilityInfo } from 'react-native';
 import { animation } from '../constants/theme';
 
 interface EntranceAnimationConfig {
-  type: 'fade' | 'slideUp' | 'scale';
+  type: 'fade' | 'slideUp' | 'slideLeft' | 'slideRight' | 'scale';
   duration?: number;
   delay?: number;
-  distance?: number; // For slideUp
+  distance?: number; // For slide animations
   initialScale?: number; // For scale
   enabled?: boolean; // Allow disabling animation
 }
 
 /**
  * Custom hook for entrance animations
- * Provides fade-in, slide-up, and scale-in animations with configurable delays and durations
+ * Provides fade-in, slide (up/left/right), and scale-in animations with configurable delays and durations
  * Automatically respects reduced motion accessibility preferences
  */
 export function useEntranceAnimation(config: EntranceAnimationConfig) {
@@ -81,6 +81,34 @@ export function useEntranceAnimation(config: EntranceAnimationConfig) {
           translateY: animatedValue.interpolate({
             inputRange: [0, 1],
             outputRange: [distance, 0],
+          }),
+        },
+      ],
+    };
+  }
+
+  if (type === 'slideLeft') {
+    return {
+      opacity: animatedValue,
+      transform: [
+        {
+          translateX: animatedValue.interpolate({
+            inputRange: [0, 1],
+            outputRange: [distance, 0],
+          }),
+        },
+      ],
+    };
+  }
+
+  if (type === 'slideRight') {
+    return {
+      opacity: animatedValue,
+      transform: [
+        {
+          translateX: animatedValue.interpolate({
+            inputRange: [0, 1],
+            outputRange: [-distance, 0],
           }),
         },
       ],

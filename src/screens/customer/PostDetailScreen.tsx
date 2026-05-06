@@ -19,7 +19,6 @@ import { colors, spacing, borderRadius, fontSize, fontWeight, shadows } from '..
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { getProviderAvailability, AvailabilityInfo } from '../../utils/availability';
-import BookingModal from '../../components/BookingModal';
 import { Alert } from 'react-native';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -85,7 +84,6 @@ export default function PostDetailScreen() {
   const [isSaved, setIsSaved] = useState(false);
   const [availability, setAvailability] = useState<AvailabilityInfo | null>(null);
   const [providerService, setProviderService] = useState<ProviderService | null>(null);
-  const [bookingModalVisible, setBookingModalVisible] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -106,6 +104,13 @@ export default function PostDetailScreen() {
   const loadData = async () => {
     setLoading(true);
     try {
+      const isActive = await isProviderActive(providerId);
+      if (!isActive) {
+        Alert.alert('Provider Unavailable', 'This provider account is currently unavailable.');
+        navigation.goBack();
+        return;
+      }
+
       await Promise.all([
         loadRelatedPosts(),
         loadLikeSaveStatus(),
@@ -116,6 +121,33 @@ export default function PostDetailScreen() {
       console.error('Error loading post data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const isProviderActive = async (targetProviderId: string): Promise<boolean> => {
+    try {
+      const { data: providerData, error: providerError } = await supabase
+        .from('provider_profiles')
+        .select('profiles!inner(user_id)')
+        .eq('id', targetProviderId)
+        .single();
+
+      if (providerError || !providerData) return false;
+
+      const profileJoin: any = (providerData as any).profiles;
+      const userId = Array.isArray(profileJoin) ? profileJoin?.[0]?.user_id : profileJoin?.user_id;
+      if (!userId) return false;
+
+      const { data: activeUser, error: activeUserError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userId)
+        .eq('is_active', true)
+        .single();
+
+      return !activeUserError && !!activeUser;
+    } catch {
+      return false;
     }
   };
 
@@ -133,7 +165,10 @@ export default function PostDetailScreen() {
           id,
           business_name,
           avatar_url,
-          is_verified
+          is_verified,
+          profiles!inner (
+            user_id
+          )
         ),
         provider_services (
           id,
@@ -150,7 +185,34 @@ export default function PostDetailScreen() {
       .limit(20);
 
     if (!error && data) {
-      const posts: RelatedPost[] = data.map((item: any) => ({
+      let activeData = data;
+      const providerUserIds = Array.from(
+        new Set(
+          activeData
+            .map((item: any) => item?.provider_profiles?.profiles?.user_id)
+            .filter((id: any) => typeof id === 'string' && id.length > 0)
+        )
+      );
+
+      if (providerUserIds.length > 0) {
+        const { data: activeUsers, error: activeUsersError } = await supabase
+          .from('users')
+          .select('id')
+          .in('id', providerUserIds)
+          .eq('is_active', true);
+
+        if (!activeUsersError) {
+          const activeUserIds = new Set((activeUsers || []).map((row: any) => row.id));
+          activeData = activeData.filter((item: any) => {
+            const userId = item?.provider_profiles?.profiles?.user_id;
+            return !!userId && activeUserIds.has(userId);
+          });
+        } else {
+          console.warn('Unable to filter deactivated post providers:', activeUsersError.message);
+        }
+      }
+
+      const posts: RelatedPost[] = activeData.map((item: any) => ({
         id: item.id,
         provider_id: item.provider_id,
         image_url: item.image_url,
@@ -312,7 +374,12 @@ export default function PostDetailScreen() {
       Alert.alert('Service Unavailable', 'This service is not available for booking');
       return;
     }
-    setBookingModalVisible(true);
+    // Navigate to unified booking flow (same as feed posts)
+    (navigation as any).navigate('Booking', {
+      providerId: providerId,
+      portfolioItemId: postId,
+      serviceId: providerService.service_id,
+    });
   };
 
   const handleViewProvider = () => {
@@ -473,30 +540,6 @@ export default function PostDetailScreen() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       />
-
-      {/* Booking Modal */}
-      {providerService && (
-        <BookingModal
-          visible={bookingModalVisible}
-          onClose={() => setBookingModalVisible(false)}
-          provider={{
-            id: providerId,
-            user_id: providerId,
-            business_name: providerName,
-            price: providerService.final_price,
-          }}
-          service={{
-            id: providerService.service_id,
-            name: providerService.service_name,
-            description: caption || '',
-            base_duration_minutes: providerService.duration_minutes,
-          }}
-          onSuccess={() => {
-            setBookingModalVisible(false);
-            Alert.alert('Success', `Booking confirmed with ${providerName}!`);
-          }}
-        />
-      )}
     </View>
   );
 }

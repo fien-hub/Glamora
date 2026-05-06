@@ -6,7 +6,7 @@ import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '..
 
 interface FeedPostCardProps {
   providerName: string;
-  providerAvatar: string;
+  providerAvatar?: string;
   postImage: string;
   serviceName: string;
   servicePrice?: number;
@@ -47,6 +47,10 @@ export default function FeedPostCard({
   onLikePress,
   onSavePress,
 }: FeedPostCardProps) {
+  const providerAvatarSource = providerAvatar
+    ? { uri: providerAvatar }
+    : require('../../assets/icon.png');
+
   // Removed animations to avoid native/JS driver conflicts
   // The like/save functionality works perfectly without animations
 
@@ -96,7 +100,7 @@ export default function FeedPostCard({
         <View style={styles.engagementButtons}>
           {onLikePress && (
             <TouchableOpacity
-              style={styles.engagementButton}
+              style={[styles.engagementButton, styles.engagementButtonRow]}
               onPress={(e) => {
                 e.stopPropagation();
                 onLikePress();
@@ -137,7 +141,7 @@ export default function FeedPostCard({
         {/* Provider Info */}
         <View style={styles.providerInfo}>
           <Image
-            source={{ uri: providerAvatar }}
+            source={providerAvatarSource}
             style={styles.avatar}
             contentFit="cover"
             transition={200}
@@ -268,17 +272,23 @@ const styles = StyleSheet.create({
   },
   engagementButton: {
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    width: 36,
+    minWidth: 36,
     height: 36,
     borderRadius: borderRadius.round,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    paddingHorizontal: 8,
     ...shadows.sm,
   },
+  engagementButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   engagementCount: {
-    position: 'absolute',
-    bottom: -5,
-    fontSize: 9,
+    marginLeft: 6,
+    fontSize: 11,
     fontWeight: fontWeight.bold,
     color: colors.white,
     textShadowColor: 'rgba(0, 0, 0, 0.75)',

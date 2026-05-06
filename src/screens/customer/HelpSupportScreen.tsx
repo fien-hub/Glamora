@@ -7,9 +7,12 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
+import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../services/supabase';
 
 interface FAQItem {
   question: string;
@@ -27,7 +30,7 @@ const faqs: FAQItem[] = [
   },
   {
     question: 'How do I add a payment method?',
-    answer: 'Go to Profile > Payment Methods > Add Payment Method. Enter your card details securely through Stripe. Your first card is automatically set as default.',
+    answer: 'You do not need to add a saved card. Glamora uses secure in-app purchases at checkout through RevenueCat on iOS and Android.',
   },
   {
     question: 'What if I have an issue with my booking?',
@@ -43,7 +46,7 @@ const faqs: FAQItem[] = [
   },
   {
     question: 'Are my payment details secure?',
-    answer: 'Yes! All payment information is encrypted and processed securely through Stripe. We never store your full card details on our servers.',
+    answer: 'Yes. Payments are handled through secure in-app purchase infrastructure (App Store / Google Play via RevenueCat), and sensitive card details are not stored on our servers.',
   },
   {
     question: 'How do I change my notification settings?',
@@ -52,37 +55,75 @@ const faqs: FAQItem[] = [
 ];
 
 export default function HelpSupportScreen({ navigation }: any) {
+  const { user } = useAuth();
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [openingLiveChat, setOpeningLiveChat] = useState(false);
 
   const toggleFAQ = (index: number) => {
     setExpandedIndex(expandedIndex === index ? null : index);
   };
 
   const handleEmail = () => {
-    Linking.openURL('mailto:support@glamora.com?subject=Help Request');
+    Linking.openURL('mailto:fientum@icloud.com?subject=Glamora Support Request').catch(() =>
+      Alert.alert('Error', 'Could not open email app')
+    );
   };
 
   const handlePhone = () => {
     Alert.alert(
-      'Call Support',
-      'Would you like to call our support team?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Call', onPress: () => Linking.openURL('tel:+1234567890') },
-      ]
+      'Phone Support',
+      'For phone support, please email us at fientum@icloud.com and we\'ll get back to you within 24 hours.',
+      [{ text: 'OK' }]
     );
   };
 
-  const handleChat = () => {
-    Alert.alert('Live Chat', 'Live chat feature coming soon! For now, please email us at support@glamora.com');
+  const handleChat = async () => {
+    if (!user || openingLiveChat) return;
+
+    setOpeningLiveChat(true);
+    try {
+      const supportEmails = ['support@glamora.app', 'fientum@icloud.com'];
+      const { data: supportUsers, error } = await supabase
+        .from('users')
+        .select('id, email')
+        .in('email', supportEmails)
+        .limit(1);
+
+      if (error) throw error;
+
+      const supportUserId = supportUsers?.[0]?.id;
+      if (!supportUserId) {
+        Alert.alert(
+          'Live Chat Unavailable',
+          'Support chat is currently unavailable. Please contact us via email at fientum@icloud.com.'
+        );
+        return;
+      }
+
+      navigation.navigate('Chat', {
+        bookingId: null,
+        otherUserId: supportUserId,
+        otherUserName: 'Glamora Support',
+        isSupportChat: true,
+      });
+    } catch (error) {
+      console.error('Error opening live chat:', error);
+      Alert.alert('Error', 'Could not open live chat. Please try again.');
+    } finally {
+      setOpeningLiveChat(false);
+    }
   };
 
   const handleTerms = () => {
-    Linking.openURL('https://glamora.com/terms');
+    Linking.openURL('https://www.termsfeed.com/live/6bfa6e5e-f1d2-4c95-a306-7e4f4e3b3cc5').catch(() =>
+      Alert.alert('Error', 'Could not open Terms & Conditions')
+    );
   };
 
   const handlePrivacy = () => {
-    Linking.openURL('https://glamora.com/privacy');
+    Linking.openURL('https://www.freeprivacypolicy.com/live/b955f068-3a35-49fa-a6de-46a938bf6b71').catch(() =>
+      Alert.alert('Error', 'Could not open Privacy Policy')
+    );
   };
 
   return (
@@ -107,7 +148,7 @@ export default function HelpSupportScreen({ navigation }: any) {
             </View>
             <View style={styles.contactInfo}>
               <Text style={styles.contactTitle}>Email Support</Text>
-              <Text style={styles.contactDescription}>support@glamora.com</Text>
+              <Text style={styles.contactDescription}>fientum@icloud.com</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -118,12 +159,12 @@ export default function HelpSupportScreen({ navigation }: any) {
             </View>
             <View style={styles.contactInfo}>
               <Text style={styles.contactTitle}>Phone Support</Text>
-              <Text style={styles.contactDescription}>+1 (234) 567-890</Text>
+              <Text style={styles.contactDescription}>Request callback via email</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.contactCard} onPress={handleChat}>
+          <TouchableOpacity style={styles.contactCard} onPress={handleChat} disabled={openingLiveChat}>
             <View style={styles.contactIconContainer}>
               <Ionicons name="chatbubble-outline" size={24} color={colors.primary} />
             </View>
@@ -131,7 +172,11 @@ export default function HelpSupportScreen({ navigation }: any) {
               <Text style={styles.contactTitle}>Live Chat</Text>
               <Text style={styles.contactDescription}>Chat with our team</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            {openingLiveChat ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            )}
           </TouchableOpacity>
         </View>
 
@@ -181,7 +226,7 @@ export default function HelpSupportScreen({ navigation }: any) {
         {/* App Info */}
         <View style={styles.appInfo}>
           <Text style={styles.appInfoText}>Glamora v1.0.0</Text>
-          <Text style={styles.appInfoText}>© 2024 Glamora. All rights reserved.</Text>
+          <Text style={styles.appInfoText}>© 2025 Glamora. All rights reserved.</Text>
         </View>
       </ScrollView>
     </View>

@@ -12,19 +12,25 @@ import {
   ActivityIndicator,
   Alert,
   ActionSheetIOS,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import ImageViewing from 'react-native-image-viewing';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { pickImage, uploadChatImage } from '../../utils/imageUpload';
 import * as ImagePicker from 'expo-image-picker';
+import { useVerificationGuard } from '../../hooks/useVerificationGuard';
 
 interface Message {
   id: string;
-  booking_id: string;
+  booking_id: string | null;
   sender_id: string;
   receiver_id: string;
   message: string;
@@ -34,17 +40,19 @@ interface Message {
 }
 
 interface RouteParams {
-  bookingId: string;
+  bookingId?: string | null;
   otherUserId: string;
   otherUserName: string;
   otherUserAvatar?: string;
+  isSupportChat?: boolean;
 }
 
 export default function ChatScreen() {
   const route = useRoute();
   const navigation = useNavigation();
   const { user } = useAuth();
-  const { bookingId, otherUserId, otherUserName, otherUserAvatar } = route.params as RouteParams;
+  const { bookingId, otherUserId, otherUserName, otherUserAvatar, isSupportChat = false } = route.params as RouteParams;
+  const conversationBookingId = isSupportChat ? null : bookingId ?? null;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -58,14 +66,26 @@ export default function ChatScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [filteredMessages, setFilteredMessages] = useState<Message[]>([]);
   const [otherUserAuthId, setOtherUserAuthId] = useState<string | null>(null);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerImageUrl, setViewerImageUrl] = useState<string | null>(null);
+  const [viewerActionLoading, setViewerActionLoading] = useState<'save' | 'share' | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Verification guard
+  const { requireVerification } = useVerificationGuard();
+
   useEffect(() => {
+    // Check verification before allowing messaging
+    if (!requireVerification('messaging')) {
+      navigation.goBack();
+      return;
+    }
+
     if (user) {
       initializeChat();
     }
-  }, [user, bookingId]);
+  }, [user, bookingId, isSupportChat]);
 
   useEffect(() => {
     // Filter messages based on search query
@@ -120,12 +140,23 @@ export default function ChatScreen() {
 
   const fetchMessages = async (profileId: string) => {
     try {
-      const { data, error } = await supabase
+      const supportAuthUserId = otherUserAuthId || otherUserId;
+      let query = supabase
         .from('messages')
         .select('*')
-        .eq('booking_id', bookingId)
-        .or(`sender_id.eq.${profileId},receiver_id.eq.${profileId}`)
         .order('created_at', { ascending: true });
+
+      if (conversationBookingId) {
+        query = query
+          .eq('booking_id', conversationBookingId)
+          .or(`sender_id.eq.${profileId},receiver_id.eq.${profileId}`);
+      } else {
+        query = query
+          .is('booking_id', null)
+          .or(`and(sender_id.eq.${profileId},receiver_id.eq.${supportAuthUserId}),and(sender_id.eq.${supportAuthUserId},receiver_id.eq.${profileId})`);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -142,82 +173,104 @@ export default function ChatScreen() {
 
   const markMessagesAsRead = async (profileId: string) => {
     try {
-      await supabase
+      const supportAuthUserId = otherUserAuthId || otherUserId;
+      let query = supabase
         .from('messages')
         .update({ is_read: true })
-        .eq('booking_id', bookingId)
         .eq('receiver_id', profileId)
         .eq('is_read', false);
+
+      if (conversationBookingId) {
+        query = query.eq('booking_id', conversationBookingId);
+      } else {
+        query = query
+          .eq('sender_id', supportAuthUserId)
+          .is('booking_id', null);
+      }
+
+      await query;
     } catch (error) {
       console.error('Error marking messages as read:', error);
     }
   };
 
   const subscribeToMessages = (profileId: string) => {
+    const supportAuthUserId = otherUserAuthId || otherUserId;
+
+    const handleIncomingMessage = (newMsg: Message) => {
+      if (conversationBookingId) {
+        if (newMsg.booking_id !== conversationBookingId) return;
+        if (newMsg.sender_id !== profileId && newMsg.receiver_id !== profileId) return;
+      } else {
+        const isSupportThread =
+          newMsg.booking_id === null &&
+          ((newMsg.sender_id === profileId && newMsg.receiver_id === supportAuthUserId) ||
+            (newMsg.sender_id === supportAuthUserId && newMsg.receiver_id === profileId));
+
+        if (!isSupportThread) return;
+      }
+
+      setMessages((prev) => {
+        const exists = prev.some((msg) => msg.id === newMsg.id);
+        if (exists) return prev;
+
+        const tempIndex = prev.findIndex((msg) =>
+          msg.id.startsWith('temp-') &&
+          msg.sender_id === newMsg.sender_id &&
+          msg.message === newMsg.message
+        );
+
+        if (tempIndex !== -1) {
+          const newMessages = [...prev];
+          newMessages[tempIndex] = newMsg;
+          return newMessages;
+        }
+
+        return [...prev, newMsg];
+      });
+
+      if (newMsg.receiver_id === profileId) {
+        markMessagesAsRead(profileId);
+      }
+
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    };
+
     const subscription = supabase
-      .channel(`messages:${bookingId}`)
+      .channel(`messages:${conversationBookingId || `support-${profileId}-${supportAuthUserId}`}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `booking_id=eq.${bookingId}`,
         },
         (payload) => {
-          const newMsg = payload.new as Message;
-
-          // Only add if it's for this conversation
-          if (newMsg.sender_id === profileId || newMsg.receiver_id === profileId) {
-            // Add message only if it doesn't already exist (prevents duplicates with optimistic updates)
-            setMessages((prev) => {
-              const exists = prev.some((msg) => msg.id === newMsg.id);
-              if (exists) return prev;
-              // Also check if we have a temp message that matches (from optimistic update)
-              const tempIndex = prev.findIndex((msg) =>
-                msg.id.startsWith('temp-') &&
-                msg.sender_id === newMsg.sender_id &&
-                msg.message === newMsg.message
-              );
-              if (tempIndex !== -1) {
-                // Replace temp with real message
-                const newMessages = [...prev];
-                newMessages[tempIndex] = newMsg;
-                return newMessages;
-              }
-              return [...prev, newMsg];
-            });
-
-            // Mark as read if we're the receiver
-            if (newMsg.receiver_id === profileId) {
-              markMessagesAsRead(profileId);
-            }
-
-            // Scroll to bottom
-            setTimeout(() => {
-              flatListRef.current?.scrollToEnd({ animated: true });
-            }, 100);
-          }
+          handleIncomingMessage(payload.new as Message);
         }
-      )
-      .on(
+      );
+
+    if (conversationBookingId) {
+      subscription.on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
           table: 'typing_indicators',
-          filter: `booking_id=eq.${bookingId}`,
+          filter: `booking_id=eq.${conversationBookingId}`,
         },
         (payload) => {
           const indicator = payload.new as any;
-
-          // Only show typing if it's the other user
           if (indicator.user_id !== profileId) {
             setOtherUserTyping(indicator.is_typing);
           }
         }
-      )
-      .subscribe();
+      );
+    }
+
+    subscription.subscribe();
 
     return () => {
       subscription.unsubscribe();
@@ -225,13 +278,13 @@ export default function ChatScreen() {
   };
 
   const updateTypingIndicator = async (isTyping: boolean) => {
-    if (!currentUserId) return;
+    if (!currentUserId || !conversationBookingId) return;
 
     try {
       await supabase
         .from('typing_indicators')
         .upsert({
-          booking_id: bookingId,
+          booking_id: conversationBookingId,
           user_id: currentUserId,
           is_typing: isTyping,
           updated_at: new Date().toISOString(),
@@ -254,7 +307,7 @@ export default function ChatScreen() {
     // Create optimistic message (show immediately before DB confirms)
     const optimisticMessage: Message = {
       id: `temp-${Date.now()}`,
-      booking_id: bookingId,
+      booking_id: conversationBookingId,
       sender_id: currentUserId,
       receiver_id: receiverId,
       message: messageText,
@@ -277,7 +330,7 @@ export default function ChatScreen() {
       console.log('[Chat] Sending message - sender:', currentUserId, 'receiver:', receiverId);
 
       const { data, error } = await supabase.from('messages').insert({
-        booking_id: bookingId,
+        booking_id: conversationBookingId,
         sender_id: currentUserId,
         receiver_id: receiverId,
         message: messageText,
@@ -294,6 +347,22 @@ export default function ChatScreen() {
             msg.id === optimisticMessage.id ? data : msg
           )
         );
+
+        // Trigger remote push notification (non-blocking)
+        supabase.functions
+          .invoke('send-message-notification', {
+            body: {
+              message_id: data.id,
+              booking_id: conversationBookingId,
+              sender_id: currentUserId,
+              receiver_id: receiverId,
+              message: messageText,
+              image_url: imageUrl || null,
+            },
+          })
+          .catch((pushError) => {
+            console.error('[Chat] Failed to invoke message push function:', pushError);
+          });
       }
 
       // Stop typing indicator
@@ -554,11 +623,11 @@ export default function ChatScreen() {
         }
       );
     } else {
-      const androidOptions = [
+      const androidOptions: Array<{ text: string; style?: 'cancel' | 'destructive' | 'default'; onPress?: () => void }> = [
         { text: 'Cancel', style: 'cancel' as const },
-        { text: '❤️ React', onPress: () => handleReactToMessage(message.id, '❤️') },
-        { text: '👍 React', onPress: () => handleReactToMessage(message.id, '👍') },
-        { text: '😂 React', onPress: () => handleReactToMessage(message.id, '😂') },
+        { text: '❤️ React', onPress: () => { handleReactToMessage(message.id, '❤️'); } },
+        { text: '👍 React', onPress: () => { handleReactToMessage(message.id, '👍'); } },
+        { text: '😂 React', onPress: () => { handleReactToMessage(message.id, '😂'); } },
       ];
 
       if (isMyMessage) {
@@ -605,7 +674,7 @@ export default function ChatScreen() {
           {/* Avatar for other user's messages */}
           {!isMyMessage && (
             <Image
-              source={{ uri: otherUserAvatar || 'https://via.placeholder.com/32' }}
+              source={otherUserAvatar ? { uri: otherUserAvatar } : require('../../../assets/icon.png')}
               style={styles.messageAvatar}
             />
           )}
@@ -625,9 +694,13 @@ export default function ChatScreen() {
               ]}
             >
               {item.image_url && (
-                <TouchableOpacity onPress={() => {
-                  Alert.alert('Image', 'Full-screen image viewer coming soon!');
-                }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (!item.image_url) return;
+                    setViewerImageUrl(item.image_url);
+                    setViewerVisible(true);
+                  }}
+                >
                   <Image source={{ uri: item.image_url }} style={styles.messageImage} />
                 </TouchableOpacity>
               )}
@@ -673,6 +746,105 @@ export default function ChatScreen() {
     );
   };
 
+  const closeImageViewer = () => {
+    setViewerVisible(false);
+    setViewerImageUrl(null);
+    setViewerActionLoading(null);
+  };
+
+  const downloadViewerImage = async (): Promise<string> => {
+    if (!viewerImageUrl) throw new Error('No image available');
+
+    const extension = viewerImageUrl.toLowerCase().includes('.png') ? 'png' : 'jpg';
+    const baseDirectory =
+      (FileSystem as any).cacheDirectory ||
+      (FileSystem as any).documentDirectory;
+
+    if (!baseDirectory) {
+      throw new Error('No writable storage directory available on this device');
+    }
+
+    const destination = `${baseDirectory}chat-image-${Date.now()}.${extension}`;
+    const download = await FileSystem.downloadAsync(viewerImageUrl, destination);
+    return download.uri;
+  };
+
+  const handleShareViewerImage = async () => {
+    if (!viewerImageUrl || viewerActionLoading) return;
+
+    setViewerActionLoading('share');
+    try {
+      const localImageUri = await downloadViewerImage();
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(localImageUri);
+      } else {
+        await Share.share({
+          message: viewerImageUrl,
+          url: viewerImageUrl,
+        });
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to share image');
+    } finally {
+      setViewerActionLoading(null);
+    }
+  };
+
+  const handleSaveViewerImage = async () => {
+    if (!viewerImageUrl || viewerActionLoading) return;
+
+    setViewerActionLoading('save');
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow photo library access to save images.');
+        return;
+      }
+
+      const localImageUri = await downloadViewerImage();
+      await MediaLibrary.saveToLibraryAsync(localImageUri);
+      Alert.alert('Saved', 'Image saved to your photo library.');
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to save image');
+    } finally {
+      setViewerActionLoading(null);
+    }
+  };
+
+  const ViewerHeader = ({ imageIndex }: { imageIndex: number }) => (
+    <View style={styles.viewerHeader}>
+      <TouchableOpacity style={styles.viewerHeaderButton} onPress={closeImageViewer}>
+        <Ionicons name="close" size={26} color={colors.white} />
+      </TouchableOpacity>
+
+      <View style={styles.viewerHeaderActions}>
+        <TouchableOpacity
+          style={[styles.viewerHeaderButton, viewerActionLoading === 'save' && styles.viewerHeaderButtonDisabled]}
+          onPress={handleSaveViewerImage}
+          disabled={viewerActionLoading !== null}
+        >
+          {viewerActionLoading === 'save' ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <Ionicons name="download-outline" size={22} color={colors.white} />
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.viewerHeaderButton, viewerActionLoading === 'share' && styles.viewerHeaderButtonDisabled]}
+          onPress={handleShareViewerImage}
+          disabled={viewerActionLoading !== null}
+        >
+          {viewerActionLoading === 'share' ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <Ionicons name="share-social-outline" size={22} color={colors.white} />
+          )}
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -696,7 +868,7 @@ export default function ChatScreen() {
         {!showSearch ? (
           <>
             <Image
-              source={{ uri: otherUserAvatar || 'https://via.placeholder.com/40' }}
+              source={otherUserAvatar ? { uri: otherUserAvatar } : require('../../../assets/icon.png')}
               style={styles.headerAvatar}
             />
             <Text style={styles.headerName}>{otherUserName}</Text>
@@ -797,6 +969,15 @@ export default function ChatScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      <ImageViewing
+        images={viewerImageUrl ? [{ uri: viewerImageUrl }] : []}
+        imageIndex={0}
+        visible={viewerVisible}
+        onRequestClose={closeImageViewer}
+        swipeToCloseEnabled
+        HeaderComponent={ViewerHeader}
+      />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -941,6 +1122,29 @@ const styles = StyleSheet.create({
     height: 150,
     borderRadius: borderRadius.md,
     marginBottom: spacing.sm,
+  },
+  viewerHeader: {
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  viewerHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  viewerHeaderButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+  },
+  viewerHeaderButtonDisabled: {
+    opacity: 0.6,
   },
   inputContainer: {
     flexDirection: 'row',

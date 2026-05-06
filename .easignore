@@ -1,0 +1,37 @@
+# Keep EAS uploads lean and stable
+
+# Dependencies / caches
+node_modules/
+**/node_modules/
+.expo/
+**/.expo/
+coverage/
+dist/
+
+# Build/test outputs
+build/
+.next/
+.turbo/
+tmp/
+temp/
+
+# VCS metadata
+.git/
+**/.git/
+.gitignore
+
+# Local/backup native folders not needed for cloud iOS build
+ios.backup/
+
+# Tests and docs not required for build
+e2e/
+docs/
+*.md
+test-*.js
+*.sql
+*.log
+
+# Local env files
+.env
+.env.*
+!.env.example

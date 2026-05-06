@@ -5,11 +5,7 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  ActivityIndicator,
-  Alert,
 } from 'react-native';
-import { useStripe } from '@stripe/stripe-react-native';
-import { supabase } from '../services/supabase';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../constants/theme';
 
 interface AddPaymentMethodModalProps {
@@ -23,105 +19,13 @@ export default function AddPaymentMethodModal({
   onClose,
   onSuccess,
 }: AddPaymentMethodModalProps) {
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const [loading, setLoading] = useState(false);
 
   const handleAddPaymentMethod = async () => {
-    try {
-      setLoading(true);
-
-      // Get setup intent from backend
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        Alert.alert('Error', 'Please log in to add a payment method');
-        return;
-      }
-
-      const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/api/payment-methods/setup-intent`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create setup intent');
-      }
-
-      const setupIntentId = data.setupIntentId;
-
-      // Initialize payment sheet
-      const { error: initError } = await initPaymentSheet({
-        paymentIntentClientSecret: undefined,
-        setupIntentClientSecret: data.clientSecret,
-        merchantDisplayName: 'Glamora',
-        customerId: data.customerId,
-        allowsDelayedPaymentMethods: false,
-        returnURL: 'glamora://payment-methods',
-      });
-
-      if (initError) {
-        console.error('Error initializing payment sheet:', initError);
-        Alert.alert('Error', initError.message);
-        return;
-      }
-
-      // Present payment sheet
-      const { error: presentError } = await presentPaymentSheet();
-
-      if (presentError) {
-        if (presentError.code !== 'Canceled') {
-          console.error('Error presenting payment sheet:', presentError);
-          Alert.alert('Error', presentError.message);
-        }
-        return;
-      }
-
-      // Payment method was added successfully
-      // Now confirm the setup intent and save to database
-      const confirmResponse = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL}/api/payment-methods/confirm-setup`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ setupIntentId }),
-        }
-      );
-
-      const confirmData = await confirmResponse.json();
-
-      if (!confirmResponse.ok) {
-        throw new Error(confirmData.error || 'Failed to save payment method');
-      }
-
-      Alert.alert(
-        'Success',
-        'Payment method added successfully!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              onSuccess();
-              onClose();
-            },
-          },
-        ]
-      );
-    } catch (error: any) {
-      console.error('Error adding payment method:', error);
-      Alert.alert('Error', error.message || 'Failed to add payment method');
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    onSuccess();
+    onClose();
+    setLoading(false);
   };
 
   return (
@@ -142,13 +46,13 @@ export default function AddPaymentMethodModal({
 
           <View style={styles.content}>
             <Text style={styles.description}>
-              Add a credit or debit card to make booking services easier and faster.
+              Glamora now uses secure in-app purchases at checkout with RevenueCat.
             </Text>
 
             <View style={styles.securityNote}>
               <Text style={styles.securityIcon}>🔒</Text>
               <Text style={styles.securityText}>
-                Your payment information is securely processed by Stripe
+                You do not need to save a card here. Payment is handled when you complete a booking.
               </Text>
             </View>
           </View>
@@ -168,9 +72,9 @@ export default function AddPaymentMethodModal({
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color={colors.white} />
+                <Text style={styles.addButtonText}>...</Text>
               ) : (
-                <Text style={styles.addButtonText}>Add Card</Text>
+                <Text style={styles.addButtonText}>Continue</Text>
               )}
             </TouchableOpacity>
           </View>

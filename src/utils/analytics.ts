@@ -1,6 +1,11 @@
 import { Mixpanel } from 'mixpanel-react-native';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
+import {
+  trackMetaCompleteRegistration,
+  trackMetaInitiatedCheckout,
+  trackMetaPurchase,
+} from '../services/metaAds';
 
 // Analytics provider type
 type AnalyticsProvider = 'mixpanel' | 'amplitude' | 'custom';
@@ -19,6 +24,14 @@ interface UserProperties {
   lastName?: string;
   [key: string]: any;
 }
+
+const normalizeCurrencyAmount = (amount: number) => {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return 0;
+  }
+
+  return amount > 1000 ? amount / 100 : amount;
+};
 
 class AnalyticsService {
   private mixpanel: Mixpanel | null = null;
@@ -216,6 +229,7 @@ export type { EventProperties, UserProperties, AnalyticsProvider };
 // Convenience functions for common events
 export const trackSignUp = (method: string, role: string) => {
   analytics.trackEvent('Sign Up', { method, role });
+  void trackMetaCompleteRegistration(method, role);
 };
 
 export const trackSignIn = (method: string) => {
@@ -230,6 +244,10 @@ export const trackBookingCreated = (serviceType: string, price: number, provider
   analytics.trackEvent('Booking Created', {
     serviceType,
     price,
+    providerId,
+  });
+  void trackMetaInitiatedCheckout(normalizeCurrencyAmount(price), {
+    serviceType,
     providerId,
   });
 };
@@ -273,6 +291,9 @@ export const trackPaymentSuccess = (amount: number, bookingId: string) => {
     bookingId,
   });
   analytics.trackRevenue(amount, { bookingId });
+  void trackMetaPurchase(normalizeCurrencyAmount(amount), 'USD', {
+    bookingId,
+  });
 };
 
 export const trackPaymentFailed = (amount: number, bookingId: string, error: string) => {
@@ -443,7 +464,7 @@ export const trackContentShared = (
   contentId?: string,
   metadata?: any
 ) => {
-  track('Content Shared', {
+  analytics.trackEvent('Content Shared', {
     content_type: contentType,
     platform,
     content_id: contentId,
@@ -459,7 +480,7 @@ export const trackProviderShared = (
   platform: 'general' | 'whatsapp' | 'facebook' | 'twitter' | 'sms' | 'copy',
   hasReferralCode: boolean = false
 ) => {
-  track('Provider Shared', {
+  analytics.trackEvent('Provider Shared', {
     provider_id: providerId,
     platform,
     has_referral_code: hasReferralCode,
@@ -474,7 +495,7 @@ export const trackPortfolioShared = (
   providerId: string,
   platform: 'image' | 'whatsapp' | 'facebook' | 'twitter' | 'copy' | 'general'
 ) => {
-  track('Portfolio Shared', {
+  analytics.trackEvent('Portfolio Shared', {
     portfolio_image_id: portfolioImageId,
     provider_id: providerId,
     platform,
@@ -489,7 +510,7 @@ export const trackBookingShared = (
   platform: 'whatsapp' | 'sms' | 'general',
   bookingStatus?: string
 ) => {
-  track('Booking Shared', {
+  analytics.trackEvent('Booking Shared', {
     booking_id: bookingId,
     platform,
     booking_status: bookingStatus,
@@ -500,7 +521,7 @@ export const trackBookingShared = (
  * Track when a referral code is copied
  */
 export const trackReferralCodeCopied = (referralCode: string) => {
-  track('Referral Code Copied', {
+  analytics.trackEvent('Referral Code Copied', {
     referral_code: referralCode,
   });
 };

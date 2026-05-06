@@ -38,6 +38,10 @@ export default function FadeInView({
     enabled,
   });
 
-  return <Animated.View style={[style, animatedStyle]}>{children}</Animated.View>;
+  return (
+    <Animated.View style={[style, animatedStyle]} pointerEvents="box-none">
+      {children}
+    </Animated.View>
+  );
 }
 

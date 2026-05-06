@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,24 +8,20 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
-  Linking,
   KeyboardAvoidingView,
   Platform,
   Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
-import {
-  createConnectedAccount,
-  getAccountOnboardingLink,
-  getAccountStatus
-} from '../../services/stripe';
+import { getPayoutAccountStatus, getPayoutOnboardingUrl } from '../../services/payouts';
 import { getCurrentLocation, reverseGeocode } from '../../services/location';
 import { colors, spacing, fontSize, borderRadius, fontWeight } from '../../constants/theme';
 import { useScreenTracking } from '../../hooks/useScreenTracking';
 import { DocumentUpload } from '../../components/DocumentUpload';
-import { getVerificationStatus, getUserVerificationStatus, sendPhoneVerificationCode, verifyPhoneCode } from '../../services/verification';
+import { getVerificationStatus, getUserVerificationStatus, sendPhoneVerificationCode, verifyPhoneCode, uploadVerificationDocument, DocumentType } from '../../services/verification';
 import AddServiceModal from '../../components/AddServiceModal';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
@@ -36,10 +32,11 @@ import ModernTextArea from '../../components/ModernTextArea';
 import FormCard from '../../components/FormCard';
 
 export default function ProviderOnboardingScreen() {
-  const navigation = useNavigation();
-  const { user, refreshOnboardingStatus } = useAuth();
+  const navigation = useNavigation<any>();
+  const { user, markOnboardingComplete, refreshOnboardingStatus } = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const submitInProgressRef = useRef(false);
 
   // Track screen view
   useScreenTracking('Provider Onboarding');
@@ -79,8 +76,8 @@ export default function ProviderOnboardingScreen() {
 
   // Step 4: Verification (formerly Step 5)
   const [bankAccountConnected, setBankAccountConnected] = useState(false);
-  const [stripeAccountStatus, setStripeAccountStatus] = useState<any>(null);
-  const [connectingStripe, setConnectingStripe] = useState(false);
+  const [payoutAccountStatus, setPayoutAccountStatus] = useState<any>(null);
+  const [loadingPayoutSetup, setLoadingPayoutSetup] = useState(false);
   const [identityVerificationStatus, setIdentityVerificationStatus] = useState<string>('pending');
   const [showDocumentUpload, setShowDocumentUpload] = useState(false);
 
@@ -95,17 +92,18 @@ export default function ProviderOnboardingScreen() {
   useEffect(() => {
     fetchAvailableServices();
     checkExistingProfile();
-    checkStripeAccountStatus();
+    checkPayoutAccountStatus();
     checkVerificationStatus();
   }, []);
 
-  const checkStripeAccountStatus = async () => {
+  const checkPayoutAccountStatus = async () => {
     try {
-      const status = await getAccountStatus();
-      setStripeAccountStatus(status);
+      const status = await getPayoutAccountStatus();
+      setPayoutAccountStatus(status);
       setBankAccountConnected(status.connected && status.payoutsEnabled);
     } catch (error) {
-      console.error('Error checking Stripe account status:', error);
+      setPayoutAccountStatus(null);
+      setBankAccountConnected(false);
     }
   };
 
@@ -262,7 +260,7 @@ export default function ProviderOnboardingScreen() {
         }
         return true;
       case 4:
-        console.log('[Onboarding] Step 4 - Verification (no requirements)');
+        console.log('[Onboarding] Step 4 - Human review setup (optional at onboarding)');
         return true;
       default:
         return true;
@@ -292,62 +290,91 @@ export default function ProviderOnboardingScreen() {
     }
   };
 
-  const handleConnectStripe = async () => {
-    setConnectingStripe(true);
-    try {
-      // Get user's email and business name
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+  const handleSkipForNow = async () => {
+    if (loading || submitInProgressRef.current) return;
 
-      if (!authUser?.email) {
-        throw new Error('User email not found');
+    submitInProgressRef.current = true;
+    setLoading(true);
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (profileError) {
+        throw profileError;
       }
 
-      // Create or get connected account
-      const { accountId } = await createConnectedAccount(
-        authUser.email,
-        businessName || 'My Business',
-        'US'
-      );
+      if (!profileData) {
+        throw new Error('Profile not found');
+      }
 
-      // Get onboarding link
-      const { url } = await getAccountOnboardingLink();
+      const { error: providerError } = await supabase
+        .from('provider_profiles')
+        .update({
+          business_name: businessName,
+          years_experience: parseInt(yearsExperience) || 0,
+          certifications: certifications.split(',').map((c) => c.trim()).filter(Boolean),
+          service_radius_km: parseInt(serviceRadius) || 10,
+          city,
+          state,
+          latitude,
+          longitude,
+          onboarding_completed: true,
+        })
+        .eq('id', profileData.id);
 
-      // Open Stripe onboarding in browser
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
+      if (providerError) {
+        throw providerError;
+      }
 
-        // Show instructions
+      await supabase
+        .from('profiles')
+        .update({ bio })
+        .eq('id', profileData.id);
+
+      markOnboardingComplete();
+      refreshOnboardingStatus().catch((error) => {
+        console.error('[Onboarding] Failed to refresh onboarding status after skip:', error);
+      });
+    } catch (error: any) {
+      console.error('[Onboarding] Error skipping verification step:', error);
+      Alert.alert('Error', error.message || 'Failed to skip verification step');
+    } finally {
+      setLoading(false);
+      submitInProgressRef.current = false;
+    }
+  };
+
+  const handleOpenPayoutSetup = async () => {
+    setLoadingPayoutSetup(true);
+    try {
+      const url = await getPayoutOnboardingUrl();
+      // openAuthSessionAsync closes itself when Stripe redirects to glamora://
+      const result = await WebBrowser.openAuthSessionAsync(url, 'glamora://');
+      // After the user returns, refresh status regardless of result
+      await checkPayoutAccountStatus();
+      if (result.type === 'cancel') {
+        // User closed the browser — they may have completed or abandoned
         Alert.alert(
-          'Complete Stripe Setup',
-          'Please complete the Stripe onboarding process in your browser. Once done, return to the app and refresh this page.',
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                // Refresh status after user returns
-                setTimeout(() => {
-                  checkStripeAccountStatus();
-                }, 2000);
-              },
-            },
-          ]
+          'Payout Setup',
+          bankAccountConnected
+            ? 'Your bank account is connected!'
+            : 'You can complete bank setup from your Earnings screen at any time.'
         );
-      } else {
-        throw new Error('Cannot open Stripe onboarding link');
       }
     } catch (error: any) {
-      console.error('Stripe connect error:', error);
-      const errorMessage = error.message === 'Network request failed'
-        ? 'Unable to connect to the server. Please check your internet connection and try again, or skip this step and set up payments later.'
-        : error.message || 'Failed to connect Stripe account';
-      Alert.alert('Connection Error', errorMessage);
+      Alert.alert('Setup Failed', error.message || 'Could not open payout setup. Please try again.');
     } finally {
-      setConnectingStripe(false);
+      setLoadingPayoutSetup(false);
     }
   };
 
   const saveProfile = async () => {
+    if (submitInProgressRef.current) return;
+
+    submitInProgressRef.current = true;
     setLoading(true);
     try {
       console.log('[Onboarding] Starting profile save...');
@@ -471,42 +498,20 @@ export default function ProviderOnboardingScreen() {
       console.log('[Onboarding] Availability added');
       console.log('[Onboarding] All steps completed successfully!');
 
-      // Refresh onboarding status in AuthContext
-      console.log('[Onboarding] Refreshing onboarding status...');
-      await refreshOnboardingStatus();
-      console.log('[Onboarding] Onboarding status refreshed');
+      // Mark onboarding complete immediately so navigation can switch right away
+      markOnboardingComplete();
+      console.log('[Onboarding] Onboarding marked complete locally; refreshing status in background...');
+      refreshOnboardingStatus().catch((error) => {
+        console.error('[Onboarding] Failed to refresh onboarding status after completion:', error);
+      });
 
-      // Navigate directly to home without popup
       setLoading(false);
-
-      console.log('[Onboarding] Profile setup complete!');
-      console.log('[Onboarding] Navigation object:', navigation);
-      console.log('[Onboarding] Attempting to navigate to ProviderMain...');
-
-      try {
-        // Try multiple navigation methods
-        if ((navigation as any).replace) {
-          console.log('[Onboarding] Using replace method');
-          (navigation as any).replace('ProviderMain');
-        } else if ((navigation as any).navigate) {
-          console.log('[Onboarding] Using navigate method');
-          (navigation as any).navigate('ProviderMain');
-        } else if (navigation.reset) {
-          console.log('[Onboarding] Using reset method');
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'ProviderMain' as never }],
-          });
-        } else {
-          console.error('[Onboarding] No navigation method available!');
-        }
-      } catch (navError) {
-        console.error('[Onboarding] Navigation error:', navError);
-      }
     } catch (error: any) {
       console.error('[Onboarding] Error saving profile:', error);
       Alert.alert('Error', error.message || 'Failed to save profile');
       setLoading(false);
+    } finally {
+      submitInProgressRef.current = false;
     }
   };
 
@@ -815,10 +820,31 @@ export default function ProviderOnboardingScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
+        const uri = result.assets[0].uri;
+
+        // Set loading state
         if (type === 'certification') {
-          setCertificationUri(result.assets[0].uri);
+          setCertificationUri(uri);
         } else {
-          setLicenseUri(result.assets[0].uri);
+          setLicenseUri(uri);
+        }
+
+        // Upload the document to verification_documents table
+        try {
+          const fileName = uri.split('/').pop() || 'document.jpg';
+          const fileType = fileName.endsWith('.png') ? 'image/png' : 'image/jpeg';
+          const documentType: DocumentType = type === 'certification' ? 'certification' : 'professional_license';
+
+          await uploadVerificationDocument(
+            { uri, name: fileName, type: fileType },
+            documentType
+          );
+
+          Alert.alert('Success', `${type === 'certification' ? 'Certification' : 'Professional License'} uploaded successfully!`);
+        } catch (uploadError: any) {
+          console.error('Error uploading document:', uploadError);
+          Alert.alert('Upload Error', uploadError.message || 'Failed to upload document. You can try again later from your profile.');
+          // Keep the URI set so user can see they selected something
         }
       }
     } catch (error) {
@@ -864,37 +890,42 @@ export default function ProviderOnboardingScreen() {
         </View>
       </View>
 
-      {!isComplete && (
-        <TouchableOpacity style={styles.verificationActionButton} onPress={onAction}>
-          <Text style={styles.verificationActionText}>{actionLabel}</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.primary} />
-        </TouchableOpacity>
-      )}
-
-      {status === 'under_review' && (
-        <View style={styles.reviewBadge}>
-          <Ionicons name="time-outline" size={16} color={colors.warning} />
-          <Text style={styles.reviewBadgeText}>Under Review</Text>
-        </View>
-      )}
+      <View style={styles.verificationFooter}>
+        {status === 'under_review' ? (
+          <View style={styles.reviewBadge}>
+            <Ionicons name="time-outline" size={16} color={colors.warning} />
+            <Text style={styles.reviewBadgeText}>Under Review</Text>
+          </View>
+        ) : isComplete ? (
+          <View style={styles.completeBadge}>
+            <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+            <Text style={styles.completeBadgeText}>Completed</Text>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.verificationActionButton} onPress={onAction}>
+            <Text style={styles.verificationActionText}>{actionLabel}</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.white} />
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 
   const renderVerification = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Verification</Text>
+      <Text style={styles.stepTitle}>Trust & Safety Review</Text>
       <Text style={styles.stepDescription}>
-        Complete verification to become visible to customers
+        Submit identity documents and services for human review before customer visibility
       </Text>
 
       {/* Required Section */}
-      <Text style={styles.sectionLabel}>Required Verification</Text>
+      <Text style={styles.sectionLabel}>Required For Marketplace Visibility</Text>
 
       {/* KYC Verification - Combined ID + Selfie */}
       {renderVerificationItem(
         'shield-checkmark-outline',
-        'Identity Verification (KYC)',
-        'Verify your identity with government ID and selfie',
+        'KYC Verification',
+        'Upload government ID for manual trust & safety review',
         identityVerificationStatus === 'approved',
         true,
         () => (navigation as any).navigate('KYCVerification', {
@@ -906,14 +937,14 @@ export default function ProviderOnboardingScreen() {
           ? 'Verified ✓'
           : identityVerificationStatus === 'under_review' || identityVerificationStatus === 'processing'
           ? 'Under Review'
-          : 'Start Verification',
+          : 'Upload Documents',
         identityVerificationStatus as any
       )}
 
       {identityVerificationStatus === 'approved' && (
         <View style={styles.verifiedBadgeContainer}>
           <Ionicons name="shield-checkmark" size={20} color={colors.success} />
-          <Text style={styles.verifiedBadgeText}>Identity Verified</Text>
+          <Text style={styles.verifiedBadgeText}>KYC Verified</Text>
         </View>
       )}
 
@@ -946,17 +977,19 @@ export default function ProviderOnboardingScreen() {
       {renderVerificationItem(
         'card-outline',
         'Bank Account',
-        bankAccountConnected ? 'Connected and ready for payouts' : 'Connect to receive payments',
+        bankAccountConnected
+          ? 'Connected and ready for payouts'
+          : 'Connect your bank account to receive payments',
         bankAccountConnected,
         false,
-        handleConnectStripe,
-        connectingStripe ? 'Connecting...' : 'Connect Bank'
+        handleOpenPayoutSetup,
+        loadingPayoutSetup ? 'Connecting...' : bankAccountConnected ? 'Manage' : 'Connect Bank'
       )}
 
       <View style={styles.infoBox}>
         <Ionicons name="information-circle-outline" size={20} color={colors.warning} />
         <Text style={styles.infoText}>
-          You won't be visible to customers until required verification is complete. You can skip and verify later from your Profile.
+          You won't be visible to customers until identity is approved and your services pass admin review. You can skip now and complete this later from Profile.
         </Text>
       </View>
     </View>
@@ -965,8 +998,8 @@ export default function ProviderOnboardingScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 140 : 80}
     >
       {/* Progress Bar with fade-in animation */}
       <FadeInView delay={0}>
@@ -985,8 +1018,9 @@ export default function ProviderOnboardingScreen() {
         style={styles.content}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 140 }}
       >
-        <SlideUpView delay={100} key={currentStep}>
+        <SlideUpView delay={100} key={currentStep} direction={currentStep % 2 === 0 ? 'left' : 'right'}>
           {renderStep()}
         </SlideUpView>
       </ScrollView>
@@ -1004,7 +1038,7 @@ export default function ProviderOnboardingScreen() {
           <>
             <TouchableOpacity
               style={styles.skipButton}
-              onPress={handleNext}
+              onPress={handleSkipForNow}
               disabled={loading}
             >
               {loading ? (
@@ -1269,7 +1303,8 @@ const styles = StyleSheet.create({
   verificationDescription: {
     fontSize: fontSize.sm,
     color: colors.textSecondary,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
+    lineHeight: 21,
   },
   connectButton: {
     backgroundColor: colors.primary,
@@ -1764,7 +1799,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: '700',
     color: colors.text,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
     marginTop: spacing.md,
   },
   verificationCardComplete: {
@@ -1815,32 +1850,51 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: '600',
   },
+  verificationFooter: {
+    marginTop: spacing.sm,
+  },
   verificationActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    backgroundColor: colors.primaryDarker,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   verificationActionText: {
-    fontSize: fontSize.md,
-    color: colors.primary,
+    fontSize: fontSize.sm,
+    color: colors.white,
     fontWeight: '600',
   },
   reviewBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: spacing.xs,
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    backgroundColor: colors.warningLight,
+    borderRadius: borderRadius.round,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
   },
   reviewBadgeText: {
     fontSize: fontSize.sm,
     color: colors.warning,
+    fontWeight: '600',
+  },
+  completeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.xs,
+    backgroundColor: colors.successLight,
+    borderRadius: borderRadius.round,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+  },
+  completeBadgeText: {
+    fontSize: fontSize.sm,
+    color: colors.success,
     fontWeight: '600',
   },
   previewContainer: {

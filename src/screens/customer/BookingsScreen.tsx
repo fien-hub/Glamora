@@ -10,7 +10,7 @@ import {
   Linking,
   Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius, lineHeight, shadows } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, dbService } from '../../services/supabase';
@@ -54,6 +54,7 @@ interface Booking {
 export default function BookingsScreen() {
   const { user } = useAuth();
   const navigation = useNavigation();
+  const route = useRoute<any>();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -71,6 +72,18 @@ export default function BookingsScreen() {
   useEffect(() => {
     fetchBookings();
   }, [user]);
+
+  useEffect(() => {
+    const openBookingId = route.params?.openBookingId as string | undefined;
+    if (!openBookingId || bookings.length === 0) return;
+
+    const matchedBooking = bookings.find((booking) => booking.id === openBookingId);
+    if (matchedBooking) {
+      setSelectedBooking(matchedBooking);
+      setDetailsModalVisible(true);
+      (navigation as any).setParams?.({ openBookingId: undefined });
+    }
+  }, [route.params?.openBookingId, bookings]);
 
   const fetchBookings = async () => {
     if (!user) return;

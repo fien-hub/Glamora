@@ -196,7 +196,7 @@ export default function PhoneVerificationScreen() {
               {code.map((digit, index) => (
                 <TextInput
                   key={index}
-                  ref={(ref) => (inputRefs.current[index] = ref!)}
+                  ref={(ref) => { inputRefs.current[index] = ref!; }}
                   style={[styles.codeInput, digit && styles.codeInputFilled]}
                   value={digit}
                   onChangeText={(value) => handleCodeChange(value.slice(-1), index)}
