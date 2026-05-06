@@ -28,7 +28,7 @@
         "EXPO_PUBLIC_API_URL": "https://glamora-backend-production.up.railway.app",
         "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "appl_ZVhdhVDafKvsRrKEWsJuQiRoRvg",
         "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_JuGsnSKlCqdwVyQiCHNyoGjVklL",
-        "EXPO_PUBLIC_REVENUECAT_BOOKING_PRODUCT_ID": "booking_single_service"
+        "EXPO_PUBLIC_REVENUECAT_BOOKING_PRODUCT_ID": "glamora_booking_single"
       }
     }
   },
