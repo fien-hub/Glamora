@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { recordStartupCheckpoint } from './utils/startupDiagnostics';
 import ErrorBoundary from './components/ErrorBoundary';
 import { AuthProvider } from './contexts/AuthContext';
+import { AnalyticsProvider } from './contexts/AnalyticsContext';
 import Navigation from './navigation';
 import { initSentry } from './services/sentry';
 
@@ -45,8 +46,10 @@ export default function AppRuntime() {
           <SafeAreaProvider>
             <QueryClientProvider client={queryClient}>
               <AuthProvider>
-                <Navigation />
-                <StatusBar style="auto" />
+                <AnalyticsProvider>
+                  <Navigation />
+                  <StatusBar style="auto" />
+                </AnalyticsProvider>
               </AuthProvider>
             </QueryClientProvider>
           </SafeAreaProvider>
