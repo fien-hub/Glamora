@@ -1,21 +1,16 @@
-import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Animated, Image, Dimensions, ScrollView, Platform } from 'react-native';
+import React, { useEffect, useRef, useCallback } from 'react';
+import { View, StyleSheet, Animated, Image, Dimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../contexts/AuthContext';
-import { colors, spacing, fontSize, fontWeight } from '../../constants/theme';
-import {
-  getStartupTimeline,
-  recordStartupCheckpoint,
-  subscribeToStartupTimeline,
-} from '../../utils/startupDiagnostics';
+import { colors } from '../../constants/theme';
+import { recordStartupCheckpoint } from '../../utils/startupDiagnostics';
 
 const { width } = Dimensions.get('window');
 
 export default function SplashScreen() {
   const navigation = useNavigation();
   const { user, loading } = useAuth();
-  const [startupTimeline, setStartupTimeline] = useState(getStartupTimeline);
   const animationDoneRef = useRef(false);
   const hasNavigatedRef = useRef(false);
 
@@ -259,25 +254,6 @@ export default function SplashScreen() {
       >
         Beauty at your doorstep
       </Animated.Text>
-
-      <View style={styles.tracePanel}>
-        <Text style={styles.traceTitle}>Startup trace</Text>
-        <ScrollView
-          style={styles.traceScroll}
-          contentContainerStyle={styles.traceContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {startupTimeline.slice(-12).map((entry, index) => {
-            const details = entry.details ? ` ${JSON.stringify(entry.details)}` : '';
-
-            return (
-              <Text key={`${entry.atMs}-${entry.step}-${index}`} style={styles.traceLine}>
-                {`+${entry.atMs}ms ${entry.step} :: ${entry.status}${details}`}
-              </Text>
-            );
-          })}
-        </ScrollView>
-      </View>
     </View>
   );
 }
@@ -368,38 +344,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 8,
     letterSpacing: 1,
-  },
-  tracePanel: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 24,
-    maxHeight: 220,
-    borderRadius: 12,
-    backgroundColor: 'rgba(17, 24, 39, 0.92)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  traceTitle: {
-    color: '#F9FAFB',
-    fontSize: 12,
-    fontWeight: '700',
-    paddingHorizontal: 12,
-    paddingTop: 10,
-  },
-  traceScroll: {
-    maxHeight: 180,
-  },
-  traceContent: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  traceLine: {
-    color: '#D1D5DB',
-    fontSize: 11,
-    marginBottom: 6,
-    fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }),
   },
 });
 

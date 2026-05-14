@@ -156,34 +156,45 @@ const replacePlugin = (
   return [...withoutExisting, [pluginName, pluginConfig]];
 };
 
+const removePlugin = (
+  plugins: NonNullable<ExpoConfig['plugins']>,
+  pluginName: string
+): NonNullable<ExpoConfig['plugins']> => {
+  return plugins.filter((plugin) => {
+    if (Array.isArray(plugin)) return plugin[0] !== pluginName;
+    return plugin !== pluginName;
+  });
+};
+
 export default (): ExpoConfig => {
   const metaAppIdFromEnv = process.env.EXPO_PUBLIC_META_APP_ID;
   const metaClientTokenFromEnv = process.env.EXPO_PUBLIC_META_CLIENT_TOKEN;
 
   const isMetaConfigured = isValidEnvValue(metaAppIdFromEnv) && isValidEnvValue(metaClientTokenFromEnv);
 
-  const configuredMetaAppId = isValidEnvValue(metaAppIdFromEnv)
-    ? metaAppIdFromEnv!.trim()
-    : (baseConfig.extra as any)?.meta?.appId || 'YOUR_META_APP_ID';
+  // CRITICAL FIX: Only include react-native-fbsdk-next when BOTH Meta credentials
+  // are properly configured. Including this plugin with a placeholder App ID causes
+  // a TurboModule SIGABRT crash on iOS production builds before any JS executes,
+  // which permanently freezes the app on the native splash screen.
+  // Setting isAutoInitEnabled: false is NOT enough — the native module still
+  // registers on the TurboModule queue and throws if the App ID is invalid.
+  let plugins = (baseConfig.plugins || []) as NonNullable<ExpoConfig['plugins']>;
 
-  const configuredMetaClientToken = isValidEnvValue(metaClientTokenFromEnv)
-    ? metaClientTokenFromEnv!.trim()
-    : 'YOUR_META_CLIENT_TOKEN';
-
-  const plugins = replacePlugin(
-    (baseConfig.plugins || []) as NonNullable<ExpoConfig['plugins']>,
-    'react-native-fbsdk-next',
-    {
-      appID: configuredMetaAppId,
-      clientToken: configuredMetaClientToken,
+  if (isMetaConfigured) {
+    plugins = replacePlugin(plugins, 'react-native-fbsdk-next', {
+      appID: metaAppIdFromEnv!.trim(),
+      clientToken: metaClientTokenFromEnv!.trim(),
       displayName: 'Glamora',
-      scheme: `fb${configuredMetaAppId}`,
+      scheme: `fb${metaAppIdFromEnv!.trim()}`,
       advertiserIDCollectionEnabled: true,
       autoLogAppEventsEnabled: true,
-      // Disable auto-init when using placeholder App ID to prevent SIGABRT on TurboModule queue
-      isAutoInitEnabled: isMetaConfigured,
-    }
-  );
+      isAutoInitEnabled: true,
+    });
+  } else {
+    // Remove the plugin entirely when credentials are missing.
+    // A partially-configured Facebook SDK is far worse than no SDK at all.
+    plugins = removePlugin(plugins, 'react-native-fbsdk-next');
+  }
 
   return {
     ...baseConfig,
@@ -194,7 +205,7 @@ export default (): ExpoConfig => {
     extra: {
       ...baseConfig.extra,
       meta: {
-        appId: configuredMetaAppId,
+        appId: isMetaConfigured ? metaAppIdFromEnv!.trim() : 'NOT_CONFIGURED',
       },
     },
   };

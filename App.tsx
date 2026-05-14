@@ -1,17 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import {
-  getStartupTimeline,
-  recordStartupCheckpoint,
-  subscribeToStartupTimeline,
-} from './src/utils/startupDiagnostics';
+import * as SplashScreen from 'expo-splash-screen';
+import { recordStartupCheckpoint } from './src/utils/startupDiagnostics';
 import AppRuntime from './src/AppRuntime';
+
+// Keep the native splash screen visible until we explicitly hide it.
+// This prevents a white flash between the native splash and first React frame.
+SplashScreen.preventAutoHideAsync().catch(() => {
+  // Already hidden or not supported — safe to ignore.
+});
 
 type BootstrapErrorProps = {
   error: unknown;
 };
-
-type RuntimeComponentType = React.ComponentType<Record<string, never>>;
 
 function BootstrapErrorScreen({ error }: BootstrapErrorProps) {
   const message = error instanceof Error ? error.message : String(error);
@@ -37,38 +38,10 @@ function BootstrapErrorScreen({ error }: BootstrapErrorProps) {
   );
 }
 
-function BootstrapLoadingScreen({ timedOut }: { timedOut: boolean }) {
-  const [timeline, setTimeline] = useState(getStartupTimeline);
-
-  useEffect(() => {
-    const unsubscribe = subscribeToStartupTimeline(setTimeline);
-    return unsubscribe;
-  }, []);
-
-  const latestEntries = useMemo(() => timeline.slice(-8), [timeline]);
-
-  return (
-    <ScrollView contentContainerStyle={styles.container} style={styles.scrollView}>
-      <Text style={styles.title}>Starting Glamora</Text>
-      <Text style={styles.body}>
-        {timedOut
-          ? 'Startup is taking longer than expected. The app is running in protected boot mode.'
-          : 'Preparing the app runtime...'}
-      </Text>
-      <Text style={styles.label}>Boot status</Text>
-      <Text style={styles.value}>{timedOut ? 'Protected timeout reached' : 'Loading runtime module'}</Text>
-      <Text style={styles.label}>Recent checkpoints</Text>
-      {latestEntries.length === 0 ? (
-        <Text style={styles.value}>No checkpoints yet</Text>
-      ) : (
-        latestEntries.map((entry) => (
-          <Text key={`${entry.atMs}-${entry.step}`} style={styles.stack}>
-            {`+${entry.atMs}ms ${entry.step} :: ${entry.status}`}
-          </Text>
-        ))
-      )}
-    </ScrollView>
-  );
+function BootstrapLoadingScreen() {
+  // Intentionally blank white screen — the native splash is still visible
+  // at this point (preventAutoHideAsync keeps it up). Users never see this.
+  return <View style={styles.blank} />;
 }
 
 type BootstrapBoundaryState = {
@@ -104,33 +77,18 @@ class BootstrapBoundary extends React.Component<React.PropsWithChildren, Bootstr
 function RuntimeHost() {
   const [isReady, setIsReady] = useState(false);
   const [loadError, setLoadError] = useState<unknown>(null);
-  const [loadTimedOut, setLoadTimedOut] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
     recordStartupCheckpoint('App.bootstrap.loadRuntime.start', 'start');
 
-    const timeout = setTimeout(() => {
-      if (!isMounted || isReady) {
-        return;
-      }
-      setLoadTimedOut(true);
-      recordStartupCheckpoint('App.bootstrap.loadRuntime.timeout', 'warn', {
-        timeoutMs: 4500,
-      });
-    }, 4500);
-
     const initializeRuntime = () => {
       try {
-        // Static import already loaded at top of file
-        // Just verify AppRuntime is valid
         if (typeof AppRuntime !== 'function') {
           throw new Error(`AppRuntime is not a valid component (type: ${typeof AppRuntime})`);
         }
-
         if (isMounted) {
           setIsReady(true);
-          setLoadTimedOut(false);
           recordStartupCheckpoint('App.bootstrap.loadRuntime.success', 'ok');
         }
       } catch (error) {
@@ -143,23 +101,31 @@ function RuntimeHost() {
       }
     };
 
-    // Defer by one tick so we always render at least one frame and avoid
-    // looking like a native splash deadlock if runtime import is slow.
+    // Defer by one tick so we always render at least one frame before
+    // trying to mount the runtime (avoids a synchronous throw blocking paint).
     const bootstrapHandle = setTimeout(initializeRuntime, 0);
 
     return () => {
       isMounted = false;
-      clearTimeout(timeout);
       clearTimeout(bootstrapHandle);
     };
   }, []);
 
+  useEffect(() => {
+    if (isReady) {
+      // Hide the native splash now that the app tree is ready to render.
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [isReady]);
+
   if (loadError) {
+    // Hide splash even on error so the user sees the error screen.
+    SplashScreen.hideAsync().catch(() => {});
     return <BootstrapErrorScreen error={loadError} />;
   }
 
   if (!isReady) {
-    return <BootstrapLoadingScreen timedOut={loadTimedOut} />;
+    return <BootstrapLoadingScreen />;
   }
 
   return <AppRuntime />;
@@ -176,6 +142,10 @@ export default function App() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
+  },
+  blank: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   scrollView: {
     flex: 1,
