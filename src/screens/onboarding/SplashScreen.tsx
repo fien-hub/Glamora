@@ -99,7 +99,6 @@ export default function SplashScreen() {
 
   useEffect(() => {
     recordStartupCheckpoint('SplashScreen.mounted', 'ok');
-    const unsubscribe = subscribeToStartupTimeline(setStartupTimeline);
 
     // Main animation sequence - navigate only after animation completes
     Animated.sequence([
@@ -159,7 +158,6 @@ export default function SplashScreen() {
       maybeNavigate();
     });
 
-    return unsubscribe;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
