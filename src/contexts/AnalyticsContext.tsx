@@ -13,12 +13,22 @@ interface AnalyticsContextType {
 
 const AnalyticsContext = createContext<AnalyticsContextType | undefined>(undefined);
 
-export const AnalyticsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+type AnalyticsProviderProps = {
+  children: React.ReactNode;
+  enabled?: boolean;
+};
+
+export const AnalyticsProvider: React.FC<AnalyticsProviderProps> = ({ children, enabled = true }) => {
   const { user, userRole } = useAuth();
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Initialize analytics on mount
   useEffect(() => {
+    if (!enabled) {
+      setIsInitialized(false);
+      return;
+    }
+
     const initAnalytics = async () => {
       try {
         await analytics.initialize();
@@ -30,7 +40,7 @@ export const AnalyticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
 
     initAnalytics();
-  }, []);
+  }, [enabled]);
 
   // Identify user when auth state changes
   useEffect(() => {

@@ -1,30 +1,46 @@
 import 'react-native-url-polyfill/auto';
-import { createClient } from '@supabase/supabase-js';
-import * as SecureStore from 'expo-secure-store';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
 const supabaseUrl = Constants.expoConfig?.extra?.EXPO_PUBLIC_SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = Constants.expoConfig?.extra?.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
-// Custom storage adapter for Expo SecureStore
-const ExpoSecureStoreAdapter = {
+// Use AsyncStorage instead of SecureStore to avoid blocking native operations during startup
+// AsyncStorage is async and won't block the main thread during session restoration
+const AsyncStorageAdapter = {
   getItem: async (key: string) => {
-    return await SecureStore.getItemAsync(key);
+    return await AsyncStorage.getItem(key);
   },
   setItem: async (key: string, value: string) => {
-    await SecureStore.setItemAsync(key, value);
+    await AsyncStorage.setItem(key, value);
   },
   removeItem: async (key: string) => {
-    await SecureStore.deleteItemAsync(key);
+    await AsyncStorage.removeItem(key);
   },
 };
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: ExpoSecureStoreAdapter,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
+// Lazy-initialized Supabase client to avoid blocking startup
+let supabaseInstance: SupabaseClient | null = null;
+
+function getSupabaseClient(): SupabaseClient {
+  if (!supabaseInstance) {
+    supabaseInstance = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        storage: AsyncStorageAdapter,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+    });
+  }
+  return supabaseInstance;
+}
+
+// Export getter as named export for backwards compatibility
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(target, prop) {
+    return getSupabaseClient()[prop as keyof SupabaseClient];
   },
 });
 

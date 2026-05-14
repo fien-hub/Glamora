@@ -186,10 +186,8 @@ export default function Navigation() {
       >
         {initialUnauthRoute === null ? (
           // AsyncStorage onboarding flag is still loading.
-          // Keep Splash as the visible route, but register fallback unauth routes
-          // so Splash's absolute-deadline navigate() has valid destinations.
+          // Start on a real route immediately to avoid getting trapped on Splash.
           <>
-            <Stack.Screen name="Splash" component={SplashScreen} />
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
             <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
@@ -225,8 +223,14 @@ export default function Navigation() {
           </>
         ) : user && !userRole && !roleResolutionExpired ? (
           // A session exists, but role hydration has not completed yet.
-          // Keep showing the splash briefly instead of rendering an empty navigator.
-          <Stack.Screen name="Splash" component={SplashScreen} />
+          // Render a safe unauth flow instead of Splash to prevent startup deadlocks.
+          <>
+            <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="Signup" component={SignupScreen} />
+          </>
         ) : user && !userRole ? (
           // If role resolution failed, recover to the unauthenticated flow instead of
           // leaving the navigator with no active screen.

@@ -1,0 +1,64 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "version": "1.0",
+    "copyright": "2025 Glamora",
+    "release": {
+      "automaticRelease": true
+    },
+    "info": {
+      "en-GB": {
+        "description": "Glamora – Beauty at Your Door\nGlamora brings salon-quality beauty services directly to your home. No more waiting in queues or traveling — book professional beauty providers in just a few taps.\n\nKey Services:\n\nNails & Manicure/Pedicure combos\n\nHair styling & braiding\n\nMakeup for everyday or events\n\nSpa & facial treatments\n\nWhy Glamora?\n\nBrowse verified and reviewed beauty providers\n\nFlexible scheduling and travel fee options\n\nSecure in-app payments\n\nReal-time messaging with your provider\n\nEasy booking, no hidden fees\n\nPerfect For:\n\nBusy professionals\n\nBrides & event-ready clients\n\nAt-home pampering enthusiasts\n\nAnyone who wants trusted beauty services without leaving home\n\nExperience the convenience of at-home beauty with Glamora — your trusted beauty assistant.",
+        "keywords": [
+          "Beauty at home",
+          "nails",
+          "hair",
+          "makeup",
+          "spa",
+          "facial",
+          "braids",
+          "home salon",
+          "booking",
+          "beauty services"
+        ],
+        "promoText": "Book top beauty pros for nails, hair, makeup & spa at home. Verified providers, easy payments, and flexible scheduling.",
+        "title": "Glamora",
+        "subtitle": "Beauty Services at Home",
+        "privacyPolicyUrl": "https://www.freeprivacypolicy.com/live/b955f068-3a35-49fa-a6de-46a938bf6b71"
+      }
+    },
+    "categories": [
+      "LIFESTYLE",
+      "HEALTH_AND_FITNESS"
+    ],
+    "advisory": {
+      "ageRatingOverride": "NONE",
+      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+      "contests": "NONE",
+      "gambling": false,
+      "gamblingSimulated": "NONE",
+      "horrorOrFearThemes": "NONE",
+      "kidsAgeBand": null,
+      "koreaAgeRatingOverride": "NONE",
+      "lootBox": false,
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "profanityOrCrudeHumor": "NONE",
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "unrestrictedWebAccess": false,
+      "violenceCartoonOrFantasy": "NONE",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "advertising": false,
+      "ageAssurance": false,
+      "ageRatingOverrideV2": "NONE",
+      "developerAgeRatingInfoUrl": null,
+      "gunsOrOtherWeapons": "NONE",
+      "healthOrWellnessTopics": false,
+      "messagingAndChat": false,
+      "parentalControls": false,
+      "userGeneratedContent": false
+    }
+  }
+}

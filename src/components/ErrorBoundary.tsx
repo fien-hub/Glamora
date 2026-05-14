@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';
+import { navigationRef } from '../navigation/RootNavigation';
 
 interface Props {
   children: ReactNode;
@@ -66,11 +67,39 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   handleReset = () => {
+    // Reset error state to retry rendering
     this.setState({
       hasError: false,
       error: null,
       errorInfo: null,
     });
+  };
+
+  handleGoHome = () => {
+    // Reset error state and try to navigate to home
+    this.setState(
+      {
+        hasError: false,
+        error: null,
+        errorInfo: null,
+      },
+      () => {
+        // Wait a tick for the state to update, then navigate
+        setTimeout(() => {
+          if (navigationRef.isReady()) {
+            try {
+              // Reset to the root of the navigation stack
+              (navigationRef as any).reset({
+                index: 0,
+                routes: [{ name: 'Home' }],
+              });
+            } catch (navError) {
+              console.warn('[ErrorBoundary] Failed to navigate home:', navError);
+            }
+          }
+        }, 100);
+      }
+    );
   };
 
   render() {
@@ -111,10 +140,7 @@ class ErrorBoundary extends Component<Props, State> {
 
             <TouchableOpacity
               style={styles.secondaryButton}
-              onPress={() => {
-                // In a real app, you might want to navigate to home or restart the app
-                this.handleReset();
-              }}
+              onPress={this.handleGoHome}
             >
               <Text style={styles.secondaryButtonText}>Go to Home</Text>
             </TouchableOpacity>

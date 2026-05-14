@@ -70,15 +70,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     recordStartupCheckpoint('AuthProvider.effect.start', 'ok');
 
-    // Configure Google Sign-In lazily so native modules are not touched during bootstrap.
-    setTimeout(() => {
-      try {
-        loadSocialAuth().configureGoogleSignIn();
-      } catch (error) {
-        console.warn('[AuthContext] Google Sign-In configuration skipped:', error);
-      }
-    }, 0);
-
     // Hard safety timeout: if loading is still true after 10 s, force it off so
     // the app never stays stuck on the splash/spinner indefinitely.
     const loadingTimeout = setTimeout(() => {
@@ -596,6 +587,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithGoogle = async (role: UserRole) => {
+    try {
+      loadSocialAuth().configureGoogleSignIn();
+    } catch (error) {
+      console.warn('[AuthContext] Google Sign-In configuration failed:', error);
+    }
+
     const result = await loadSocialAuth().signInWithGoogle();
     if (!result.success || !result.user) {
       throw new Error(result.error || 'Google sign-in failed');
