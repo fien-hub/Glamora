@@ -26,8 +26,8 @@
         "SENTRY_DISABLE_AUTO_UPLOAD": "true",
         "SENTRY_ALLOW_FAILURE": "true",
         "EXPO_PUBLIC_API_URL": "https://glamora-backend-production.up.railway.app",
-        "EXPO_PUBLIC_SUPABASE_URL": "REPLACE_WITH_YOUR_SUPABASE_URL",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_YOUR_SUPABASE_ANON_KEY",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://hygbxfkkdmenpkvgpwhn.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh5Z2J4ZmtrZG1lbnBrdmdwd2huIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1MjQ5MDEsImV4cCI6MjA3ODEwMDkwMX0.W4t7okeCeD7tHrQ3sdMD_mgMSH08yTHtD_qekZm8xxE",
         "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "appl_ZVhdhVDafKvsRrKEWsJuQiRoRvg",
         "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_JuGsnSKlCqdwVyQiCHNyoGjVklL",
         "EXPO_PUBLIC_REVENUECAT_BOOKING_PRODUCT_ID": "glamora_booking_single"
