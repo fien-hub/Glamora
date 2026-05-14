@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
-import { notifyAdminsNewCustomService } from '../utils/pushNotifications';
+import { notifyAdminsNewCustomService, notifyAdminsNewService } from '../utils/pushNotifications';
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const serviceKey = process.env.SUPABASE_SERVICE_KEY || '';
@@ -87,6 +87,41 @@ export async function customServiceAlert(req: Request, res: Response) {
     return res.json({ ok: true });
   } catch (err: any) {
     console.error('customServiceAlert error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+export async function newServiceAlert(req: Request, res: Response) {
+  try {
+    // Accept either internal secret OR a valid JWT (set by authenticate middleware)
+    const secret = req.headers['x-internal-secret'];
+    const expected = process.env.INTERNAL_WEBHOOK_SECRET;
+    const isInternalCall = expected && secret === expected;
+    const isAuthenticatedProvider = !!(req as any).user;
+
+    if (!isInternalCall && !isAuthenticatedProvider) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { serviceId, serviceName, providerName } = req.body as {
+      serviceId?: string;
+      serviceName?: string;
+      providerName?: string;
+    };
+
+    if (!serviceId || !serviceName) {
+      return res.status(400).json({ error: 'serviceId and serviceName are required' });
+    }
+
+    await notifyAdminsNewService(
+      serviceName,
+      providerName || 'A provider',
+      serviceId
+    );
+
+    return res.json({ ok: true });
+  } catch (err: any) {
+    console.error('newServiceAlert error:', err);
     return res.status(500).json({ error: 'Internal server error' });
   }
 }

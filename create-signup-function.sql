@@ -25,18 +25,23 @@ BEGIN
     email = EXCLUDED.email,
     role = EXCLUDED.role;
 
-  -- Create profile record
+  -- Create profile record (idempotent — handles retries after partial failures)
   INSERT INTO profiles (user_id, first_name, last_name, phone)
   VALUES (p_user_id, p_first_name, p_last_name, p_phone)
+  ON CONFLICT (user_id) DO UPDATE SET
+    first_name = COALESCE(NULLIF(EXCLUDED.first_name, ''), profiles.first_name),
+    last_name  = COALESCE(NULLIF(EXCLUDED.last_name,  ''), profiles.last_name)
   RETURNING id INTO v_profile_id;
 
-  -- Create role-specific profile
+  -- Create role-specific profile (idempotent)
   IF p_role = 'customer' THEN
     INSERT INTO customer_profiles (id, onboarding_completed)
-    VALUES (v_profile_id, FALSE);
+    VALUES (v_profile_id, FALSE)
+    ON CONFLICT (id) DO NOTHING;
   ELSIF p_role = 'provider' THEN
     INSERT INTO provider_profiles (id, onboarding_completed, is_verified)
-    VALUES (v_profile_id, FALSE, FALSE);
+    VALUES (v_profile_id, FALSE, FALSE)
+    ON CONFLICT (id) DO NOTHING;
   END IF;
 
   -- Return success with profile id

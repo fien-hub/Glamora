@@ -253,8 +253,8 @@ export const notifyAdminsNewCustomService = async (
   try {
     // Fetch all admin user IDs
     const { data: admins, error } = await supabase
-      .from('profiles')
-      .select('user_id')
+      .from('users')
+      .select('id')
       .eq('role', 'admin');
 
     if (error || !admins || admins.length === 0) {
@@ -268,7 +268,7 @@ export const notifyAdminsNewCustomService = async (
     await Promise.all(
       admins.map((admin) =>
         sendPushNotification({
-          userId: admin.user_id,
+          userId: admin.id,
           title,
           body,
           data: {
@@ -283,6 +283,49 @@ export const notifyAdminsNewCustomService = async (
     console.log(`[Admin Push] Notified ${admins.length} admin(s) about new custom service: ${serviceName}`);
   } catch (error) {
     console.error('[Admin Push] Error notifying admins of new custom service:', error);
+  }
+};
+
+/**
+ * Send push notification to all admin users when any provider adds a new service (needs approval)
+ */
+export const notifyAdminsNewService = async (
+  serviceName: string,
+  providerName: string,
+  serviceId: string
+): Promise<void> => {
+  try {
+    const { data: admins, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('role', 'admin');
+
+    if (error || !admins || admins.length === 0) {
+      console.log('[Admin Push] No admin users found:', error?.message);
+      return;
+    }
+
+    const title = '🔔 New Service Pending Approval';
+    const body = `${providerName} added "${serviceName}" — review it in the admin dashboard.`;
+
+    await Promise.all(
+      admins.map((admin) =>
+        sendPushNotification({
+          userId: admin.id,
+          title,
+          body,
+          data: {
+            type: 'admin_service_pending',
+            serviceId,
+            screen: 'PendingServices',
+          },
+        })
+      )
+    );
+
+    console.log(`[Admin Push] Notified ${admins.length} admin(s) about new service: ${serviceName}`);
+  } catch (error) {
+    console.error('[Admin Push] Error notifying admins of new service:', error);
   }
 };
 

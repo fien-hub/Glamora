@@ -19,6 +19,7 @@ import {
   listUsers,
   setUserRole,
   getSettings,
+  newServiceAlert,
 } from '../controllers/adminController';
 
 const router = Router();
@@ -41,6 +42,22 @@ router.get(
 // Internal webhook — Supabase DB trigger fires this when a custom service is submitted
 // Protected by x-internal-secret header (no JWT needed)
 router.post('/internal/custom-service-alert', customServiceAlert);
+
+// Internal webhook — fires when any new service is added (needs admin approval)
+router.post('/internal/new-service-alert', newServiceAlert);
+
+// Provider-authenticated endpoint to notify admins of a new service submission
+router.post(
+  '/notify-new-service',
+  authenticate,
+  [
+    body('serviceId').isUUID().withMessage('serviceId must be a valid UUID'),
+    body('serviceName').isString().trim().isLength({ min: 1, max: 200 }),
+    body('providerName').optional().isString().trim().isLength({ max: 200 }),
+    validate,
+  ],
+  newServiceAlert
+);
 
 // Custom services moderation
 router.get(
