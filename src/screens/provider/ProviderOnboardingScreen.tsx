@@ -13,7 +13,8 @@ import {
   Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import * as WebBrowser from 'expo-web-browser';
+let WebBrowser: typeof import('expo-web-browser') = {} as any;
+try { WebBrowser = require('expo-web-browser'); } catch (e) { console.warn('[ProviderOnboardingScreen] expo-web-browser unavailable:', e); }
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { getPayoutAccountStatus, getPayoutOnboardingUrl } from '../../services/payouts';
@@ -26,7 +27,8 @@ import AddServiceModal from '../../components/AddServiceModal';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 import { Ionicons } from '../../utils/icons';
-import * as ImagePicker from 'expo-image-picker';
+let ImagePicker: typeof import('expo-image-picker') = {} as any;
+try { ImagePicker = require('expo-image-picker'); } catch (e) { console.warn('[ProviderOnboardingScreen] expo-image-picker unavailable:', e); }
 import ModernInput from '../../components/ModernInput';
 import ModernTextArea from '../../components/ModernTextArea';
 import FormCard from '../../components/FormCard';

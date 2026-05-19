@@ -1,4 +1,10 @@
-import * as Notifications from 'expo-notifications';
+// expo-notifications is lazy-loaded — it calls native ATT/push modules at
+// module-evaluation time which can throw in New Architecture builds.
+let Notifications: typeof import('expo-notifications') = {} as any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Notifications = require('expo-notifications');
+} catch (e) { console.warn('[notifications.ts] expo-notifications unavailable:', e); }
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';

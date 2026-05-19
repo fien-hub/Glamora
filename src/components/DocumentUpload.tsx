@@ -9,7 +9,8 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+let ImagePicker: typeof import('expo-image-picker') = {} as any;
+try { ImagePicker = require('expo-image-picker'); } catch (e) { console.warn('[DocumentUpload] expo-image-picker unavailable:', e); }
 import { colors, spacing, fontSize, borderRadius } from '../constants/theme';
 import { DocumentType, uploadVerificationDocument } from '../services/verification';
 

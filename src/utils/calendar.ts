@@ -1,4 +1,10 @@
-import * as Calendar from 'expo-calendar';
+// expo-calendar calls native calendar module at module-evaluation time
+// and can throw in New Architecture builds.
+let Calendar: typeof import('expo-calendar') = {} as any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Calendar = require('expo-calendar');
+} catch (e) { console.warn('[calendar.ts] expo-calendar unavailable:', e); }
 import { Platform, Alert } from 'react-native';
 
 export interface CalendarEventDetails {

@@ -1,5 +1,10 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import * as Notifications from 'expo-notifications';
+// expo-notifications is lazy-loaded to prevent module-level native crashes.
+let Notifications: typeof import('expo-notifications') = {} as any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Notifications = require('expo-notifications');
+} catch (e) { console.warn('[NotificationsContext] expo-notifications unavailable:', e); }
 import { useAuth } from './AuthContext';
 import {
   getExpoPushToken,

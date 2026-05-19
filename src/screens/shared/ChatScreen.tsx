@@ -20,12 +20,14 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import ImageViewing from 'react-native-image-viewing';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import * as MediaLibrary from 'expo-media-library';
+let MediaLibrary: typeof import('expo-media-library') = {} as any;
+try { MediaLibrary = require('expo-media-library'); } catch (e) { console.warn('[ChatScreen] expo-media-library unavailable:', e); }
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { pickImage, uploadChatImage } from '../../utils/imageUpload';
-import * as ImagePicker from 'expo-image-picker';
+let ImagePicker: typeof import('expo-image-picker') = {} as any;
+try { ImagePicker = require('expo-image-picker'); } catch (e) { console.warn('[ChatScreen] expo-image-picker unavailable:', e); }
 import { useVerificationGuard } from '../../hooks/useVerificationGuard';
 
 interface Message {

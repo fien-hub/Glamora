@@ -1,5 +1,22 @@
-import { Audio } from 'expo-av';
-import { Sound } from 'expo-av/build/Audio';
+// expo-av is required lazily — it is deprecated in SDK 54 and its native
+// module (ExpoAV) can throw during TurboModule registration in New Architecture
+// builds, which would crash every file that transitively imports this module.
+type ExpoAvAudio = typeof import('expo-av')['Audio'];
+type Sound = import('expo-av/build/Audio').Sound;
+
+let _Audio: ExpoAvAudio | null = null;
+function getAudio(): ExpoAvAudio | null {
+  if (_Audio) return _Audio;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const av = require('expo-av') as typeof import('expo-av');
+    _Audio = av.Audio;
+    return _Audio;
+  } catch (e) {
+    console.warn('[soundService] expo-av failed to load:', e);
+    return null;
+  }
+}
 
 class SoundService {
   private clickSound: Sound | null = null;
@@ -8,6 +25,11 @@ class SoundService {
 
   async initialize() {
     try {
+      const Audio = getAudio();
+      if (!Audio) {
+        console.warn('[SoundService] expo-av not available, sound effects disabled');
+        return;
+      }
       // Set audio mode for sound effects
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
@@ -17,6 +39,7 @@ class SoundService {
 
       // Load click sound - simple UI click sound
       const { sound } = await Audio.Sound.createAsync(
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
         require('../../assets/sounds/click.mp3'),
         { shouldPlay: false, volume: 0.3 }
       );

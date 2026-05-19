@@ -1,9 +1,21 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import {
-  getTrackingPermissionsAsync,
-  requestTrackingPermissionsAsync,
-} from 'expo-tracking-transparency';
+
+// expo-tracking-transparency is required lazily — it calls into a native ATT
+// module at module-evaluation time which can throw in New Architecture builds.
+type TrackingModule = typeof import('expo-tracking-transparency');
+let _tracking: TrackingModule | null = null;
+function getTracking(): TrackingModule | null {
+  if (_tracking) return _tracking;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _tracking = require('expo-tracking-transparency') as TrackingModule;
+    return _tracking;
+  } catch (e) {
+    console.warn('[metaAds] expo-tracking-transparency failed to load:', e);
+    return null;
+  }
+}
 
 let sdkLoadAttempted = false;
 let metaInitialized = false;
@@ -97,10 +109,12 @@ export const initializeMetaAdsTracking = async () => {
 
     if (Platform.OS === 'ios') {
       try {
-        const current = await getTrackingPermissionsAsync();
+        const tracking = getTracking();
+        if (!tracking) return;
+        const current = await tracking.getTrackingPermissionsAsync();
         const permission =
           current.status === 'undetermined'
-            ? await requestTrackingPermissionsAsync()
+            ? await tracking.requestTrackingPermissionsAsync()
             : current;
 
         if (typeof Settings.setAdvertiserTrackingEnabled === 'function') {

@@ -13,7 +13,8 @@ import { supabase } from '../../services/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, fontSize } from '../../constants/theme';
 import { getPayoutAccountStatus, getPayoutOnboardingUrl } from '../../services/payouts';
-import * as WebBrowser from 'expo-web-browser';
+let WebBrowser: typeof import('expo-web-browser') = {} as any;
+try { WebBrowser = require('expo-web-browser'); } catch (e) { console.warn('[EarningsScreen] expo-web-browser unavailable:', e); }
 import { Ionicons } from '../../utils/icons';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';

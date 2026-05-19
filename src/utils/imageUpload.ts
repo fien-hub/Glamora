@@ -1,6 +1,11 @@
-import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
-import * as VideoThumbnails from 'expo-video-thumbnails';
+// These expo modules are lazy-loaded — they can call native modules at
+// module-evaluation time and throw in New Architecture builds.
+let ImagePicker: typeof import('expo-image-picker') = {} as any;
+try { ImagePicker = require('expo-image-picker'); } catch (e) { console.warn('[imageUpload] expo-image-picker unavailable:', e); }
+let ImageManipulator: typeof import('expo-image-manipulator') = {} as any;
+try { ImageManipulator = require('expo-image-manipulator'); } catch (e) { console.warn('[imageUpload] expo-image-manipulator unavailable:', e); }
+let VideoThumbnails: typeof import('expo-video-thumbnails') = {} as any;
+try { VideoThumbnails = require('expo-video-thumbnails'); } catch (e) { console.warn('[imageUpload] expo-video-thumbnails unavailable:', e); }
 import { supabase } from '../services/supabase';
 import { decode } from 'base64-arraybuffer';
 

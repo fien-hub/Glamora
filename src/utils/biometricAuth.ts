@@ -1,4 +1,10 @@
-import * as LocalAuthentication from 'expo-local-authentication';
+// expo-local-authentication calls native biometrics module at module-evaluation
+// time and can throw in New Architecture builds.
+let LocalAuthentication: typeof import('expo-local-authentication') = {} as any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  LocalAuthentication = require('expo-local-authentication');
+} catch (e) { console.warn('[biometricAuth.ts] expo-local-authentication unavailable:', e); }
 import { Platform } from 'react-native';
 
 /**

@@ -1,5 +1,11 @@
 import { Platform } from 'react-native';
-import * as AppleAuthentication from 'expo-apple-authentication';
+// expo-apple-authentication calls native Sign-In-With-Apple at module level
+// and can throw in New Architecture builds.
+let AppleAuthentication: typeof import('expo-apple-authentication') = {} as any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  AppleAuthentication = require('expo-apple-authentication');
+} catch (e) { console.warn('[socialAuth.ts] expo-apple-authentication unavailable:', e); }
 import { supabase } from '../services/supabase';
 
 // Try to import GoogleSignin, but make it optional for Expo Go

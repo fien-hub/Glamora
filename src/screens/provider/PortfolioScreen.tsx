@@ -12,7 +12,20 @@ import {
   Modal,
   Dimensions,
 } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
+// expo-av is lazy-loaded to prevent module-level native crashes in New Arch builds.
+let _ExpoAv: typeof import('expo-av') | null = null;
+function getExpoAv() {
+  if (_ExpoAv) return _ExpoAv;
+  try { _ExpoAv = require('expo-av') as typeof import('expo-av'); } catch { /* unavailable */ }
+  return _ExpoAv;
+}
+// Stable wrapper component — resolves the real expo-av Video at render time.
+const Video = React.forwardRef((props: any, ref: any) => {
+  const av = getExpoAv();
+  if (!av?.Video) return null;
+  return React.createElement(av.Video, { ref, ...props });
+});
+const ResizeMode = { CONTAIN: 'contain' as const, COVER: 'cover' as const, STRETCH: 'stretch' as const };
 import { Ionicons } from '../../utils/icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';

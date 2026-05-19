@@ -13,11 +13,23 @@
  */
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-import {
-  trackMetaCompleteRegistration,
-  trackMetaInitiatedCheckout,
-  trackMetaPurchase,
-} from '../services/metaAds';
+
+// metaAds is required lazily to prevent module-level crashes.
+// expo-tracking-transparency (imported by metaAds at the top level) can
+// throw in New Architecture builds when the TurboModule registry isn't ready.
+type MetaAdsModule = typeof import('../services/metaAds');
+let _metaAds: MetaAdsModule | null = null;
+function getMetaAds(): MetaAdsModule | null {
+  if (_metaAds) return _metaAds;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _metaAds = require('../services/metaAds') as MetaAdsModule;
+    return _metaAds;
+  } catch (e) {
+    console.warn('[analytics] metaAds failed to load:', e);
+    return null;
+  }
+}
 
 // Analytics provider type
 type AnalyticsProvider = 'mixpanel' | 'amplitude' | 'custom';
@@ -246,7 +258,7 @@ export type { EventProperties, UserProperties, AnalyticsProvider };
 // Convenience functions for common events
 export const trackSignUp = (method: string, role: string) => {
   analytics.trackEvent('Sign Up', { method, role });
-  void trackMetaCompleteRegistration(method, role);
+  void getMetaAds()?.trackMetaCompleteRegistration(method, role);
 };
 
 export const trackSignIn = (method: string) => {
@@ -263,7 +275,7 @@ export const trackBookingCreated = (serviceType: string, price: number, provider
     price,
     providerId,
   });
-  void trackMetaInitiatedCheckout(normalizeCurrencyAmount(price), {
+  void getMetaAds()?.trackMetaInitiatedCheckout(normalizeCurrencyAmount(price), {
     serviceType,
     providerId,
   });
@@ -308,7 +320,7 @@ export const trackPaymentSuccess = (amount: number, bookingId: string) => {
     bookingId,
   });
   analytics.trackRevenue(amount, { bookingId });
-  void trackMetaPurchase(normalizeCurrencyAmount(amount), 'USD', {
+  void getMetaAds()?.trackMetaPurchase(normalizeCurrencyAmount(amount), 'USD', {
     bookingId,
   });
 };
