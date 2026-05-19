@@ -112,18 +112,41 @@ try {
 
 // ---------------------------------------------------------------------------
 // Navigation — lazy so its 50+ screen imports don't affect THIS factory
+//
+// IMPORTANT: Metro/Hermes can silently resolve a dynamic import with
+// { default: undefined } when a module factory throws during evaluation
+// (e.g. because a cached-errored dependency was re-required). The promise
+// does NOT reject in that case, so .catch() alone is insufficient.
+// The .then() validator below converts a silent undefined into a proper
+// rejection so our .catch() fallback always fires.
 // ---------------------------------------------------------------------------
 const Navigation = React.lazy(() =>
-  import('./navigation').catch((e) => ({
-    default: () =>
-      React.createElement(
-        View,
-        { style: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 } },
-        React.createElement(Text, { style: { color: 'red', fontSize: 14 } },
-          `Navigation failed to load: ${e instanceof Error ? e.message : String(e)}`
+  import('./navigation')
+    .then((mod) => {
+      if (!mod?.default) {
+        console.error('[AppRuntime] navigation/index resolved without default export — a module in its dependency chain likely failed silently.');
+        throw new Error(
+          'Navigation module has no default export. ' +
+          'A required module (AuthContext, a screen, or a navigator) likely ' +
+          'threw during Metro module factory evaluation.'
+        );
+      }
+      return mod as { default: React.ComponentType };
+    })
+    .catch((e) => ({
+      default: (() =>
+        React.createElement(
+          View,
+          { style: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#fff' } },
+          React.createElement(Text, { style: { color: '#c00', fontSize: 14, textAlign: 'center', fontWeight: '600' } },
+            'Navigation failed to load'
+          ),
+          React.createElement(Text, { style: { color: '#444', fontSize: 12, textAlign: 'center', marginTop: 8 } },
+            e instanceof Error ? e.message : String(e)
+          )
         )
-      ),
-  }))
+      ) as React.ComponentType,
+    }))
 );
 
 function NavigationLoadingFallback() {

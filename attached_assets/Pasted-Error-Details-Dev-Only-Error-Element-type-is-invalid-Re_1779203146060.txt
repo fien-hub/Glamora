@@ -1,0 +1,32 @@
+Error Details (Dev Only):
+Error: Element type is invalid. Received a promise that resolves to: undefined. Lazy element type must resolve to a class or function.
+Component Stack:
+at Lazy (<anonymous>)
+at Suspense (<anonymous>)
+at Passthrough (address at /private/var/containers/Bundle/ Application/07C2CD9B-F2C7-4985-9B8B-55EEFDC6724F/ Glamora.app/main.jsbundle:1:850124)
+at Passthrough (address at /private/var/containers/Bundle/ Annlication/07020DQR-F207-4985-QR&R-55FFEDCA724F/
+
+Application/07C2CD9B-F2C7-4985-9B8B-55EEFDC6724F/ Glamora.app/main.jsbundle: 1:850124)
+at QueryClientProvider (address at /private/var/containers/
+Bundle/Application/07C2CD9B-F2C7-4985-9B8B-55EEFDC6724F/Glamora.app/ main.isbundle:1:919413)
+at RNCSafeAreaProvider (<anonymous>)
+at SafeAreaProvider (address at /private/var/containers/
+Bundle/Application/07C2CD9B-F2C7-4985-9B8B-55EEFDC6724F/Glamora.app/ main.jsbundle:1:2367144)
+at RCTView (<anonvmous>)
+at View (address at /private/var/containers/Bundle/Application/ 07C2CD9B-F2C7-4985-9B8B-55EEFDC6724F/Glamora.app/ main.jsbundle:1:261263)
+
+main.isbundle:1:261263)
+at RCTView (<anonymous>)
+at View (address at /private/var/containers/Bundle/Application/ 07C2CD9B-F2C7-4985-9B8B-55EEFDC6724F/Glamora.app/ main.isbundle:1:261263)
+at GestureHandlerRootView (address at /private/var/ containers/Bundle/Application/07C2CD9B-
+F2C7-4985-9B8B-55EEFDC6724F/Glamora.app/ main.isbundle: 1:2301977)
+at ErrorBoundary (address at /private/var/containers/Bundle/ Application/07C2CD9B-F2C7-4985-9B8B-55EEFDC6724F/ Glamora.app/main.isbundle:1:935097)
+at AppRuntime (address at /private/var/containers/Bundle/ Application/07C2CD9B-F2C7-4985-9B8B-55EEFDC6724F/ Glamora.app/main.jsbundle:1:849333)
+Mommy
+
+at RuntimeHost (address at /private/var/containers/Bundle/ Application/07C2CD9B-F2C7-4985-9B8B-55EEFDC6724F/ Glamora.app/main.jsbundle:1:838435)
+at BootstrapBoundary (address at /private/var/containers/ Bundle/Application/07C2CD9B-F2C7-4985-9B8B-55EEFDC6724F/Glamora.app/ main.jsbundle:1:839433)
+at App (<anonymous>)
+at RCTView (<anonymous>)
+at View (address at /private/var/containers/Bundle/Application/ 07C2CD9B-F2C7-4985-9B8B-55EEFDC6724F/Glamora.app/ main.jsbundle:1:261263)
+at AppContainer (address at /private/var/containers/Bundle/ Application/07C2CD9B-F2C7-4985-9B8B-55EEFDC6724F/ Glamora.app/main.jsbundle:1:501496)
