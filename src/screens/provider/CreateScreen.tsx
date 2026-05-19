@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { useScreenTracking } from '../../hooks/useScreenTracking';
 import AnimatedCard from '../../components/AnimatedCard';

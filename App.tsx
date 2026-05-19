@@ -118,6 +118,16 @@ function RuntimeHost() {
     }
   }, [isReady]);
 
+  useEffect(() => {
+    // Hard failsafe: force-hide the native splash after 3 seconds regardless
+    // of ready state. Prevents any future regression from keeping the splash
+    // frozen indefinitely if something unexpected blocks the normal hide path.
+    const failsafe = setTimeout(() => {
+      SplashScreen.hideAsync().catch(() => {});
+    }, 3000);
+    return () => clearTimeout(failsafe);
+  }, []);
+
   if (loadError) {
     // Hide splash even on error so the user sees the error screen.
     SplashScreen.hideAsync().catch(() => {});

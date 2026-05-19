@@ -8,7 +8,7 @@ import {
   TextInputProps,
   ViewStyle,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../utils/icons';
 import { colors, spacing, fontSize, borderRadius } from '../constants/theme';
 
 interface ModernTextAreaProps extends TextInputProps {

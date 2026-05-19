@@ -12,9 +12,9 @@ import {
   ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from '../../utils/linearGradient';
+import { BlurView } from '../../utils/blurView';
+import { Ionicons } from '../../utils/icons';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserRole } from '../../types';

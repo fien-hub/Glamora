@@ -25,7 +25,7 @@ import { getVerificationStatus, getUserVerificationStatus, sendPhoneVerification
 import AddServiceModal from '../../components/AddServiceModal';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import * as ImagePicker from 'expo-image-picker';
 import ModernInput from '../../components/ModernInput';
 import ModernTextArea from '../../components/ModernTextArea';

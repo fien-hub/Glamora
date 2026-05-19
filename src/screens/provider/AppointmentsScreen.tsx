@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';

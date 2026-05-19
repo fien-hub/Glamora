@@ -9,7 +9,7 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius, lineHeight } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';

@@ -13,9 +13,9 @@ import {
   Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LinearGradient } from 'expo-linear-gradient';
+import { LinearGradient } from '../../utils/linearGradient';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { HOME_HEADER_HEIGHT } from '../../components/HomeHeader';
 import { useScreenTracking } from '../../hooks/useScreenTracking';

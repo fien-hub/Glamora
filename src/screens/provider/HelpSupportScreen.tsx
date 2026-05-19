@@ -11,7 +11,7 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 
 interface FAQItem {

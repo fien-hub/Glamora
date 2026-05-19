@@ -15,7 +15,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { useNavigation } from '@react-navigation/native';
 import Animated, {
   useSharedValue,
@@ -29,7 +29,7 @@ import Animated, {
   SlideOutLeft,
   Easing,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
+import { LinearGradient } from '../../utils/linearGradient';
 import * as Haptics from 'expo-haptics';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';

@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, View, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../utils/icons';
 import { colors } from '../constants/theme';
 
 interface AnimatedHeartProps {

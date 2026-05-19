@@ -10,7 +10,7 @@ import {
   Animated,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { colors, spacing, fontSize, borderRadius, fontWeight } from '../../constants/theme';
 import { supabase } from '../../services/supabase';
 

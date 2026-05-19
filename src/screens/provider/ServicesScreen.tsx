@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { colors, spacing, fontSize } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';

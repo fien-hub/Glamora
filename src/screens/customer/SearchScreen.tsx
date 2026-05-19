@@ -10,7 +10,7 @@ import {
   Image,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, fontSize, fontWeight, borderRadius, lineHeight } from '../../constants/theme';
 import { supabase } from '../../services/supabase';

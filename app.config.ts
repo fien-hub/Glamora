@@ -25,6 +25,15 @@ const baseConfig: ExpoConfig = {
     icon: './assets/icon.png',
     backgroundColor: '#FFFFFF',
     infoPlist: {
+      GIDClientID: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '556025469880-2eall9hermo9c9p0c0b6p81h8gj1lbam.apps.googleusercontent.com',
+      CFBundleURLTypes: [
+        {
+          CFBundleURLName: 'Google Sign-In',
+          CFBundleURLSchemes: [
+            'com.googleusercontent.apps.556025469880-2eall9hermo9c9p0c0b6p81h8gj1lbam',
+          ],
+        },
+      ],
       NSLocationWhenInUseUsageDescription:
         'Glamora needs your location to find beauty professionals near you and calculate travel distances.',
       NSCameraUsageDescription:
@@ -63,9 +72,6 @@ const baseConfig: ExpoConfig = {
       'android.permission.USE_FINGERPRINT',
     ],
   },
-  web: {
-    bundler: 'metro',
-  },
   plugins: [
     [
       'expo-build-properties',
@@ -98,7 +104,12 @@ const baseConfig: ExpoConfig = {
       },
     ],
     ['expo-apple-authentication'],
-    ['@react-native-google-signin/google-signin'],
+    [
+      '@react-native-google-signin/google-signin',
+      {
+        iosUrlScheme: 'com.googleusercontent.apps.556025469880-2eall9hermo9c9p0c0b6p81h8gj1lbam',
+      },
+    ],
     [
       'expo-local-authentication',
       {
@@ -170,14 +181,18 @@ export default (): ExpoConfig => {
   const metaAppIdFromEnv = process.env.EXPO_PUBLIC_META_APP_ID;
   const metaClientTokenFromEnv = process.env.EXPO_PUBLIC_META_CLIENT_TOKEN;
 
-  const isMetaConfigured = isValidEnvValue(metaAppIdFromEnv) && isValidEnvValue(metaClientTokenFromEnv);
+  const hasMetaCredentials = isValidEnvValue(metaAppIdFromEnv) && isValidEnvValue(metaClientTokenFromEnv);
+
+  const isFbsdkInstalled = (() => {
+    try { require.resolve('react-native-fbsdk-next'); return true; } catch { return false; }
+  })();
+
+  const isMetaConfigured = hasMetaCredentials && isFbsdkInstalled;
 
   // CRITICAL FIX: Only include react-native-fbsdk-next when BOTH Meta credentials
-  // are properly configured. Including this plugin with a placeholder App ID causes
-  // a TurboModule SIGABRT crash on iOS production builds before any JS executes,
-  // which permanently freezes the app on the native splash screen.
-  // Setting isAutoInitEnabled: false is NOT enough — the native module still
-  // registers on the TurboModule queue and throws if the App ID is invalid.
+  // are present AND the package is installed. Including this plugin when the package
+  // is not installed causes "Failed to resolve plugin" which breaks every EAS build.
+  // Including it with a bad App ID causes a TurboModule SIGABRT crash on iOS.
   let plugins = (baseConfig.plugins || []) as NonNullable<ExpoConfig['plugins']>;
 
   if (isMetaConfigured) {

@@ -13,7 +13,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';

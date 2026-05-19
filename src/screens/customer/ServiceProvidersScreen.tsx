@@ -9,7 +9,7 @@ import {
   Image,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius, lineHeight } from '../../constants/theme';
 import { supabase } from '../../services/supabase';
 import { getCurrentLocation, calculateDistance, Coordinates } from '../../utils/location';

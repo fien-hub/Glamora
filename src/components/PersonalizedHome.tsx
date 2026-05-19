@@ -9,7 +9,7 @@ import {
   TextInput,
   Image,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../utils/icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius, lineHeight, shadows } from '../constants/theme';
 import { supabase } from '../services/supabase';

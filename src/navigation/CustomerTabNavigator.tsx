@@ -1,6 +1,6 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../utils/icons';
 import { colors } from '../constants/theme';
 import CurvedHeader from '../components/CurvedHeader';
 import HomeHeader from '../components/HomeHeader';

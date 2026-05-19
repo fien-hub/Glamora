@@ -23,10 +23,10 @@ import Animated, {
   withSpring,
   interpolate,
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
+import { LinearGradient } from '../../utils/linearGradient';
 import * as Haptics from 'expo-haptics';
 import { Calendar } from 'react-native-calendars';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { supabase } from '../../services/supabase';

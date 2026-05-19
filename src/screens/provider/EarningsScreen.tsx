@@ -14,7 +14,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, fontSize } from '../../constants/theme';
 import { getPayoutAccountStatus, getPayoutOnboardingUrl } from '../../services/payouts';
 import * as WebBrowser from 'expo-web-browser';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 

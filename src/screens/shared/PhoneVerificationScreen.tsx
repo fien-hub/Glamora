@@ -14,7 +14,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { sendPhoneVerificationCode, verifyPhoneCode } from '../../services/verification';
 import FadeInView from '../../components/animations/FadeInView';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 
 export default function PhoneVerificationScreen() {
   const navigation = useNavigation();

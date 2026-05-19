@@ -17,7 +17,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, fontSize, borderRadius, fontWeight } from '../../constants/theme';

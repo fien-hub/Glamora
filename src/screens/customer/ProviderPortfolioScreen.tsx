@@ -12,7 +12,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Video, ResizeMode } from 'expo-av';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { supabase } from '../../services/supabase';

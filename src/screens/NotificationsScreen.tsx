@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../utils/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';

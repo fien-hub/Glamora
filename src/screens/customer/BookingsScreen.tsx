@@ -29,7 +29,7 @@ import BrandedRefreshControl from '../../components/BrandedRefreshControl';
 import BookingConfirmationAnimation from '../../components/BookingConfirmationAnimation';
 import PillTabs from '../../components/PillTabs';
 import { TOTAL_HEADER_HEIGHT } from '../../components/CurvedHeader';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import FadeInView from '../../components/animations/FadeInView';
 
 interface Booking {

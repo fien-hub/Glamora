@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../utils/icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../constants/theme';
 import { supabase } from '../services/supabase';

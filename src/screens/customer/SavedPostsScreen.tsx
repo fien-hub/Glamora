@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { supabase } from '../../services/supabase';

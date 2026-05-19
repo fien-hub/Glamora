@@ -11,7 +11,7 @@ import {
   Image
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { uploadProfilePicture, pickImage, requestImagePermissions } from '../../utils/imageUpload';

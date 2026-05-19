@@ -8,7 +8,7 @@ import {
   FlatList,
   ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../utils/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../services/supabase';
 import { colors, spacing, fontSize, borderRadius } from '../constants/theme';

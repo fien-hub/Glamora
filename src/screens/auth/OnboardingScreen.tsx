@@ -10,8 +10,8 @@ import {
   ImageBackground,
   StatusBar,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import { LinearGradient } from '../../utils/linearGradient';
+import { BlurView } from '../../utils/blurView';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';

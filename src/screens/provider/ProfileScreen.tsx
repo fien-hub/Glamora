@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Image, ActivityIndicator, ScrollView, RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase, dbService } from '../../services/supabase';
 import { uploadProfilePicture, pickImage, requestImagePermissions } from '../../utils/imageUpload';

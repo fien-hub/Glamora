@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { colors, spacing, borderRadius, fontSize, fontWeight, shadows } from '../../constants/theme';

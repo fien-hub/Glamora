@@ -7,7 +7,7 @@ import {
   Animated,
 } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../utils/icons';
 import { borderRadius, spacing } from '../constants/theme';
 
 // Icon map per route name

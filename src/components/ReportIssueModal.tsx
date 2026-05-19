@@ -10,7 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../utils/icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';
 import { supabase } from '../services/supabase';
 
