@@ -1,5 +1,14 @@
-import * as Location from 'expo-location';
+// expo-location is required lazily to avoid module-level native module crashes
+// in New Architecture builds. All Location usage is inside async function bodies.
 import { Alert } from 'react-native';
+
+let Location: typeof import('expo-location') | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Location = require('expo-location') as typeof import('expo-location');
+} catch (e) {
+  console.warn('[location.ts] expo-location failed to load:', e);
+}
 
 export interface LocationCoords {
   latitude: number;

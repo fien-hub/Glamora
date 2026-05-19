@@ -1,10 +1,25 @@
-import * as Location from 'expo-location';
+// expo-location is required lazily to avoid module-level native module
+// crashes in New Architecture builds. All Location usage is inside async
+// methods that run well after the app has rendered.
 import { AppState, AppStateStatus } from 'react-native';
 import { supabase } from './supabase';
 import { getCurrentLocation, LocationCoords } from './location';
 
+let _Location: typeof import('expo-location') | null = null;
+function getLocation(): typeof import('expo-location') | null {
+  if (_Location !== null) return _Location;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _Location = require('expo-location') as typeof import('expo-location');
+    return _Location;
+  } catch (e) {
+    console.warn('[locationTracking] expo-location failed to load:', e);
+    return null;
+  }
+}
+
 class LocationTrackingService {
-  private locationSubscription: Location.LocationSubscription | null = null;
+  private locationSubscription: any = null;
   private isTracking: boolean = false;
   private userId: string | null = null;
   private userRole: 'customer' | 'provider' | null = null;
@@ -44,7 +59,10 @@ class LocationTrackingService {
   private async requestPermissions(): Promise<boolean> {
     try {
       // Request foreground permissions
-      const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
+      const Loc = getLocation();
+      if (!Loc) return false;
+
+      const { status: foregroundStatus } = await Loc.requestForegroundPermissionsAsync();
       
       if (foregroundStatus !== 'granted') {
         return false;
@@ -52,7 +70,7 @@ class LocationTrackingService {
 
       // For providers, also request background permissions for continuous tracking
       if (this.userRole === 'provider') {
-        const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+        const { status: backgroundStatus } = await Loc.requestBackgroundPermissionsAsync();
         if (backgroundStatus !== 'granted') {
           console.warn('[LocationTracking] Background permission denied for provider');
           // Still return true for foreground tracking
@@ -73,10 +91,12 @@ class LocationTrackingService {
     if (this.isTracking) return;
 
     try {
+      const Loc = getLocation();
+      if (!Loc) return;
       // Start watching location with appropriate settings
-      this.locationSubscription = await Location.watchPositionAsync(
+      this.locationSubscription = await Loc.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.Balanced,
+          accuracy: Loc.Accuracy.Balanced,
           timeInterval: this.updateInterval,
           distanceInterval: 100, // Update if user moves 100 meters
         },

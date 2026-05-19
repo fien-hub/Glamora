@@ -1,4 +1,5 @@
-import * as Sentry from '@sentry/react-native';
+// @sentry/react-native is NOT imported directly here — it is accessed only
+// through the safe lazy-loading functions in ../services/sentry.
 import { captureException, captureMessage, addBreadcrumb, setSentryContext } from '../services/sentry';
 
 /**
@@ -189,7 +190,7 @@ export const logMessage = (message: string, level: ErrorSeverity = 'info', conte
     setSentryContext('log', context);
   }
   
-  captureMessage(message, level as Sentry.SeverityLevel);
+  captureMessage(message, level as any);
 };
 
 /**

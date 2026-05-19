@@ -1,14 +1,40 @@
-import * as Sentry from '@sentry/react-native';
+/**
+ * Sentry service — safe lazy-loading wrapper.
+ *
+ * @sentry/react-native registers native integrations (reactNativeTracingIntegration,
+ * reactNavigationIntegration) during module evaluation. In React Native 0.81 +
+ * New Architecture (TurboModules) builds this can throw before the TurboModule
+ * registry is ready, crashing every file that transitively imports sentry.ts —
+ * including AuthContext.tsx — and causing the splash screen to freeze.
+ *
+ * Fix: never import @sentry/react-native at the module top level. Load it
+ * lazily on first use so native modules are always fully registered by then.
+ */
 import Constants from 'expo-constants';
 
-/**
- * Initialize Sentry for error tracking and performance monitoring
- */
+type SentryModule = typeof import('@sentry/react-native');
+
+let _sentry: SentryModule | null = null;
+
+function getSentry(): SentryModule | null {
+  if (_sentry !== null) return _sentry;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _sentry = require('@sentry/react-native') as SentryModule;
+    return _sentry;
+  } catch (e) {
+    console.warn('[sentry.ts] @sentry/react-native failed to load:', e);
+    return null;
+  }
+}
+
 export const initSentry = () => {
+  const S = getSentry();
+  if (!S) return;
+
   const sentryDsn = Constants.expoConfig?.extra?.EXPO_PUBLIC_SENTRY_DSN || process.env.EXPO_PUBLIC_SENTRY_DSN;
   const environment = Constants.expoConfig?.extra?.EXPO_PUBLIC_ENV || process.env.EXPO_PUBLIC_ENV || 'development';
 
-  // Only initialize Sentry in production or staging
   if (environment === 'development') {
     console.log('[Sentry] Skipping initialization in development mode');
     return;
@@ -19,186 +45,108 @@ export const initSentry = () => {
     return;
   }
 
-  Sentry.init({
-    dsn: sentryDsn,
-    environment,
-    
-    // Enable automatic session tracking
-    enableAutoSessionTracking: true,
-    
-    // Session tracking interval (30 seconds)
-    sessionTrackingIntervalMillis: 30000,
-    
-    // Enable performance monitoring
-    tracesSampleRate: environment === 'production' ? 0.2 : 1.0, // 20% in prod, 100% in staging
-    
-    // Enable profiling
-    profilesSampleRate: environment === 'production' ? 0.1 : 1.0, // 10% in prod, 100% in staging
-    
-    // Capture 100% of errors
-    sampleRate: 1.0,
-    
-    // Enable native crash handling
-    enableNative: true,
-    
-    // Enable automatic breadcrumbs
-    enableAutoPerformanceTracing: true,
-    
-    // Attach stack traces to messages
-    attachStacktrace: true,
-    
-    // Maximum breadcrumbs to keep
-    maxBreadcrumbs: 100,
-    
-    // Release version
-    release: Constants.expoConfig?.version || '1.0.0',
-    
-    // Distribution (build number)
-    dist: Constants.expoConfig?.extra?.buildNumber || '1',
-    
-    // Before send hook - filter sensitive data
-    beforeSend(event, hint) {
-      // Remove sensitive data from event
-      if (event.request) {
-        // Remove authorization headers
-        if (event.request.headers) {
+  try {
+    S.init({
+      dsn: sentryDsn,
+      environment,
+      enableAutoSessionTracking: true,
+      sessionTrackingIntervalMillis: 30000,
+      tracesSampleRate: environment === 'production' ? 0.2 : 1.0,
+      profilesSampleRate: environment === 'production' ? 0.1 : 1.0,
+      sampleRate: 1.0,
+      enableNative: true,
+      enableAutoPerformanceTracing: true,
+      attachStacktrace: true,
+      maxBreadcrumbs: 100,
+      release: Constants.expoConfig?.version || '1.0.0',
+      dist: Constants.expoConfig?.extra?.buildNumber || '1',
+      beforeSend(event) {
+        if (event.request?.headers) {
           delete event.request.headers['Authorization'];
           delete event.request.headers['authorization'];
         }
-        
-        // Remove sensitive query parameters
-        if (event.request.query_string) {
+        if (event.request?.query_string) {
           const qs = String(event.request.query_string);
           event.request.query_string = qs
             .replace(/token=[^&]*/gi, 'token=[REDACTED]')
             .replace(/password=[^&]*/gi, 'password=[REDACTED]')
             .replace(/api_key=[^&]*/gi, 'api_key=[REDACTED]');
         }
-      }
-      
-      // Remove sensitive data from extra context
-      if (event.extra) {
-        delete event.extra.password;
-        delete event.extra.token;
-        delete event.extra.apiKey;
-        delete event.extra.creditCard;
-      }
-      
-      return event;
-    },
-    
-    // Before breadcrumb hook - filter sensitive breadcrumbs
-    beforeBreadcrumb(breadcrumb, hint) {
-      // Don't log navigation to sensitive screens
-      if (breadcrumb.category === 'navigation') {
-        const sensitiveScreens = ['Payment', 'CreditCard', 'BankAccount'];
-        if (breadcrumb.data && sensitiveScreens.some(screen => breadcrumb.data?.to?.includes(screen))) {
-          return null; // Don't log this breadcrumb
+        if (event.extra) {
+          delete event.extra.password;
+          delete event.extra.token;
+          delete event.extra.apiKey;
+          delete event.extra.creditCard;
         }
-      }
-      
-      // Filter sensitive data from console logs
-      if (breadcrumb.category === 'console') {
-        if (breadcrumb.message) {
+        return event;
+      },
+      beforeBreadcrumb(breadcrumb) {
+        if (breadcrumb.category === 'navigation') {
+          const sensitive = ['Payment', 'CreditCard', 'BankAccount'];
+          if (breadcrumb.data && sensitive.some((s) => breadcrumb.data?.to?.includes(s))) {
+            return null;
+          }
+        }
+        if (breadcrumb.category === 'console' && breadcrumb.message) {
           breadcrumb.message = breadcrumb.message
             .replace(/password[:\s=]+[^\s,}]*/gi, 'password: [REDACTED]')
             .replace(/token[:\s=]+[^\s,}]*/gi, 'token: [REDACTED]')
             .replace(/api[_-]?key[:\s=]+[^\s,}]*/gi, 'api_key: [REDACTED]');
         }
-      }
-      
-      return breadcrumb;
-    },
-    
-    // Integrations
-    integrations: [
-      Sentry.reactNativeTracingIntegration(),
-      Sentry.reactNavigationIntegration(),
-    ],
-  });
-
-  console.log('[Sentry] Initialized successfully');
-};
-
-/**
- * Set user context for error tracking
- */
-export const setSentryUser = (user: {
-  id: string;
-  email?: string;
-  role?: string;
-  username?: string;
-}) => {
-  Sentry.setUser({
-    id: user.id,
-    email: user.email,
-    username: user.username,
-    role: user.role,
-  });
-};
-
-/**
- * Clear user context (on logout)
- */
-export const clearSentryUser = () => {
-  Sentry.setUser(null);
-};
-
-/**
- * Add custom context to errors
- */
-export const setSentryContext = (key: string, context: Record<string, any>) => {
-  Sentry.setContext(key, context);
-};
-
-/**
- * Add tags for filtering errors
- */
-export const setSentryTag = (key: string, value: string) => {
-  Sentry.setTag(key, value);
-};
-
-/**
- * Manually capture an exception
- */
-export const captureException = (error: Error, context?: Record<string, any>) => {
-  if (context) {
-    Sentry.withScope((scope) => {
-      Object.entries(context).forEach(([key, value]) => {
-        scope.setExtra(key, value);
-      });
-      Sentry.captureException(error);
+        return breadcrumb;
+      },
+      integrations: [
+        S.reactNativeTracingIntegration(),
+        S.reactNavigationIntegration(),
+      ],
     });
-  } else {
-    Sentry.captureException(error);
+    console.log('[Sentry] Initialized successfully');
+  } catch (e) {
+    console.warn('[Sentry] init() threw:', e);
   }
 };
 
-/**
- * Manually capture a message
- */
-export const captureMessage = (message: string, level: Sentry.SeverityLevel = 'info') => {
-  Sentry.captureMessage(message, level);
+export const setSentryUser = (user: { id: string; email?: string; role?: string; username?: string }) => {
+  try { getSentry()?.setUser({ id: user.id, email: user.email, username: user.username }); } catch {}
 };
 
-/**
- * Add a breadcrumb manually
- */
-export const addBreadcrumb = (breadcrumb: {
-  message: string;
-  category?: string;
-  level?: Sentry.SeverityLevel;
-  data?: Record<string, any>;
-}) => {
-  Sentry.addBreadcrumb(breadcrumb);
+export const clearSentryUser = () => {
+  try { getSentry()?.setUser(null); } catch {}
 };
 
-/**
- * Start a performance span (v7+ API)
- */
+export const setSentryContext = (key: string, context: Record<string, any>) => {
+  try { getSentry()?.setContext(key, context); } catch {}
+};
+
+export const setSentryTag = (key: string, value: string) => {
+  try { getSentry()?.setTag(key, value); } catch {}
+};
+
+export const captureException = (error: Error, context?: Record<string, any>) => {
+  const S = getSentry();
+  if (!S) return;
+  try {
+    if (context) {
+      S.withScope((scope) => {
+        Object.entries(context).forEach(([k, v]) => scope.setExtra(k, v));
+        S.captureException(error);
+      });
+    } else {
+      S.captureException(error);
+    }
+  } catch {}
+};
+
+export const captureMessage = (message: string, level?: any) => {
+  try { getSentry()?.captureMessage(message, level); } catch {}
+};
+
+export const addBreadcrumb = (breadcrumb: { message: string; category?: string; level?: any; data?: Record<string, any> }) => {
+  try { getSentry()?.addBreadcrumb(breadcrumb); } catch {}
+};
+
 export const startTransaction = (name: string, op: string) => {
-  return Sentry.startInactiveSpan({ name, op });
+  try { return getSentry()?.startInactiveSpan({ name, op }); } catch { return null; }
 };
 
-export default Sentry;
-
+export default { getSentry };

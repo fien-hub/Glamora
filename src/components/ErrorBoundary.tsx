@@ -137,7 +137,7 @@ class ErrorBoundary extends Component<Props, State> {
               We're sorry for the inconvenience. The error has been reported to our team.
             </Text>
 
-            {__DEV__ && this.state.error && (
+            {this.state.error && (
               <ScrollView style={styles.errorDetails}>
                 <Text style={styles.errorTitle}>Error Details (Dev Only):</Text>
                 <Text style={styles.errorText}>{this.state.error.toString()}</Text>
