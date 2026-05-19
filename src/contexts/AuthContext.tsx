@@ -559,13 +559,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log('[AuthContext] Profile verified in database with role:', verifyData.role);
 
-      // Set the role immediately so navigation works
-      setUserRole(role);
-      console.log('[AuthContext] Role set to:', role);
-
-      // Check onboarding status immediately after profile creation
+      // Check onboarding status BEFORE setting the role so that when navigation
+      // first renders with a role, needsOnboarding is already correct.
+      // (Previously role was set first → navigation jumped to CustomerMain before
+      // needsOnboarding could be updated, skipping the personalization screens.)
       await checkOnboardingStatus(data.user.id, role);
       console.log('[AuthContext] Onboarding status checked');
+
+      setUserRole(role);
+      console.log('[AuthContext] Role set to:', role);
 
       setLoading(false);
 

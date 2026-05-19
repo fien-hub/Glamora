@@ -44,7 +44,7 @@ const HERO_BANNERS = [
     title: 'Book Your\nPerfect Look',
     subtitle: 'Top-rated stylists\nin your area',
     cta: 'Book Now',
-    bg: '#F4B5A4',
+    bg: '#8B6A53',
     image: require('../../../assets/home-hero-3310.jpg'),
   },
   {
@@ -53,7 +53,7 @@ const HERO_BANNERS = [
     title: 'First Session\n50% Off',
     subtitle: 'New to Glamora?\nGet your first booking half price',
     cta: 'Claim Now',
-    bg: '#F4B5A4',
+    bg: '#8B6A53',
     image: require('../../../assets/home-hero-3303.jpg'),
   },
   {
@@ -62,7 +62,7 @@ const HERO_BANNERS = [
     title: 'Nail Art &\nSkin Glow',
     subtitle: 'Explore the latest beauty\ntrends near you',
     cta: 'Explore',
-    bg: '#F4B5A4',
+    bg: '#8B6A53',
     image: require('../../../assets/home-hero-3317.jpg'),
   },
 ];
@@ -927,7 +927,7 @@ export default function HomeScreen() {
         ))}
       </ScrollView>
       {/* Dots */}
-      <View style={styles.heroDots}>
+      <View pointerEvents="none" style={styles.heroDots}>
         {HERO_BANNERS.map((_, i) => (
           <View key={i} style={[styles.heroDot, i === heroBannerIndex && styles.heroDotActive]} />
         ))}
@@ -1335,15 +1335,15 @@ const styles = StyleSheet.create({
   },
   heroBanner: {
     width: HERO_BANNER_WIDTH,
-    height: 172,
+    height: 200,
     flexDirection: 'row',
     alignItems: 'center',
     overflow: 'hidden',
   },
   heroBannerTextSide: {
-    width: '38%',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    width: '42%',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
     justifyContent: 'center',
     position: 'relative',
     overflow: 'visible',
@@ -1392,14 +1392,14 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   heroBannerImageWrap: {
-    width: '62%',
+    width: '58%',
     height: '100%',
     position: 'relative',
     zIndex: 1,
   },
   heroBannerSeamBlur: {
     position: 'absolute',
-    left: '36%',
+    left: '40%',
     top: 0,
     bottom: 0,
     width: 56,
