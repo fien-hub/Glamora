@@ -1,0 +1,179 @@
+appId: host.exp.Exponent
+---
+# ========================================
+# Provider Flow E2E Test
+# ========================================
+# This test covers:
+# 1. Provider signup
+# 2. Complete provider onboarding
+# 3. View dashboard
+# 4. Manage services
+# 5. View appointments
+# ========================================
+
+- launchApp:
+    clearState: true
+
+# Wait for app to load
+- waitForAnimationToEnd
+
+# ========================================
+# Test 1: Provider Signup
+# ========================================
+- assertVisible: "Welcome to Glamora"
+- tapOn: "Skip"
+- waitForAnimationToEnd
+
+- assertVisible: "Welcome"
+- tapOn: "Create Account"
+- waitForAnimationToEnd
+
+# Select provider role
+- tapOn: "Provider"
+- waitForAnimationToEnd
+
+# Fill in signup form
+- tapOn: "First Name"
+- inputText: "Test"
+
+- tapOn: "Last Name"
+- inputText: "Provider"
+
+- tapOn: "Email"
+- inputText: "testprovider${random}@example.com"
+
+- tapOn: "Phone"
+- inputText: "+1234567891"
+
+- tapOn: "Password"
+- inputText: "TestPassword123!"
+
+- tapOn: "Confirm Password"
+- inputText: "TestPassword123!"
+
+# Submit signup
+- tapOn: "Create Account"
+- waitForAnimationToEnd:
+    timeout: 10000
+
+# ========================================
+# Test 2: Complete Provider Onboarding
+# ========================================
+- assertVisible: "Complete Your Profile"
+
+# Business Information
+- tapOn: "Business Name"
+- inputText: "Test Beauty Salon"
+
+- tapOn: "Bio"
+- inputText: "Professional beauty services with 10 years of experience"
+
+- tapOn: "Years of Experience"
+- inputText: "10"
+
+- scroll
+
+- tapOn: "Street Address"
+- inputText: "456 Beauty Ave"
+
+- tapOn: "City"
+- inputText: "Los Angeles"
+
+- tapOn: "State"
+- inputText: "CA"
+
+- tapOn: "ZIP Code"
+- inputText: "90001"
+
+- scroll
+
+# Select services
+- tapOn: "Haircut"
+- tapOn: "Manicure"
+- tapOn: "Makeup"
+
+- scroll
+
+# Set availability
+- tapOn: "Monday"
+- tapOn: "Tuesday"
+- tapOn: "Wednesday"
+
+- scroll
+
+# Submit onboarding
+- tapOn: "Complete Profile"
+- waitForAnimationToEnd:
+    timeout: 10000
+
+# ========================================
+# Test 3: View Provider Dashboard
+# ========================================
+- assertVisible: "Dashboard"
+- assertVisible: "Today's Appointments"
+- assertVisible: "Earnings"
+- assertVisible: "Reviews"
+
+# ========================================
+# Test 4: View Appointments
+# ========================================
+- tapOn: "Appointments"
+- waitForAnimationToEnd
+
+- assertVisible: "My Appointments"
+- assertVisible: "Upcoming"
+- assertVisible: "Past"
+
+# ========================================
+# Test 5: Manage Services
+# ========================================
+- tapOn: "My Services"
+- waitForAnimationToEnd
+
+- assertVisible: "My Services"
+
+# Add new service
+- tapOn: "Add Service"
+- waitForAnimationToEnd
+
+- assertVisible: "Add Service"
+
+# Select service type
+- tapOn: "Service Type"
+- tapOn: "Facial"
+- waitForAnimationToEnd
+
+# Set price
+- tapOn: "Price"
+- inputText: "75"
+
+# Set duration
+- tapOn: "Duration (minutes)"
+- inputText: "60"
+
+# Add description
+- tapOn: "Description"
+- inputText: "Relaxing facial treatment with organic products"
+
+# Save service
+- tapOn: "Save Service"
+- waitForAnimationToEnd
+
+# Verify service added
+- assertVisible: "Facial"
+- assertVisible: "$75"
+
+# ========================================
+# Test 6: View Profile
+# ========================================
+- tapOn: "My Profile"
+- waitForAnimationToEnd
+
+- assertVisible: "Test Provider"
+- assertVisible: "Test Beauty Salon"
+- assertVisible: "testprovider"
+
+# ========================================
+# Test Complete
+# ========================================
+

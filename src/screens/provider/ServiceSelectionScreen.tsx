@@ -1,0 +1,671 @@
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  TextInput,
+  Alert,
+  Modal,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
+import { supabase } from '../../services/supabase';
+import { useAuth } from '../../contexts/AuthContext';
+import AddServiceModal from '../../components/AddServiceModal';
+
+interface Service {
+  id: string;
+  name: string;
+  description: string;
+  base_duration_minutes: number;
+  category_name?: string;
+}
+
+const CUSTOM_SERVICE_ID = '550e8400-e29b-41d4-a716-446655440999';
+
+export default function ServiceSelectionScreen() {
+  const navigation = useNavigation();
+  const { user } = useAuth();
+  const [services, setServices] = useState<Service[]>([]);
+  const [myServiceIds, setMyServiceIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [showPricingGuide, setShowPricingGuide] = useState(false);
+
+  useEffect(() => {
+    fetchServices();
+    checkPricingGuide();
+  }, [user]);
+
+  const checkPricingGuide = async () => {
+    if (!user) return;
+    const key = `glamora_pricing_guide_seen_${user.id}`;
+    const seen = await AsyncStorage.getItem(key);
+    if (!seen) {
+      setShowPricingGuide(true);
+    }
+  };
+
+  const dismissPricingGuide = async () => {
+    if (!user) return;
+    const key = `glamora_pricing_guide_seen_${user.id}`;
+    await AsyncStorage.setItem(key, 'true');
+    setShowPricingGuide(false);
+  };
+
+  const fetchServices = async () => {
+    if (!user) return;
+
+    try {
+      // Get profile ID
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile) return;
+
+      // Get provider's existing services
+      const { data: providerServices } = await supabase
+        .from('provider_services')
+        .select('service_id')
+        .eq('provider_id', profile.id);
+
+      const existingServiceIds = providerServices?.map(ps => ps.service_id) || [];
+      setMyServiceIds(existingServiceIds);
+
+      // Get all available services
+      const { data: allServices, error } = await supabase
+        .from('services')
+        .select(`
+          id,
+          name,
+          description,
+          base_duration_minutes,
+          service_categories (name)
+        `)
+        .order('name');
+
+      if (error) throw error;
+
+      const formattedServices = allServices?.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        base_duration_minutes: s.base_duration_minutes,
+        category_name: s.service_categories?.name,
+      })) || [];
+
+      setServices(formattedServices);
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleServiceSelect = (service: Service) => {
+    setSelectedService(service);
+    setModalVisible(true);
+  };
+
+  const handleSaveService = async (data: {
+    price?: number;
+    basePrice?: number;
+    duration: number;
+    customDescription: string;
+    customServiceName: string;
+    isActive: boolean;
+    maxTravelDistance?: number;
+    travelFee0to10?: number;
+    travelFee11to15?: number;
+    travelFee16to25?: number;
+    acceptsOver25km?: boolean;
+  }) => {
+    if (!user || !selectedService) return;
+
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile) throw new Error('Profile not found');
+
+      const { error } = await supabase
+        .from('provider_services')
+        .insert({
+          provider_id: profile.id,
+          service_id: selectedService.id,
+          base_price: data.price ?? data.basePrice,
+          duration_minutes: data.duration,
+          description: data.customDescription || null,
+          custom_service_name: data.customServiceName || null,
+          is_active: data.isActive,
+          platform_commission_rate: 0.20,
+          max_travel_distance_km: data.maxTravelDistance,
+          travel_fee_0_10km: data.travelFee0to10,
+          travel_fee_11_15km: data.travelFee11to15,
+          travel_fee_16_25km: data.travelFee16to25,
+        });
+
+      if (error) throw error;
+
+      Alert.alert('Success', 'Service added successfully');
+      setModalVisible(false);
+      setSelectedService(null);
+
+      // Refresh the services list
+      fetchServices();
+    } catch (error) {
+      console.error('Error adding service:', error);
+      Alert.alert('Error', 'Failed to add service. Please try again.');
+    }
+  };
+
+  const filteredServices = services.filter(service => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      service.name.toLowerCase().includes(query) ||
+      service.description.toLowerCase().includes(query) ||
+      service.category_name?.toLowerCase().includes(query)
+    );
+  });
+
+  // Separate available services from already added ones
+  const availableServices = filteredServices.filter(s => !myServiceIds.includes(s.id));
+  const customService = availableServices.find(s => s.id === CUSTOM_SERVICE_ID);
+  const regularServices = availableServices.filter(s => s.id !== CUSTOM_SERVICE_ID);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color={colors.textSecondary} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search services..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholderTextColor={colors.textSecondary}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Custom Service Card (Always at top) */}
+        {customService && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>✨ Create Your Own</Text>
+            <TouchableOpacity
+              style={[styles.serviceCard, styles.customServiceCard]}
+              onPress={() => handleServiceSelect(customService)}
+            >
+              <View style={styles.customServiceIcon}>
+                <Ionicons name="add-circle" size={32} color={colors.primary} />
+              </View>
+              <View style={styles.serviceInfo}>
+                <Text style={styles.serviceName}>{customService.name}</Text>
+                <Text style={styles.serviceDescription}>{customService.description}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Regular Services */}
+        {regularServices.length > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              📋 Available Services ({regularServices.length})
+            </Text>
+            {regularServices.map((service) => (
+              <TouchableOpacity
+                key={service.id}
+                style={styles.serviceCard}
+                onPress={() => handleServiceSelect(service)}
+              >
+                <View style={styles.serviceInfo}>
+                  <Text style={styles.serviceName}>{service.name}</Text>
+                  <Text style={styles.serviceDescription}>{service.description}</Text>
+                  <View style={styles.serviceMetaRow}>
+                    {service.category_name && (
+                      <View style={styles.categoryBadge}>
+                        <Text style={styles.categoryText}>{service.category_name}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.durationText}>
+                      ⏱️ {service.base_duration_minutes} min
+                    </Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={24} color={colors.textSecondary} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="checkmark-circle" size={64} color={colors.success} />
+            <Text style={styles.emptyText}>All services added!</Text>
+            <Text style={styles.emptySubtext}>
+              You've added all available services. You can still create custom services.
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* Pricing Guide Modal */}
+      <Modal
+        visible={showPricingGuide}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+      >
+        <View style={styles.guideBackdrop}>
+          <View style={styles.guideCard}>
+            <View style={styles.guideHeader}>
+              <Text style={styles.guideHeaderIcon}>💡</Text>
+              <Text style={styles.guideHeaderTitle}>How Pricing Works</Text>
+            </View>
+
+            <ScrollView style={styles.guideScroll} showsVerticalScrollIndicator={false}>
+
+              {/* Base Price */}
+              <View style={styles.guideSection}>
+                <View style={styles.guideSectionTitleRow}>
+                  <Text style={styles.guideSectionIcon}>💰</Text>
+                  <Text style={styles.guideSectionTitle}>Base Price</Text>
+                </View>
+                <Text style={styles.guideSectionBody}>
+                  This is the price you charge for the service itself. Customers will see
+                  this clearly before booking.
+                </Text>
+                <View style={styles.guideNote}>
+                  <Text style={styles.guideNoteText}>
+                    📌  Glamora retains a{' '}
+                    <Text style={styles.guideNoteHighlight}>20% platform commission</Text>{' '}
+                    from every booking. You keep the remaining 80%.
+                  </Text>
+                </View>
+                <Text style={styles.guideExample}>
+                  Example: Base price $100 → You earn $80, Glamora earns $20.
+                </Text>
+              </View>
+
+              {/* Divider */}
+              <View style={styles.guideDivider} />
+
+              {/* Travel Fee */}
+              <View style={styles.guideSection}>
+                <View style={styles.guideSectionTitleRow}>
+                  <Text style={styles.guideSectionIcon}>🚗</Text>
+                  <Text style={styles.guideSectionTitle}>Travel Fee</Text>
+                </View>
+                <Text style={styles.guideSectionBody}>
+                  Since Glamora is a mobile beauty platform, you travel to your clients.
+                  You can set different travel fees based on distance:
+                </Text>
+
+                <View style={styles.guideTierList}>
+                  <View style={styles.guideTierRow}>
+                    <View style={styles.guideTierBadge}>
+                      <Text style={styles.guideTierBadgeText}>0 – 10 km</Text>
+                    </View>
+                    <Text style={styles.guideTierDesc}>
+                      Short distance fee — e.g. $5 to $10
+                    </Text>
+                  </View>
+                  <View style={styles.guideTierRow}>
+                    <View style={[styles.guideTierBadge, styles.guideTierBadgeMid]}>
+                      <Text style={styles.guideTierBadgeText}>11 – 15 km</Text>
+                    </View>
+                    <Text style={styles.guideTierDesc}>
+                      Medium distance fee — e.g. $12 to $18
+                    </Text>
+                  </View>
+                  <View style={styles.guideTierRow}>
+                    <View style={[styles.guideTierBadge, styles.guideTierBadgeFar]}>
+                      <Text style={styles.guideTierBadgeText}>16 – 25 km</Text>
+                    </View>
+                    <Text style={styles.guideTierDesc}>
+                      Long distance fee — e.g. $20 to $30
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={[styles.guideSectionBody, { marginTop: 8 }]}>
+                  You can also choose a{' '}
+                  <Text style={styles.bold}>maximum travel distance</Text>. Bookings
+                  beyond that limit will not be shown to you. For distances over 25 km
+                  you can opt in separately.
+                </Text>
+
+                <View style={styles.guideNote}>
+                  <Text style={styles.guideNoteText}>
+                    📌  Travel fees are charged{' '}
+                    <Text style={styles.guideNoteHighlight}>on top of the base price</Text>{' '}
+                    and go entirely to you — Glamora does not take commission on travel fees.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Divider */}
+              <View style={styles.guideDivider} />
+
+              {/* Quick Tips */}
+              <View style={styles.guideSection}>
+                <View style={styles.guideSectionTitleRow}>
+                  <Text style={styles.guideSectionIcon}>⭐</Text>
+                  <Text style={styles.guideSectionTitle}>Quick Tips</Text>
+                </View>
+                <Text style={styles.guideTip}>• Set competitive base prices to attract more bookings.</Text>
+                <Text style={styles.guideTip}>• Keep travel fees reasonable — high fees may discourage far-away clients.</Text>
+                <Text style={styles.guideTip}>• You can edit your prices at any time from My Services.</Text>
+                <Text style={styles.guideTip}>• Leaving a travel tier at $0 means no extra charge for that range.</Text>
+              </View>
+
+            </ScrollView>
+
+            <TouchableOpacity style={styles.guideDismissBtn} onPress={dismissPricingGuide}>
+              <Text style={styles.guideDismissBtnText}>Got it, let's go! 🚀</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Service Modal */}
+      <AddServiceModal
+        visible={modalVisible}
+        service={selectedService}
+        onClose={() => {
+          setModalVisible(false);
+          setSelectedService(null);
+        }}
+        onSave={handleSaveService}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    margin: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: fontSize.md,
+    color: colors.text,
+    paddingVertical: spacing.xs,
+  },
+  scrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  section: {
+    marginBottom: spacing.xl,
+  },
+  sectionTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  serviceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  customServiceCard: {
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+  },
+  customServiceIcon: {
+    marginRight: spacing.md,
+  },
+  serviceInfo: {
+    flex: 1,
+  },
+  serviceName: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  serviceDescription: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: spacing.xs,
+  },
+  serviceMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  categoryBadge: {
+    backgroundColor: colors.primarySubtle,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  categoryText: {
+    fontSize: fontSize.xs,
+    color: colors.primary,
+    fontWeight: fontWeight.semibold,
+  },
+  durationText: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxl * 2,
+  },
+  emptyText: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  emptySubtext: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+
+  // ── Pricing Guide Modal ──────────────────────────────────────────────────────
+  guideBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  guideCard: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.xl,
+    width: '100%',
+    maxHeight: '88%',
+    overflow: 'hidden',
+    ...shadows.lg,
+  },
+  guideHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.primarySubtle,
+  },
+  guideHeaderIcon: {
+    fontSize: 26,
+  },
+  guideHeaderTitle: {
+    fontSize: fontSize.xl,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  guideScroll: {
+    paddingHorizontal: spacing.lg,
+  },
+  guideSection: {
+    paddingVertical: spacing.lg,
+  },
+  guideSectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  guideSectionIcon: {
+    fontSize: 20,
+  },
+  guideSectionTitle: {
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  guideSectionBody: {
+    fontSize: fontSize.md,
+    color: colors.textSecondary,
+    lineHeight: 22,
+  },
+  guideNote: {
+    backgroundColor: colors.primarySubtle,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
+    borderRadius: borderRadius.sm,
+    padding: spacing.md,
+    marginTop: spacing.md,
+  },
+  guideNoteText: {
+    fontSize: fontSize.sm,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  guideNoteHighlight: {
+    fontWeight: fontWeight.bold,
+    color: colors.primary,
+  },
+  guideExample: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: spacing.sm,
+  },
+  guideDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginHorizontal: -spacing.lg,
+  },
+  guideTierList: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  guideTierRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  guideTierBadge: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: borderRadius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    minWidth: 90,
+    alignItems: 'center',
+  },
+  guideTierBadgeMid: {
+    backgroundColor: '#FFF3E0',
+  },
+  guideTierBadgeFar: {
+    backgroundColor: '#FCE4EC',
+  },
+  guideTierBadgeText: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  guideTierDesc: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+  },
+  guideTip: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 22,
+    marginBottom: spacing.xs,
+  },
+  bold: {
+    fontWeight: fontWeight.bold,
+    color: colors.text,
+  },
+  guideDismissBtn: {
+    backgroundColor: colors.primary,
+    margin: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  guideDismissBtnText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.bold,
+    color: colors.white,
+  },
+});
+

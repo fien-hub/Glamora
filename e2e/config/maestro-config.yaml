@@ -1,0 +1,42 @@
+# ========================================
+# Maestro Configuration
+# ========================================
+# Global configuration for all E2E tests
+# ========================================
+
+# App configuration
+appId: host.exp.Exponent  # Expo Go app ID
+
+# Test configuration
+env:
+  # Test user credentials
+  TEST_CUSTOMER_EMAIL: customer@test.com
+  TEST_CUSTOMER_PASSWORD: TestPassword123!
+  TEST_PROVIDER_EMAIL: provider@test.com
+  TEST_PROVIDER_PASSWORD: TestPassword123!
+  
+  # API configuration
+  API_URL: ${EXPO_PUBLIC_API_URL}
+  
+  # Stripe test keys
+  STRIPE_TEST_CARD: "4242424242424242"
+  STRIPE_TEST_EXPIRY: "12/25"
+  STRIPE_TEST_CVC: "123"
+
+# Default timeouts (in milliseconds)
+timeout:
+  default: 5000
+  long: 15000
+  animation: 2000
+
+# Screenshot configuration
+screenshots:
+  enabled: true
+  onFailure: true
+  onSuccess: false
+
+# Retry configuration
+retry:
+  maxAttempts: 2
+  delayBetweenAttempts: 1000
+
