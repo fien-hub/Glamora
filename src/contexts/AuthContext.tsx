@@ -38,7 +38,7 @@ interface AuthContextType {
   updatePassword: (newPassword: string) => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const getWelcomeMessageKey = (userId: string) => `glamora_show_welcome_${userId}`;
 

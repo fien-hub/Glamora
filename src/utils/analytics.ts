@@ -1,4 +1,16 @@
-import { Mixpanel } from 'mixpanel-react-native';
+/**
+ * Mixpanel is NOT imported at the top level.
+ *
+ * mixpanel-react-native calls requireNativeModule('MixpanelReactNative') at
+ * module evaluation time. In React Native 0.81 + New Architecture (TurboModules)
+ * builds this throws if the TurboModule registry is not yet ready, which would
+ * crash every file that transitively imports this module — including AuthContext
+ * — preventing SplashScreen.hideAsync() from ever running.
+ *
+ * Fix: require('mixpanel-react-native') lazily inside initialize() where we
+ * know we are already past the initial render and inside a user gesture /
+ * deferred effect.
+ */
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import {
@@ -34,7 +46,8 @@ const normalizeCurrencyAmount = (amount: number) => {
 };
 
 class AnalyticsService {
-  private mixpanel: Mixpanel | null = null;
+  // typed as `any` to avoid importing Mixpanel at module level (see file header)
+  private mixpanel: any = null;
   private initialized = false;
   private provider: AnalyticsProvider = 'mixpanel';
   private enableLogging = __DEV__; // Enable logging in development
@@ -59,6 +72,10 @@ class AnalyticsService {
           return;
         }
 
+        // Lazy require — safe to call here because we are inside an async
+        // effect that fires after the first render, well past module-eval time.
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { Mixpanel } = require('mixpanel-react-native') as { Mixpanel: new (token: string, trackAutomaticEvents: boolean) => any };
         this.mixpanel = new Mixpanel(mixpanelToken, true);
         await this.mixpanel.init();
         

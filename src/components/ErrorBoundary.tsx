@@ -1,8 +1,20 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import * as Sentry from '@sentry/react-native';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';
 import { navigationRef } from '../navigation/RootNavigation';
+
+// Sentry is required lazily to prevent a module-level native-module crash
+// from disabling the ErrorBoundary itself.
+let SentryCapture: ((e: Error) => void) | null = null;
+let SentryWithScope: ((fn: (scope: any) => void) => void) | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const Sentry = require('@sentry/react-native') as typeof import('@sentry/react-native');
+  if (Sentry?.captureException) SentryCapture = Sentry.captureException.bind(Sentry);
+  if (Sentry?.withScope) SentryWithScope = Sentry.withScope.bind(Sentry);
+} catch (e) {
+  console.warn('[ErrorBoundary] Sentry failed to load:', e);
+}
 
 interface Props {
   children: ReactNode;
@@ -40,13 +52,19 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // Log error to Sentry
-    Sentry.withScope((scope) => {
-      scope.setContext('errorInfo', {
-        componentStack: errorInfo.componentStack,
-      });
-      Sentry.captureException(error);
-    });
+    // Log error to Sentry (via lazy-loaded reference)
+    try {
+      if (SentryWithScope && SentryCapture) {
+        SentryWithScope((scope: any) => {
+          scope.setContext('errorInfo', { componentStack: errorInfo.componentStack });
+          SentryCapture!(error);
+        });
+      } else if (SentryCapture) {
+        SentryCapture(error);
+      }
+    } catch (sentryErr) {
+      console.warn('[ErrorBoundary] Sentry report failed:', sentryErr);
+    }
 
     // Update state with error details
     this.setState({

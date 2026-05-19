@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import analytics, { EventProperties, UserProperties } from '../utils/analytics';
-import { useAuth } from './AuthContext';
+import { AuthContext } from './AuthContext';
 
 interface AnalyticsContextType {
   trackEvent: (eventName: string, properties?: EventProperties) => Promise<void>;
@@ -19,7 +19,12 @@ type AnalyticsProviderProps = {
 };
 
 export const AnalyticsProvider: React.FC<AnalyticsProviderProps> = ({ children, enabled = true }) => {
-  const { user, userRole } = useAuth();
+  // Use useContext directly (not useAuth) so this provider never throws when
+  // AuthProvider failed to mount — e.g. if a transitive import crash caused
+  // AppRuntime to fall back to a Passthrough wrapper for AuthProvider.
+  const authCtx = useContext(AuthContext);
+  const user = authCtx?.user ?? null;
+  const userRole = authCtx?.userRole ?? null;
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Initialize analytics on mount
