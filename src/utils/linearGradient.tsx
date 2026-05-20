@@ -1,52 +1,46 @@
 /**
- * Safe wrapper for expo-linear-gradient.
+ * Safe replacement for expo-linear-gradient.
  *
- * expo-linear-gradient is fully supported in Expo SDK 54 with New Architecture.
- * We keep a try/catch at module level in case the native module is somehow
- * unavailable, falling back to a solid View using the gradient's first color.
+ * In React Native 0.81 + New Architecture (Fabric), expo-linear-gradient's
+ * native ViewManager is registered via the Old Architecture interop adapter:
+ *   "ViewManagerAdapter_ExpoLinearGradient_<hash>"
+ * React Native renders it as visible error text on screen:
+ *   "Unimplemented component: <ViewManagerAdapter_ExpoLinearGradient_...>"
+ *
+ * The JS require() succeeds so try/catch around require() does NOT help —
+ * the error only surfaces at native render time.
+ *
+ * Fix: never render the native LinearGradient component. Instead, use a View
+ * whose background is derived from the gradient's most prominent (last) color.
+ * This preserves layouts while avoiding the error text overlay.
  */
 import React from 'react';
 import { View } from 'react-native';
 
 type LinearGradientProps = React.ComponentProps<typeof import('expo-linear-gradient').LinearGradient>;
 
-let NativeLinearGradient: React.ComponentType<any> | null = null;
-try {
-  NativeLinearGradient = require('expo-linear-gradient').LinearGradient;
-} catch {
-  // fall through to View fallback
-}
-
-const pickFallbackColor = (colors?: readonly (string | number)[]): string => {
+const pickBackgroundColor = (colors?: readonly (string | number)[]): string => {
   if (!colors || colors.length === 0) return 'rgba(0,0,0,0.4)';
-  const last = colors[colors.length - 1];
-  return typeof last === 'string' ? last : 'rgba(0,0,0,0.4)';
+  // Prefer the last color — gradients typically fade towards the most opaque stop
+  for (let i = colors.length - 1; i >= 0; i--) {
+    const c = colors[i];
+    if (typeof c === 'string' && c !== 'transparent' && !c.startsWith('rgba(0,0,0,0)')) {
+      return c;
+    }
+  }
+  return typeof colors[0] === 'string' ? (colors[0] as string) : 'rgba(0,0,0,0.4)';
 };
 
 export const LinearGradient: React.FC<LinearGradientProps> = ({
   colors,
-  start,
-  end,
-  locations,
+  start: _start,
+  end: _end,
+  locations: _locations,
   style,
   children,
   ...rest
 }) => {
-  if (NativeLinearGradient) {
-    return (
-      <NativeLinearGradient
-        colors={colors}
-        start={start}
-        end={end}
-        locations={locations}
-        style={style}
-        {...rest}
-      >
-        {children}
-      </NativeLinearGradient>
-    );
-  }
-  const backgroundColor = pickFallbackColor(colors);
+  const backgroundColor = pickBackgroundColor(colors);
   return (
     <View style={[{ backgroundColor }, style as any]} {...rest}>
       {children}

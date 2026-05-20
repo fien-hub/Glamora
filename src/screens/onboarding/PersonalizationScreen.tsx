@@ -16,6 +16,7 @@ import { Ionicons } from '../../utils/icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+
 import { getCurrentLocation } from '../../services/location';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
@@ -59,7 +60,7 @@ const getCategoryIcon = (categoryName: string): keyof typeof Ionicons.glyphMap =
 
 export default function PersonalizationScreen() {
   const navigation = useNavigation<any>();
-  const { user, refreshOnboardingStatus } = useAuth();
+  const { user, refreshOnboardingStatus, markOnboardingComplete } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(false);
@@ -223,12 +224,11 @@ export default function PersonalizationScreen() {
 
       console.log('[Personalization] Preferences saved successfully');
 
-      // Refresh onboarding status in AuthContext
-      // This will automatically rebuild the navigator to show CustomerMain
-      console.log('[Personalization] Refreshing onboarding status...');
-      await refreshOnboardingStatus();
-      console.log('[Personalization] Onboarding status refreshed - navigation will auto-update');
+      // Force navigation immediately via direct state change, then also
+      // refresh from DB so subsequent restarts land on the correct screen.
+      markOnboardingComplete();
       setLoading(false);
+      await refreshOnboardingStatus();
     } catch (error: any) {
       console.error('[Personalization] Error saving preferences:', error);
       Alert.alert('Error', error.message || 'Failed to save preferences');
@@ -252,12 +252,14 @@ export default function PersonalizationScreen() {
           .eq('id', profileData.id);
       }
 
-      // Refresh onboarding status - navigation will auto-update
+      // Force navigation immediately, then refresh DB state for future restarts
+      markOnboardingComplete();
       await refreshOnboardingStatus();
     } catch (error) {
       console.error('[Personalization] Error skipping:', error);
-      // Still try to refresh
-      await refreshOnboardingStatus();
+      // Still navigate even if DB update failed
+      markOnboardingComplete();
+      await refreshOnboardingStatus().catch(() => {});
     }
   };
 
