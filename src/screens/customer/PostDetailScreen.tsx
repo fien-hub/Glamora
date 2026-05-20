@@ -11,7 +11,8 @@ import {
   StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
+let Image: any = View;
+try { Image = require('expo-image').Image; } catch (e) { console.warn('[PostDetailScreen] expo-image unavailable:', e); }
 import { Ionicons } from '../../utils/icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';

@@ -1,0 +1,39 @@
+=== GLAMORA DIAGNOSTIC REPORT ===
+Platform: ios 16.6
+Build: production
+
+=== NAVIGATION ERROR ===
+Navigation module has no default export. A required module (AuthContext, a screen, or a navigator) likely threw during Metro module factory evaluation.
+Error: Navigation module has no default export. A required module (AuthContext, a screen, or a navigator) likely threw during Metro module factory evaluation.
+    at anonymous (address at /private/var/containers/Bundle/Application/6AEE076E-9978-4F79-A412-93837A7BFB0A/Glamora.app/main.jsbundle:1:852907)
+    at tryCallOne (address at InternalBytecode.js:1:1180)
+    at anonymous (address at InternalBytecode.js:1:1874)
+
+=== MODULE LOAD WARNINGS ===
+[WARN] [analytics.ts] expo-device unavailable: Error: Cannot find native module 'ExpoDevice'
+[WARN] [location.ts] expo-location failed to load: Error: Cannot find native module 'ExpoLocation'
+[WARN] [icons] @expo/vector-icons failed to load: Error: Cannot find native module 'ExpoFontLoader'
+[WARN] [biometricAuth.ts] expo-local-authentication unavailable: Error: Cannot find native module 'ExpoLocalAuthentication'
+[ERROR] Error: Cannot find native module 'ExpoImage'
+[ERROR] [AppRuntime] navigation/index resolved without default export — a module in its dependency chain likely failed silently.
+[WARN] [AuthContext] reactivateUser failed (non-blocking): Could not find the 'deactivated_at' column of 'users' in the schema cache
+[WARN] [AuthContext] reactivateUser failed (non-blocking): Could not find the 'deactivated_at' column of 'users' in the schema cache
+[WARN] [AuthContext] reactivateUser failed (non-blocking): Could not find the 'deactivated_at' column of 'users' in the schema cache
+[ERROR] Error: Cannot find native module 'ExpoLocation'
+
+=== ALL CAPTURED LOGS ===
+[WARN] [analytics.ts] expo-device unavailable: Error: Cannot find native module 'ExpoDevice'
+[WARN] [location.ts] expo-location failed to load: Error: Cannot find native module 'ExpoLocation'
+[WARN] [icons] @expo/vector-icons failed to load: Error: Cannot find native module 'ExpoFontLoader'
+[WARN] [biometricAuth.ts] expo-local-authentication unavailable: Error: Cannot find native module 'ExpoLocalAuthentication'
+[ERROR] Error: Cannot find native module 'ExpoImage'
+[ERROR] [AppRuntime] navigation/index resolved without default export — a module in its dependency chain likely failed silently.
+[WARN] Mixpanel token not provided. Analytics will not be tracked.
+[WARN] [AuthContext] reactivateUser failed (non-blocking): Could not find the 'deactivated_at' column of 'users' in the schema cache
+[WARN] [AuthContext] reactivateUser failed (non-blocking): Could not find the 'deactivated_at' column of 'users' in the schema cache
+[WARN] [AuthContext] reactivateUser failed (non-blocking): Could not find the 'deactivated_at' column of 'users' in the schema cache
+[ERROR] Error: Cannot find native module 'ExpoLocation'
+[WARN] [LocationTracking] Permission denied, cannot track location
+[WARN] [LocationTracking] Permission denied, cannot track location
+[WARN] [LocationTracking] Permission denied, cannot track location
+[WARN] Clipboard has been extracted from react-native core and will be removed in a future release. It can now be installed and imported from '@react-native-clipboard/clipboard' instead of 'react-native'. See https://github.com/react-native-clipboard/clipboard

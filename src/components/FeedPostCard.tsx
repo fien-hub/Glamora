@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Image } from 'expo-image';
+let Image: any = View;
+try { Image = require('expo-image').Image; } catch (e) { console.warn('[FeedPostCard] expo-image unavailable:', e); }
 import { Ionicons } from '../utils/icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../constants/theme';
 
