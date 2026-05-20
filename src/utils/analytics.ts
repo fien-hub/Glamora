@@ -11,7 +11,8 @@
  * know we are already past the initial render and inside a user gesture /
  * deferred effect.
  */
-import * as Device from 'expo-device';
+let Device: typeof import('expo-device') = {} as any;
+try { Device = require('expo-device'); } catch (e) { console.warn('[analytics.ts] expo-device unavailable:', e); }
 import Constants from 'expo-constants';
 
 // metaAds is required lazily to prevent module-level crashes.

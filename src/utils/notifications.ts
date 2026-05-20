@@ -5,7 +5,8 @@ try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   Notifications = require('expo-notifications');
 } catch (e) { console.warn('[notifications.ts] expo-notifications unavailable:', e); }
-import * as Device from 'expo-device';
+let Device: typeof import('expo-device') = {} as any;
+try { Device = require('expo-device'); } catch (e) { console.warn('[notifications.ts] expo-device unavailable:', e); }
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { supabase } from '../services/supabase';
