@@ -43,7 +43,8 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { LinearGradient } from '../../utils/linearGradient';
-import * as Haptics from 'expo-haptics';
+let Haptics: typeof import('expo-haptics') = {} as any;
+try { Haptics = require('expo-haptics'); } catch (e) { console.warn('[CreatePostScreen] expo-haptics unavailable:', e); }
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import {

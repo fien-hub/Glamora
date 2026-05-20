@@ -19,8 +19,10 @@ import { Ionicons } from '../../utils/icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 let ImageViewing: any = View;
 try { ImageViewing = require('react-native-image-viewing').default; } catch (e) { console.warn('[ChatScreen] react-native-image-viewing unavailable:', e); }
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+let FileSystem: typeof import('expo-file-system') = {} as any;
+try { FileSystem = require('expo-file-system'); } catch (e) { console.warn('[ChatScreen] expo-file-system unavailable:', e); }
+let Sharing: typeof import('expo-sharing') = {} as any;
+try { Sharing = require('expo-sharing'); } catch (e) { console.warn('[ChatScreen] expo-sharing unavailable:', e); }
 let MediaLibrary: typeof import('expo-media-library') = {} as any;
 try { MediaLibrary = require('expo-media-library'); } catch (e) { console.warn('[ChatScreen] expo-media-library unavailable:', e); }
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';

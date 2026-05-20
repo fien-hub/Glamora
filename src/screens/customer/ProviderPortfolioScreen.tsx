@@ -31,7 +31,8 @@ import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../const
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { analytics } from '../../services/analytics';
-import * as Haptics from 'expo-haptics';
+let Haptics: typeof import('expo-haptics') = {} as any;
+try { Haptics = require('expo-haptics'); } catch (e) { console.warn('[ProviderPortfolioScreen] expo-haptics unavailable:', e); }
 import BookingModal from '../../components/BookingModal';
 import { getProviderAvailability } from '../../utils/availability';
 

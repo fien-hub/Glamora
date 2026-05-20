@@ -17,9 +17,12 @@ import {
   ActivityIndicator,
   ScrollView,
   TouchableOpacity,
-  Clipboard,
   Platform,
 } from 'react-native';
+let _Clipboard: { setString: (s: string) => void } = { setString: () => {} };
+try { _Clipboard = require('@react-native-clipboard/clipboard').default; } catch {
+  try { _Clipboard = (require('react-native') as any).Clipboard ?? { setString: () => {} }; } catch { }
+}
 
 // ---------------------------------------------------------------------------
 // Diagnostic log collector — installed BEFORE any module is required.
@@ -217,7 +220,7 @@ function DiagnosticScreen({ error }: { error: unknown }) {
 
   const handleCopy = () => {
     try {
-      Clipboard.setString(fullReport);
+      _Clipboard.setString(fullReport);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch { /* ignore */ }

@@ -1,7 +1,10 @@
 import { Share, Platform, Linking, Alert } from 'react-native';
-import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
-import * as Clipboard from 'expo-clipboard';
+let Sharing: typeof import('expo-sharing') = {} as any;
+try { Sharing = require('expo-sharing'); } catch (e) { console.warn('[socialSharing] expo-sharing unavailable:', e); }
+let FileSystem: typeof import('expo-file-system') = {} as any;
+try { FileSystem = require('expo-file-system'); } catch (e) { console.warn('[socialSharing] expo-file-system unavailable:', e); }
+let Clipboard: typeof import('expo-clipboard') = {} as any;
+try { Clipboard = require('expo-clipboard'); } catch (e) { console.warn('[socialSharing] expo-clipboard unavailable:', e); }
 
 // expo-file-system v18+ moved cacheDirectory to the legacy API
 const cacheDirectory: string | null = (FileSystem as any).cacheDirectory ?? null;

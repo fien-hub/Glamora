@@ -10,7 +10,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-import * as Clipboard from 'expo-clipboard';
+let Clipboard: typeof import('expo-clipboard') = {} as any;
+try { Clipboard = require('expo-clipboard'); } catch (e) { console.warn('[ShareProviderModal] expo-clipboard unavailable:', e); }
 import { supabase } from '../services/supabase';
 import { colors, spacing, fontSize, borderRadius } from '../constants/theme';
 import {

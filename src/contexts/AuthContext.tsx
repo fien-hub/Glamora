@@ -234,7 +234,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (error) {
           const msg = (error.message || '').toLowerCase();
-          if (!msg.includes('column') || !msg.includes('does not exist')) {
+          const isKnownMissingCol = msg.includes('deactivated_at') || msg.includes('schema cache');
+          if (!isKnownMissingCol && (!msg.includes('column') || !msg.includes('does not exist'))) {
             console.warn('[AuthContext] reactivateUser failed (non-blocking):', error.message);
           }
         }

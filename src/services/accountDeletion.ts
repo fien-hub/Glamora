@@ -1,9 +1,12 @@
 import { supabase } from './supabase';
 import { Alert } from 'react-native';
 import { Share } from 'react-native';
-import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
-import * as MailComposer from 'expo-mail-composer';
+let Sharing: typeof import('expo-sharing') = {} as any;
+try { Sharing = require('expo-sharing'); } catch (e) { console.warn('[accountDeletion] expo-sharing unavailable:', e); }
+let FileSystem: typeof import('expo-file-system') = {} as any;
+try { FileSystem = require('expo-file-system'); } catch (e) { console.warn('[accountDeletion] expo-file-system unavailable:', e); }
+let MailComposer: typeof import('expo-mail-composer') = {} as any;
+try { MailComposer = require('expo-mail-composer'); } catch (e) { console.warn('[accountDeletion] expo-mail-composer unavailable:', e); }
 
 export interface DeleteAccountResult {
   success: boolean;
