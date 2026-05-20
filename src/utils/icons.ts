@@ -1,17 +1,22 @@
 /**
  * Safe lazy wrapper for @expo/vector-icons.
  *
- * expo-font/build/ExpoFontLoader.js calls requireNativeModule('ExpoFontLoader')
- * at module level. In React Native New Architecture (TurboModules) builds,
- * if the native module initialises before the TurboModule registry is ready
- * the call throws and crashes every file that transitively imports expo-font —
- * including every file that imports from @expo/vector-icons.
+ * expo-font calls requireNativeModule('ExpoFontLoader') at module-evaluation
+ * time. In New Architecture (TurboModules) builds the module registry may not
+ * be fully populated yet, so the call throws — crashing every file that
+ * transitively imports expo-font, including @expo/vector-icons.
  *
- * Wrapping require() in try/catch means this module always evaluates
- * successfully and exports a usable (possibly stub) component, so a single
- * native-module timing issue never silently freezes the splash screen.
+ * Strategy:
+ *  1. Try to require() at module-eval time (fast path — works once TurboModules
+ *     are ready, which is always the case in subsequent renders).
+ *  2. If that fails, each exported icon component subscribes on mount and
+ *     retries after a short delay (by then the runtime is fully initialised).
+ *  3. When the load finally succeeds every mounted icon component is notified
+ *     and re-renders with the real glyph.
+ *
+ * The placeholder renders an invisible fixed-size box so layouts don't shift.
  */
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Text } from 'react-native';
 
 type IconProps = {
@@ -21,53 +26,83 @@ type IconProps = {
   style?: any;
 };
 
-const FallbackIcon: React.FC<IconProps> = ({ size = 24, color = '#000', style }) =>
-  React.createElement(Text, { style: [{ fontSize: size, color }, style] }, '•');
+// Module-level cache — set once when the real module loads successfully
+let _mod: Record<string, React.ComponentType<any>> | null = null;
+// Subscribers notified when _mod becomes available
+const _subscribers = new Set<() => void>();
 
-let _Ionicons: React.ComponentType<IconProps> = FallbackIcon;
-let _MaterialIcons: React.ComponentType<IconProps> = FallbackIcon;
-let _MaterialCommunityIcons: React.ComponentType<IconProps> = FallbackIcon;
-let _FontAwesome: React.ComponentType<IconProps> = FallbackIcon;
-let _FontAwesome5: React.ComponentType<IconProps> = FallbackIcon;
-let _Feather: React.ComponentType<IconProps> = FallbackIcon;
-let _AntDesign: React.ComponentType<IconProps> = FallbackIcon;
-let _Entypo: React.ComponentType<IconProps> = FallbackIcon;
-let _EvilIcons: React.ComponentType<IconProps> = FallbackIcon;
-let _Octicons: React.ComponentType<IconProps> = FallbackIcon;
-let _SimpleLineIcons: React.ComponentType<IconProps> = FallbackIcon;
-let _Foundation: React.ComponentType<IconProps> = FallbackIcon;
-let _Zocial: React.ComponentType<IconProps> = FallbackIcon;
-
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const mod = require('@expo/vector-icons') as Record<string, React.ComponentType<IconProps>>;
-  if (mod?.Ionicons) _Ionicons = mod.Ionicons;
-  if (mod?.MaterialIcons) _MaterialIcons = mod.MaterialIcons;
-  if (mod?.MaterialCommunityIcons) _MaterialCommunityIcons = mod.MaterialCommunityIcons;
-  if (mod?.FontAwesome) _FontAwesome = mod.FontAwesome;
-  if (mod?.FontAwesome5) _FontAwesome5 = mod.FontAwesome5;
-  if (mod?.Feather) _Feather = mod.Feather;
-  if (mod?.AntDesign) _AntDesign = mod.AntDesign;
-  if (mod?.Entypo) _Entypo = mod.Entypo;
-  if (mod?.EvilIcons) _EvilIcons = mod.EvilIcons;
-  if (mod?.Octicons) _Octicons = mod.Octicons;
-  if (mod?.SimpleLineIcons) _SimpleLineIcons = mod.SimpleLineIcons;
-  if (mod?.Foundation) _Foundation = mod.Foundation;
-  if (mod?.Zocial) _Zocial = mod.Zocial;
-} catch (e) {
-  console.warn('[icons] @expo/vector-icons failed to load:', e);
+function attemptLoad(): void {
+  if (_mod) return;
+  try {
+    const m = require('@expo/vector-icons') as Record<string, React.ComponentType<any>>;
+    if (m?.Ionicons) {
+      _mod = m;
+      _subscribers.forEach(fn => fn());
+      _subscribers.clear();
+    }
+  } catch {
+    // ExpoFontLoader not ready yet — components will retry via useEffect
+  }
 }
 
-export const Ionicons = _Ionicons;
-export const MaterialIcons = _MaterialIcons;
-export const MaterialCommunityIcons = _MaterialCommunityIcons;
-export const FontAwesome = _FontAwesome;
-export const FontAwesome5 = _FontAwesome5;
-export const Feather = _Feather;
-export const AntDesign = _AntDesign;
-export const Entypo = _Entypo;
-export const EvilIcons = _EvilIcons;
-export const Octicons = _Octicons;
-export const SimpleLineIcons = _SimpleLineIcons;
-export const Foundation = _Foundation;
-export const Zocial = _Zocial;
+// Try immediately; if TurboModules are already registered this succeeds here
+attemptLoad();
+
+type LazyIconComponent = React.ComponentType<IconProps> & { glyphMap: Record<string, unknown> };
+
+function createLazyIcon(iconName: string): LazyIconComponent {
+  function LazyIcon(props: IconProps) {
+    const [, forceUpdate] = useState(0);
+
+    useEffect(() => {
+      if (_mod) return; // Already loaded — nothing to do
+      const refresh = () => forceUpdate(n => n + 1);
+      _subscribers.add(refresh);
+      // Give TurboModule registry ~500 ms to finish initialising, then retry
+      const timer = setTimeout(attemptLoad, 500);
+      return () => {
+        _subscribers.delete(refresh);
+        clearTimeout(timer);
+      };
+    }, []);
+
+    const Comp = _mod?.[iconName];
+    if (Comp) {
+      return React.createElement(Comp, props as any);
+    }
+    // Invisible placeholder preserves layout until the font loads
+    return React.createElement(
+      Text,
+      {
+        style: [
+          { fontSize: props.size ?? 24, color: props.color ?? '#000', opacity: 0 },
+          props.style,
+        ],
+      },
+      'X',
+    );
+  }
+
+  // Attach glyphMap stub so TypeScript callers that reference
+  // `keyof typeof Ionicons.glyphMap` compile without errors
+  (LazyIcon as any).glyphMap = new Proxy({} as Record<string, unknown>, {
+    get: () => undefined,
+    has: () => true,
+  });
+
+  return LazyIcon as LazyIconComponent;
+}
+
+export const Ionicons               = createLazyIcon('Ionicons');
+export const MaterialIcons          = createLazyIcon('MaterialIcons');
+export const MaterialCommunityIcons = createLazyIcon('MaterialCommunityIcons');
+export const FontAwesome            = createLazyIcon('FontAwesome');
+export const FontAwesome5           = createLazyIcon('FontAwesome5');
+export const Feather                = createLazyIcon('Feather');
+export const AntDesign              = createLazyIcon('AntDesign');
+export const Entypo                 = createLazyIcon('Entypo');
+export const EvilIcons              = createLazyIcon('EvilIcons');
+export const Octicons               = createLazyIcon('Octicons');
+export const SimpleLineIcons        = createLazyIcon('SimpleLineIcons');
+export const Foundation             = createLazyIcon('Foundation');
+export const Zocial                 = createLazyIcon('Zocial');

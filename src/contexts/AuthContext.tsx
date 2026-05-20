@@ -476,7 +476,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ) => {
     try {
       setLoading(true);
-      // Set flag to prevent auth state change listener from interfering
+      // IMPORTANT: update the ref synchronously BEFORE the Supabase auth call.
+      // The auth state change fires immediately inside signUp(); if we only call
+      // setIsSigningUp(true) the ref won't be updated until the next render —
+      // too late — and the handler will call fetchUserRole() in parallel with
+      // our signup flow, corrupting needsOnboarding / userRole state.
+      isSigningUpRef.current = true;
       setIsSigningUp(true);
 
       // Sign up with metadata
@@ -489,11 +494,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('[AuthContext] Signup error:', error);
+        isSigningUpRef.current = false;
         setIsSigningUp(false);
         throw error;
       }
 
       if (!data.user) {
+        isSigningUpRef.current = false;
         setIsSigningUp(false);
         throw new Error('No user returned from signup');
       }
@@ -522,8 +529,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (profileError) {
         console.error('[AuthContext] Error calling create_user_profile:', profileError);
         console.error('[AuthContext] Error details:', JSON.stringify(profileError, null, 2));
-        // Delete the auth user since profile creation failed
         await supabase.auth.signOut();
+        isSigningUpRef.current = false;
         setIsSigningUp(false);
         throw new Error(`Failed to create user profile: ${profileError.message}`);
       }
@@ -531,6 +538,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!profileResult) {
         console.error('[AuthContext] No result from create_user_profile');
         await supabase.auth.signOut();
+        isSigningUpRef.current = false;
         setIsSigningUp(false);
         throw new Error('Failed to create user profile: No result returned');
       }
@@ -538,6 +546,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!profileResult.success) {
         console.error('[AuthContext] Profile creation failed:', profileResult);
         await supabase.auth.signOut();
+        isSigningUpRef.current = false;
         setIsSigningUp(false);
         throw new Error(profileResult.message || 'Failed to create user profile');
       }
@@ -554,6 +563,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (verifyError || !verifyData?.role) {
         console.error('[AuthContext] Profile verification failed:', verifyError);
         await supabase.auth.signOut();
+        isSigningUpRef.current = false;
         setIsSigningUp(false);
         throw new Error('Profile created but verification failed. Please try signing up again.');
       }
@@ -573,6 +583,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
 
       // Clear the signup flag so auth state changes work normally again
+      isSigningUpRef.current = false;
       setIsSigningUp(false);
 
       // Track sign up event
@@ -584,6 +595,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('[AuthContext] SignUp failed:', error);
       setLoading(false);
+      isSigningUpRef.current = false;
       setIsSigningUp(false);
       throw error;
     }
