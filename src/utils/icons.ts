@@ -4,18 +4,19 @@
  * Strategy (3-layer defence):
  *  1. Try require('@expo/vector-icons') at module-eval time.
  *  2. Async: try Font.loadAsync() with the TTF files bundled via Metro assets.
- *     Each font file is required individually so a missing file doesn't block
- *     the others. After fonts are registered, re-try the require and notify
- *     all mounted icon components.
- *  3. Each icon component also retries after 1 s on mount (covers edge-cases
- *     where neither step 1 nor step 2 succeeded by first render).
+ *     Every require() must be a STATIC STRING LITERAL for Metro — no variables.
+ *     Each font is wrapped in its own try/catch so a missing file doesn't block
+ *     the others. After fonts are registered, re-try the require and notify all
+ *     mounted icon components.
+ *  3. Each icon component also retries after 1 s on mount (edge-case cover).
  *
  * The invisible placeholder preserves layout until glyphs are available.
  * Once fonts load, every mounted icon re-renders automatically.
  *
- * NOTE: app.json also configures the expo-font config-plugin to embed the
- * TTF files in UIAppFonts (Info.plist) so iOS registers them natively at
- * startup — this means step 1 will succeed on every subsequent native build.
+ * NOTE: app.json configures the expo-font config-plugin to embed TTF files in
+ * UIAppFonts (Info.plist) so iOS registers them natively at startup — this
+ * means step 1 will succeed on every subsequent native build without needing
+ * Font.loadAsync at all.
  */
 import React, { useState, useEffect } from 'react';
 import { Text } from 'react-native';
@@ -44,50 +45,36 @@ function tryRequire(): boolean {
   }
 }
 
-/** Safely require a single font asset; returns undefined on any error. */
-function safeRequireFont(path: string): number | undefined {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require(path) as number;
-  } catch {
-    return undefined;
-  }
-}
-
 async function tryLoadFonts(): Promise<void> {
   try {
     const Font = require('expo-font') as typeof import('expo-font');
 
-    // Build font map — only include entries where the asset file resolves
+    // Metro requires every require() argument to be a static string literal.
+    // Wrap each individually so a missing file doesn't abort the whole batch.
     const fontMap: Record<string, number> = {};
-    const candidates: Array<[string, string]> = [
-      ['AntDesign',              '@expo/vector-icons/fonts/AntDesign.ttf'],
-      ['Entypo',                 '@expo/vector-icons/fonts/Entypo.ttf'],
-      ['EvilIcons',              '@expo/vector-icons/fonts/EvilIcons.ttf'],
-      ['Feather',                '@expo/vector-icons/fonts/Feather.ttf'],
-      ['FontAwesome',            '@expo/vector-icons/fonts/FontAwesome.ttf'],
-      ['FontAwesome5_Regular',   '@expo/vector-icons/fonts/FontAwesome5_Regular.ttf'],
-      ['FontAwesome5_Solid',     '@expo/vector-icons/fonts/FontAwesome5_Solid.ttf'],
-      ['Foundation',             '@expo/vector-icons/fonts/Foundation.ttf'],
-      ['Ionicons',               '@expo/vector-icons/fonts/Ionicons.ttf'],
-      ['MaterialCommunityIcons', '@expo/vector-icons/fonts/MaterialCommunityIcons.ttf'],
-      ['MaterialIcons',          '@expo/vector-icons/fonts/MaterialIcons.ttf'],
-      ['Octicons',               '@expo/vector-icons/fonts/Octicons.ttf'],
-      ['SimpleLineIcons',        '@expo/vector-icons/fonts/SimpleLineIcons.ttf'],
-      ['Zocial',                 '@expo/vector-icons/fonts/Zocial.ttf'],
-    ];
-
-    for (const [name, path] of candidates) {
-      const asset = safeRequireFont(path);
-      if (asset !== undefined) fontMap[name] = asset;
-    }
+    /* eslint-disable @typescript-eslint/no-var-requires */
+    try { fontMap['AntDesign']              = require('@expo/vector-icons/fonts/AntDesign.ttf'); }              catch { /* not in bundle */ }
+    try { fontMap['Entypo']                 = require('@expo/vector-icons/fonts/Entypo.ttf'); }                 catch { /* not in bundle */ }
+    try { fontMap['EvilIcons']              = require('@expo/vector-icons/fonts/EvilIcons.ttf'); }              catch { /* not in bundle */ }
+    try { fontMap['Feather']                = require('@expo/vector-icons/fonts/Feather.ttf'); }                catch { /* not in bundle */ }
+    try { fontMap['FontAwesome']            = require('@expo/vector-icons/fonts/FontAwesome.ttf'); }            catch { /* not in bundle */ }
+    try { fontMap['FontAwesome5_Regular']   = require('@expo/vector-icons/fonts/FontAwesome5_Regular.ttf'); }   catch { /* not in bundle */ }
+    try { fontMap['FontAwesome5_Solid']     = require('@expo/vector-icons/fonts/FontAwesome5_Solid.ttf'); }     catch { /* not in bundle */ }
+    try { fontMap['Foundation']             = require('@expo/vector-icons/fonts/Foundation.ttf'); }             catch { /* not in bundle */ }
+    try { fontMap['Ionicons']               = require('@expo/vector-icons/fonts/Ionicons.ttf'); }               catch { /* not in bundle */ }
+    try { fontMap['MaterialCommunityIcons'] = require('@expo/vector-icons/fonts/MaterialCommunityIcons.ttf'); } catch { /* not in bundle */ }
+    try { fontMap['MaterialIcons']          = require('@expo/vector-icons/fonts/MaterialIcons.ttf'); }          catch { /* not in bundle */ }
+    try { fontMap['Octicons']               = require('@expo/vector-icons/fonts/Octicons.ttf'); }               catch { /* not in bundle */ }
+    try { fontMap['SimpleLineIcons']        = require('@expo/vector-icons/fonts/SimpleLineIcons.ttf'); }        catch { /* not in bundle */ }
+    try { fontMap['Zocial']                 = require('@expo/vector-icons/fonts/Zocial.ttf'); }                 catch { /* not in bundle */ }
+    /* eslint-enable @typescript-eslint/no-var-requires */
 
     if (Object.keys(fontMap).length > 0) {
       await Font.loadAsync(fontMap);
       console.log('[icons] Font.loadAsync succeeded for', Object.keys(fontMap).join(', '));
       if (tryRequire()) notifyAll();
     } else {
-      console.warn('[icons] No font assets resolved — waiting for UIAppFonts (native build)');
+      console.warn('[icons] No font assets resolved — waiting for UIAppFonts (next native build)');
       if (tryRequire()) notifyAll();
     }
   } catch (e) {
@@ -96,10 +83,10 @@ async function tryLoadFonts(): Promise<void> {
   }
 }
 
-// Layer 1 — immediate attempt at module eval time
+// Layer 1 — immediate attempt at module-eval time
 tryRequire();
 
-// Layer 2 — async font loading (fires before first component renders in most cases)
+// Layer 2 — async font loading (fires before first render in most cases)
 tryLoadFonts();
 
 type LazyIconComponent = React.ComponentType<{
