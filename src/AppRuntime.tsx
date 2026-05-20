@@ -340,6 +340,7 @@ function NavigationLoadingFallback() {
 export default function AppRuntime() {
   const queryClientRef = useRef<InstanceType<typeof QueryClient> | null>(null);
   const [deferredStartupEnabled, setDeferredStartupEnabled] = useState(false);
+  const [fontsLoaded, setFontsLoaded] = useState(false);
 
   if (!queryClientRef.current) {
     queryClientRef.current = new QueryClient({
@@ -347,6 +348,60 @@ export default function AppRuntime() {
     });
   }
   const queryClient = queryClientRef.current;
+
+  // Load all @expo/vector-icons TTF fonts before the navigation tree renders
+  // so icon glyphs are available from first paint with no blank-then-appear flash.
+  // Each require() must be a static string literal (Metro bundler requirement).
+  // A 2 s timeout ensures the app is never permanently blocked if loading fails.
+  useEffect(() => {
+    let cancelled = false;
+    const timeoutId = setTimeout(() => {
+      if (!cancelled) {
+        console.warn('[AppRuntime] Font loading timed out — rendering without pre-loaded fonts');
+        setFontsLoaded(true);
+      }
+    }, 2000);
+
+    (async () => {
+      try {
+        /* eslint-disable @typescript-eslint/no-var-requires */
+        const Font = require('expo-font') as typeof import('expo-font');
+        const fontMap: Record<string, number> = {};
+        try { fontMap['AntDesign']              = require('@expo/vector-icons/fonts/AntDesign.ttf'); }              catch { /* missing */ }
+        try { fontMap['Entypo']                 = require('@expo/vector-icons/fonts/Entypo.ttf'); }                 catch { /* missing */ }
+        try { fontMap['EvilIcons']              = require('@expo/vector-icons/fonts/EvilIcons.ttf'); }              catch { /* missing */ }
+        try { fontMap['Feather']                = require('@expo/vector-icons/fonts/Feather.ttf'); }                catch { /* missing */ }
+        try { fontMap['FontAwesome']            = require('@expo/vector-icons/fonts/FontAwesome.ttf'); }            catch { /* missing */ }
+        try { fontMap['FontAwesome5_Regular']   = require('@expo/vector-icons/fonts/FontAwesome5_Regular.ttf'); }   catch { /* missing */ }
+        try { fontMap['FontAwesome5_Solid']     = require('@expo/vector-icons/fonts/FontAwesome5_Solid.ttf'); }     catch { /* missing */ }
+        try { fontMap['FontAwesome5_Brands']    = require('@expo/vector-icons/fonts/FontAwesome5_Brands.ttf'); }    catch { /* missing */ }
+        try { fontMap['Foundation']             = require('@expo/vector-icons/fonts/Foundation.ttf'); }             catch { /* missing */ }
+        try { fontMap['Ionicons']               = require('@expo/vector-icons/fonts/Ionicons.ttf'); }               catch { /* missing */ }
+        try { fontMap['MaterialCommunityIcons'] = require('@expo/vector-icons/fonts/MaterialCommunityIcons.ttf'); } catch { /* missing */ }
+        try { fontMap['MaterialIcons']          = require('@expo/vector-icons/fonts/MaterialIcons.ttf'); }          catch { /* missing */ }
+        try { fontMap['Octicons']               = require('@expo/vector-icons/fonts/Octicons.ttf'); }               catch { /* missing */ }
+        try { fontMap['SimpleLineIcons']        = require('@expo/vector-icons/fonts/SimpleLineIcons.ttf'); }        catch { /* missing */ }
+        try { fontMap['Zocial']                 = require('@expo/vector-icons/fonts/Zocial.ttf'); }                 catch { /* missing */ }
+        /* eslint-enable @typescript-eslint/no-var-requires */
+        if (Object.keys(fontMap).length > 0) {
+          await Font.loadAsync(fontMap);
+          recordStartupCheckpoint('AppRuntime.fontsLoaded', 'ok', { count: Object.keys(fontMap).length });
+        }
+      } catch (e) {
+        console.warn('[AppRuntime] Font.loadAsync failed (non-fatal):', e);
+        recordStartupCheckpoint('AppRuntime.fontsLoaded', 'warn', {
+          reason: e instanceof Error ? e.message : String(e),
+        });
+      }
+      clearTimeout(timeoutId);
+      if (!cancelled) setFontsLoaded(true);
+    })();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, []);
 
   useEffect(() => {
     recordStartupCheckpoint('AppRuntime.componentMounted', 'ok');
@@ -379,9 +434,13 @@ export default function AppRuntime() {
             <QueryClientProvider client={queryClient}>
               <AuthProvider>
                 <AnalyticsProvider enabled={deferredStartupEnabled}>
-                  <Suspense fallback={<NavigationLoadingFallback />}>
-                    <Navigation />
-                  </Suspense>
+                  {fontsLoaded ? (
+                    <Suspense fallback={<NavigationLoadingFallback />}>
+                      <Navigation />
+                    </Suspense>
+                  ) : (
+                    <NavigationLoadingFallback />
+                  )}
                   <StatusBar style="auto" />
                 </AnalyticsProvider>
               </AuthProvider>
