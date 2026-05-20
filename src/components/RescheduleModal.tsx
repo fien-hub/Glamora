@@ -9,7 +9,8 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Calendar } from 'react-native-calendars';
+let Calendar: any = View;
+try { Calendar = require('react-native-calendars').Calendar; } catch (e) { console.warn('[RescheduleModal] react-native-calendars unavailable:', e); }
 import { supabase } from '../services/supabase';
 import {
   getAvailableTimeSlots,

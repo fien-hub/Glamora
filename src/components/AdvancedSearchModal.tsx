@@ -8,7 +8,8 @@ import {
   ScrollView,
   TextInput,
 } from 'react-native';
-import Slider from '@react-native-community/slider';
+let Slider: any = View;
+try { Slider = require('@react-native-community/slider').default; } catch (e) { console.warn('[AdvancedSearchModal] slider unavailable:', e); }
 import { colors, spacing, fontSize, borderRadius } from '../constants/theme';
 
 interface AdvancedSearchModalProps {

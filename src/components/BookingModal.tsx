@@ -10,7 +10,8 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Calendar } from 'react-native-calendars';
+let Calendar: any = View;
+try { Calendar = require('react-native-calendars').Calendar; } catch (e) { console.warn('[BookingModal] react-native-calendars unavailable:', e); }
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../services/supabase';

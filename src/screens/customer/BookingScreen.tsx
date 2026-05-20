@@ -11,7 +11,8 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Calendar } from 'react-native-calendars';
+let Calendar: any = View;
+try { Calendar = require('react-native-calendars').Calendar; } catch (e) { console.warn('[BookingScreen] react-native-calendars unavailable:', e); }
 import { Ionicons } from '../../utils/icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';

@@ -10,7 +10,8 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+let DateTimePicker: any = View;
+try { DateTimePicker = require('@react-native-community/datetimepicker').default; } catch (e) { console.warn('[ProviderNotificationSettings] datetimepicker unavailable:', e); }
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';

@@ -17,8 +17,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { Ionicons } from '../../utils/icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import type { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+let DateTimePicker: any = View;
+try { DateTimePicker = require('@react-native-community/datetimepicker').default; } catch (e) { console.warn('[AvailabilityScreen] datetimepicker unavailable:', e); }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DateTimePickerEvent = any;
 import FadeInView from '../../components/animations/FadeInView';
 import StaggeredList from '../../components/animations/StaggeredList';
 

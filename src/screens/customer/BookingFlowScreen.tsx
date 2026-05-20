@@ -25,7 +25,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from '../../utils/linearGradient';
 import * as Haptics from 'expo-haptics';
-import { Calendar } from 'react-native-calendars';
+let Calendar: any = View;
+try { Calendar = require('react-native-calendars').Calendar; } catch (e) { console.warn('[BookingFlowScreen] react-native-calendars unavailable:', e); }
 import { Ionicons } from '../../utils/icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';

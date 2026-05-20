@@ -12,7 +12,14 @@ import {
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
-import Svg, { Rect, Line, Circle, Text as SvgText, Path } from 'react-native-svg';
+let _svg: typeof import('react-native-svg') | null = null;
+try { _svg = require('react-native-svg'); } catch (e) { console.warn('[AnalyticsScreen] react-native-svg unavailable:', e); }
+const Svg = (_svg?.default ?? View) as any;
+const Rect = (_svg?.Rect ?? View) as any;
+const Line = (_svg?.Line ?? View) as any;
+const Circle = (_svg?.Circle ?? View) as any;
+const SvgText = (_svg?.Text ?? View) as any;
+const Path = (_svg?.Path ?? View) as any;
 import FadeInView from '../../components/animations/FadeInView';
 import StaggeredList from '../../components/animations/StaggeredList';
 
