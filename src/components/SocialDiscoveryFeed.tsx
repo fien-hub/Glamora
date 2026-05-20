@@ -134,11 +134,12 @@ export default function SocialDiscoveryFeed({
   const fetchUserLocation = async () => {
     try {
       const location = await getCurrentLocation();
-      if (location) {
-        setUserLocation(location);
-      }
+      // Always set location — use a default so the feed still loads when
+      // the user denies permission or expo-location is unavailable.
+      setUserLocation(location ?? { latitude: 0, longitude: 0 });
     } catch (error) {
       console.error('Error getting location:', error);
+      setUserLocation({ latitude: 0, longitude: 0 });
     }
   };
 

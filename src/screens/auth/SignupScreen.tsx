@@ -122,8 +122,13 @@ export default function SignupScreen() {
     setLoading(true);
     try {
       await signUp(email, password, role, firstName, lastName);
-      // Success! Auth system will automatically navigate to complete profile
-      // No alert needed - navigation happens automatically
+      // Explicitly navigate to onboarding to avoid the brief RoleSelection flash
+      // that occurs while auth state propagates through context.
+      if (role === 'provider') {
+        navigation.navigate('ProviderOnboarding');
+      } else {
+        navigation.navigate('Personalization');
+      }
     } catch (error: any) {
       Alert.alert('Signup Failed', error.message || 'Could not create account');
       setLoading(false);
