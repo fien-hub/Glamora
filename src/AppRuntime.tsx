@@ -10,9 +10,49 @@
  * Wrapping every require() in try/catch guarantees this factory always
  * evaluates successfully, regardless of which native TurboModule fails.
  */
-import React, { useRef, useState, Suspense } from 'react';
-import { View, Text, ActivityIndicator } from 'react-native';
+import React, { useRef, useState, Suspense, useEffect } from 'react';
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  ScrollView,
+  TouchableOpacity,
+  Clipboard,
+  Platform,
+} from 'react-native';
 
+// ---------------------------------------------------------------------------
+// Diagnostic log collector — installed BEFORE any module is required.
+// Intercepts console.warn and console.error so we can display them on screen
+// when navigation fails to load, giving full visibility into which native
+// module is throwing.
+// ---------------------------------------------------------------------------
+const _diagnosticLogs: string[] = [];
+const _origWarn = console.warn.bind(console);
+const _origError = console.error.bind(console);
+
+function _captureLog(level: 'WARN' | 'ERROR', args: any[]) {
+  try {
+    const msg = args
+      .map((a) => {
+        if (a instanceof Error) return `${a.name}: ${a.message}`;
+        if (typeof a === 'object') {
+          try { return JSON.stringify(a); } catch { return String(a); }
+        }
+        return String(a);
+      })
+      .join(' ');
+    _diagnosticLogs.push(`[${level}] ${msg}`);
+    if (_diagnosticLogs.length > 200) _diagnosticLogs.shift();
+  } catch { /* never throw inside the interceptor */ }
+}
+
+console.warn = (...args: any[]) => { _captureLog('WARN', args); _origWarn(...args); };
+console.error = (...args: any[]) => { _captureLog('ERROR', args); _origError(...args); };
+
+// ---------------------------------------------------------------------------
+// Helper types / Passthrough
+// ---------------------------------------------------------------------------
 type AnyFC = React.ComponentType<any>;
 const Passthrough: AnyFC = ({ children }: { children?: React.ReactNode }) =>
   (children as React.ReactElement) ?? null;
@@ -134,24 +174,151 @@ const Navigation = React.lazy(() =>
       return mod as { default: React.ComponentType };
     })
     .catch((e) => ({
-      default: (() =>
-        React.createElement(
-          View,
-          { style: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#fff' } },
-          React.createElement(Text, { style: { color: '#c00', fontSize: 14, textAlign: 'center', fontWeight: '600' } },
-            'Navigation failed to load'
-          ),
-          React.createElement(Text, { style: { color: '#444', fontSize: 12, textAlign: 'center', marginTop: 8 } },
-            e instanceof Error ? e.message : String(e)
-          )
-        )
-      ) as React.ComponentType,
+      default: (() => React.createElement(DiagnosticScreen, { error: e })) as React.ComponentType,
     }))
 );
 
+// ---------------------------------------------------------------------------
+// DiagnosticScreen — full on-screen log viewer shown when nav fails to load
+// ---------------------------------------------------------------------------
+function DiagnosticScreen({ error }: { error: unknown }) {
+  const [copied, setCopied] = useState(false);
+
+  const errorMsg = error instanceof Error ? error.message : String(error);
+  const errorStack = error instanceof Error && error.stack ? `\n${error.stack}` : '';
+
+  const platformInfo = `Platform: ${Platform.OS} ${Platform.Version}\nBuild: production`;
+
+  const relevantLogs = _diagnosticLogs.filter(
+    (l) =>
+      l.includes('[AppRuntime]') ||
+      l.includes('unavailable') ||
+      l.includes('load failed') ||
+      l.includes('ERROR') ||
+      l.includes('failed') ||
+      l.includes('throw') ||
+      l.includes('undefined') ||
+      l.includes('Navigation')
+  );
+
+  const fullReport = [
+    '=== GLAMORA DIAGNOSTIC REPORT ===',
+    platformInfo,
+    '',
+    '=== NAVIGATION ERROR ===',
+    errorMsg + errorStack,
+    '',
+    '=== MODULE LOAD WARNINGS ===',
+    relevantLogs.length > 0 ? relevantLogs.join('\n') : '(none captured)',
+    '',
+    '=== ALL CAPTURED LOGS ===',
+    _diagnosticLogs.length > 0 ? _diagnosticLogs.join('\n') : '(none)',
+  ].join('\n');
+
+  const handleCopy = () => {
+    try {
+      Clipboard.setString(fullReport);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#0a0a0a', paddingTop: 60 }}>
+      {/* Header */}
+      <View style={{ paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#333' }}>
+        <Text style={{ color: '#ff4444', fontSize: 16, fontWeight: '700', textAlign: 'center' }}>
+          Navigation failed to load
+        </Text>
+        <Text style={{ color: '#999', fontSize: 11, textAlign: 'center', marginTop: 4 }}>
+          Diagnostic build — share the logs below
+        </Text>
+      </View>
+
+      {/* Error summary */}
+      <View style={{ backgroundColor: '#1a0000', margin: 12, padding: 12, borderRadius: 8, borderLeftWidth: 3, borderLeftColor: '#ff4444' }}>
+        <Text style={{ color: '#ff8888', fontSize: 11, fontFamily: 'monospace' }} selectable>
+          {errorMsg}
+        </Text>
+      </View>
+
+      {/* Platform info */}
+      <View style={{ paddingHorizontal: 12, marginBottom: 4 }}>
+        <Text style={{ color: '#666', fontSize: 10 }}>{platformInfo}</Text>
+      </View>
+
+      {/* Copy button */}
+      <TouchableOpacity
+        onPress={handleCopy}
+        style={{
+          marginHorizontal: 12,
+          marginBottom: 8,
+          backgroundColor: copied ? '#1a5c1a' : '#1a3a5c',
+          borderRadius: 6,
+          padding: 10,
+          alignItems: 'center',
+        }}
+      >
+        <Text style={{ color: copied ? '#66ff66' : '#66aaff', fontSize: 13, fontWeight: '600' }}>
+          {copied ? '✓ Copied to clipboard!' : '📋 Copy full report'}
+        </Text>
+      </TouchableOpacity>
+
+      {/* Log scroll view */}
+      <Text style={{ color: '#555', fontSize: 10, paddingHorizontal: 12, marginBottom: 4 }}>
+        MODULE LOAD LOG ({_diagnosticLogs.length} entries) — scroll to see all
+      </Text>
+      <ScrollView
+        style={{ flex: 1, marginHorizontal: 12, marginBottom: 16 }}
+        contentContainerStyle={{ paddingBottom: 20 }}
+      >
+        {relevantLogs.length > 0 ? (
+          <>
+            <Text style={{ color: '#ff9900', fontSize: 10, marginBottom: 6, fontWeight: '600' }}>
+              ⚠ RELEVANT WARNINGS ({relevantLogs.length})
+            </Text>
+            {relevantLogs.map((log, i) => (
+              <Text key={`r${i}`} style={{ color: '#ffbb66', fontSize: 10, fontFamily: 'monospace', marginBottom: 2 }} selectable>
+                {log}
+              </Text>
+            ))}
+            <View style={{ height: 1, backgroundColor: '#333', marginVertical: 8 }} />
+          </>
+        ) : (
+          <Text style={{ color: '#666', fontSize: 10, marginBottom: 8 }}>
+            No module-load warnings captured. The crash happened before the interceptor ran — likely a hard JS syntax error.
+          </Text>
+        )}
+        <Text style={{ color: '#555', fontSize: 10, marginBottom: 4, fontWeight: '600' }}>
+          ALL LOGS ({_diagnosticLogs.length})
+        </Text>
+        {_diagnosticLogs.map((log, i) => (
+          <Text
+            key={`a${i}`}
+            style={{
+              color: log.startsWith('[ERROR]') ? '#ff6666' : log.startsWith('[WARN]') ? '#ffaa44' : '#888',
+              fontSize: 9,
+              fontFamily: 'monospace',
+              marginBottom: 1,
+            }}
+            selectable
+          >
+            {log}
+          </Text>
+        ))}
+        {_diagnosticLogs.length === 0 && (
+          <Text style={{ color: '#555', fontSize: 10 }}>
+            No logs captured. The crash happened synchronously during metro bundle evaluation before the interceptor was installed.
+          </Text>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
 function NavigationLoadingFallback() {
   const [showStatus, setShowStatus] = useState(false);
-  React.useEffect(() => {
+  useEffect(() => {
     const t = setTimeout(() => setShowStatus(true), 3000);
     return () => clearTimeout(t);
   }, []);
@@ -178,7 +345,7 @@ export default function AppRuntime() {
   }
   const queryClient = queryClientRef.current;
 
-  React.useEffect(() => {
+  useEffect(() => {
     recordStartupCheckpoint('AppRuntime.componentMounted', 'ok');
     const t = setTimeout(() => {
       setDeferredStartupEnabled(true);
@@ -187,7 +354,7 @@ export default function AppRuntime() {
     return () => clearTimeout(t);
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!deferredStartupEnabled) return;
     try {
       if (initSentry) {
