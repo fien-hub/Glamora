@@ -95,23 +95,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         const reason = error instanceof Error ? error.message : String(error);
-        const invalidRefreshToken = reason.toLowerCase().includes('invalid refresh token');
+        const lowerReason = reason.toLowerCase();
+        const invalidRefreshToken = lowerReason.includes('invalid refresh token') ||
+          lowerReason.includes('invalid_grant') ||
+          lowerReason.includes('refresh_token_not_found');
+        const isNetworkError = lowerReason.includes('fetch') ||
+          lowerReason.includes('network') ||
+          lowerReason.includes('timeout') ||
+          lowerReason.includes('failed to fetch') ||
+          lowerReason.includes('networkerror');
 
         recordStartupCheckpoint('AuthProvider.getSession', 'warn', {
           reason,
           invalidRefreshToken,
+          isNetworkError,
         });
 
         if (invalidRefreshToken) {
-          console.warn('[AuthContext] Invalid refresh token detected, resetting to signed-out state');
+          // Token is genuinely invalid — must sign out
+          console.warn('[AuthContext] Invalid refresh token — resetting to signed-out state');
           void supabase.auth.signOut().catch(() => undefined);
+          setSession(null);
+          setUser(null);
+          setUserRole(null);
+          setNeedsOnboarding(false);
+          setNeedsVerification(false);
+          setLoading(false);
+          return;
         }
 
-        setSession(null);
-        setUser(null);
-        setUserRole(null);
-        setNeedsOnboarding(false);
-        setNeedsVerification(false);
+        // Network error or unknown error — do NOT log the user out.
+        // The locally cached session may still be valid; Supabase will
+        // re-attempt token refresh automatically when connectivity returns.
+        console.warn('[AuthContext] getSession error (network/unknown) — keeping existing state:', reason);
         setLoading(false);
         return;
       }
@@ -143,6 +159,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         event: _event,
         hasSession: !!session,
       });
+
+      // TOKEN_REFRESH_FAILED fires when the network is unavailable during an
+      // automatic token refresh. This is NOT a real sign-out — the locally
+      // cached session is still valid and Supabase will retry automatically
+      // once connectivity is restored. Treating it as a logout would kick
+      // the user out every time they lose signal briefly.
+      if (_event === 'TOKEN_REFRESH_FAILED') {
+        console.warn('[AuthContext] Token refresh failed (network issue) — keeping existing session, will retry when online');
+        return;
+      }
 
       setSession(session);
       setUser(session?.user ?? null);
