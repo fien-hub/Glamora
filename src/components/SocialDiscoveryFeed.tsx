@@ -8,8 +8,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-let Haptics: typeof import('expo-haptics') = {} as any;
-try { Haptics = require('expo-haptics'); } catch (e) { console.warn('[SocialDiscoveryFeed] expo-haptics unavailable:', e); }
+import Haptics from '../utils/haptics';
 import { Ionicons } from '../utils/icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../constants/theme';

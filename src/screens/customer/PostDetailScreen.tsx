@@ -16,8 +16,7 @@ let Image: any = RNImage;
 try { Image = require('expo-image').Image; } catch (e) { console.warn('[PostDetailScreen] expo-image unavailable, using RN Image:', e); }
 import { Ionicons } from '../../utils/icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-let Haptics: typeof import('expo-haptics') = {} as any;
-try { Haptics = require('expo-haptics'); } catch (e) { console.warn('[PostDetailScreen] expo-haptics unavailable:', e); }
+import Haptics from '../../utils/haptics';
 import { colors, spacing, borderRadius, fontSize, fontWeight, shadows } from '../../constants/theme';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../contexts/AuthContext';

@@ -24,8 +24,7 @@ import Animated, {
   interpolate,
 } from 'react-native-reanimated';
 import { LinearGradient } from '../../utils/linearGradient';
-let Haptics: typeof import('expo-haptics') = {} as any;
-try { Haptics = require('expo-haptics'); } catch (e) { console.warn('[BookingFlowScreen] expo-haptics unavailable:', e); }
+import Haptics from '../../utils/haptics';
 let Calendar: any = View;
 try { Calendar = require('react-native-calendars').Calendar; } catch (e) { console.warn('[BookingFlowScreen] react-native-calendars unavailable:', e); }
 import { Ionicons } from '../../utils/icons';

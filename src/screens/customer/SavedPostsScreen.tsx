@@ -16,8 +16,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { analytics } from '../../services/analytics';
 import FeedPostCard from '../../components/FeedPostCard';
 import BrandedRefreshControl from '../../components/BrandedRefreshControl';
-let Haptics: typeof import('expo-haptics') = {} as any;
-try { Haptics = require('expo-haptics'); } catch (e) { console.warn('[SavedPostsScreen] expo-haptics unavailable:', e); }
+import Haptics from '../../utils/haptics';
 
 interface SavedPost {
   id: string;

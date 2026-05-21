@@ -16,8 +16,7 @@ import { analytics } from '../services/analytics';
 import FeedPostCard from './FeedPostCard';
 import BrandedRefreshControl from './BrandedRefreshControl';
 import { SkeletonFeedCard } from './SkeletonLoader';
-let Haptics: typeof import('expo-haptics') = {} as any;
-try { Haptics = require('expo-haptics'); } catch (e) { console.warn('[TrendingFeed] expo-haptics unavailable:', e); }
+import Haptics from '../utils/haptics';
 
 interface TrendingPost {
   id: string;
