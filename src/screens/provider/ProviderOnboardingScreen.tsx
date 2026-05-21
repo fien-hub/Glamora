@@ -336,7 +336,7 @@ export default function ProviderOnboardingScreen() {
         .update({ bio })
         .eq('id', profileData.id);
 
-      markOnboardingComplete();
+      navigation.navigate('AppRating' as never);
     } catch (error: any) {
       console.error('[Onboarding] Error skipping verification step:', error);
       Alert.alert('Error', error.message || 'Failed to skip verification step');
@@ -497,13 +497,10 @@ export default function ProviderOnboardingScreen() {
       console.log('[Onboarding] Availability added');
       console.log('[Onboarding] All steps completed successfully!');
 
-      // Mark onboarding complete immediately so navigation can switch right away.
-      // refreshOnboardingStatus() is intentionally NOT called — it re-queries the DB
-      // and can set needsOnboarding=true if there's any transient read error, bouncing
-      // the user back to onboarding right after they just completed it.
-      markOnboardingComplete();
-
+      // Navigate to rating screen — AppRatingScreen calls markOnboardingComplete()
+      // after the user responds, so we do NOT call it here.
       setLoading(false);
+      navigation.navigate('AppRating' as never);
     } catch (error: any) {
       console.error('[Onboarding] Error saving profile:', error);
       Alert.alert('Error', error.message || 'Failed to save profile');

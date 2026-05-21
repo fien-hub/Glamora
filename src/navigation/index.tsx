@@ -11,6 +11,7 @@ import { navigationRef } from './RootNavigation';
 import SplashScreen from '../screens/onboarding/SplashScreen';
 import OnboardingScreen from '../screens/auth/OnboardingScreen';
 import PersonalizationScreen from '../screens/onboarding/PersonalizationScreen';
+import AppRatingScreen from '../screens/onboarding/AppRatingScreen';
 
 // Auth Screens
 import WelcomeScreen from '../screens/auth/WelcomeScreen';
@@ -265,6 +266,11 @@ export default function Navigation() {
               component={PersonalizationScreen}
               options={{ headerShown: false }}
             />
+            <Stack.Screen
+              name="AppRating"
+              component={AppRatingScreen}
+              options={{ headerShown: false, gestureEnabled: false }}
+            />
           </>
         ) : user && needsOnboarding && userRole === 'provider' ? (
           // Provider needs onboarding
@@ -278,6 +284,11 @@ export default function Navigation() {
               name="KYCVerification"
               component={VerificationScreen}
               options={{ headerShown: true, title: 'KYC Documents' }}
+            />
+            <Stack.Screen
+              name="AppRating"
+              component={AppRatingScreen}
+              options={{ headerShown: false, gestureEnabled: false }}
             />
           </>
         ) : userRole === 'customer' ? (

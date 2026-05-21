@@ -234,7 +234,7 @@ export default function PersonalizationScreen() {
       // The DB already has onboarding_completed=true, so future app launches
       // will land on the correct screen without any extra refresh needed.
       setLoading(false);
-      markOnboardingComplete();
+      navigation.navigate('AppRating' as never);
     } catch (error: any) {
       console.error('[Personalization] Error saving preferences:', error);
       Alert.alert('Error', error.message || 'Failed to save preferences');
@@ -257,14 +257,10 @@ export default function PersonalizationScreen() {
           .upsert({ id: profileData.id, onboarding_completed: true }, { onConflict: 'id' });
       }
 
-      // markOnboardingComplete() switches navigation immediately.
-      // refreshOnboardingStatus() is intentionally omitted — see savePreferences()
-      // for a full explanation of why calling it here causes navigation to break.
-      markOnboardingComplete();
+      navigation.navigate('AppRating' as never);
     } catch (error) {
       console.error('[Personalization] Error skipping:', error);
-      // Navigate even if the DB update failed; the user can re-complete later.
-      markOnboardingComplete();
+      navigation.navigate('AppRating' as never);
     }
   };
 
