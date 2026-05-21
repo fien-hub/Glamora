@@ -30,6 +30,10 @@
   <string>Glamora needs calendar access to add booking reminders and appointment events.</string>
   <key>NSCalendarsFullAccessUsageDescription</key>
   <string>Glamora needs full calendar access to create, update, and remove booking events you choose to sync.</string>
+  <key>NSLocationWhenInUseUsageDescription</key>
+  <string>Glamora uses your location to find beauty professionals near you and auto-fill your service address.</string>
+  <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+  <string>Glamora uses your location to find beauty professionals near you and auto-fill your service address.</string>
   <key>UILaunchStoryboardName</key>
   <string>SplashScreen</string>
   <key>UIRequiredDeviceCapabilities</key>
