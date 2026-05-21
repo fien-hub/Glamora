@@ -11,7 +11,7 @@ interface FeedPostCardProps {
   postImage: string;
   serviceName: string;
   servicePrice?: number;
-  distance: string;
+  distance?: string;
   caption?: string;
   likeCount?: number;
   viewCount?: number;
@@ -73,11 +73,13 @@ export default function FeedPostCard({
           cachePolicy="memory-disk"
         />
 
-        {/* Distance Tag */}
-        <View style={styles.distanceTag}>
-          <Ionicons name="location" size={14} color={colors.white} />
-          <Text style={styles.distanceText}>{distance}</Text>
-        </View>
+        {/* Distance Tag — only shown when distance is known */}
+        {!!distance && (
+          <View style={styles.distanceTag}>
+            <Ionicons name="location" size={14} color={colors.white} />
+            <Text style={styles.distanceText}>{distance}</Text>
+          </View>
+        )}
 
 
 

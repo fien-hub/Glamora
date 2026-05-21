@@ -78,6 +78,7 @@ export default function SocialDiscoveryFeed({
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locationFetchComplete, setLocationFetchComplete] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
 
@@ -91,9 +92,10 @@ export default function SocialDiscoveryFeed({
     fetchUserLocation();
   }, []);
 
-  // Only load feed when both categories and userLocation are available
+  // Load feed once categories are ready and location fetch has completed
+  // (location may be null if permission was denied — that's fine, load without distance)
   useEffect(() => {
-    if (categories.length > 0 && userLocation) {
+    if (categories.length > 0 && locationFetchComplete) {
       const initializeFeed = async () => {
         await loadFeedPosts(true);
         setLoading(false);
@@ -102,17 +104,17 @@ export default function SocialDiscoveryFeed({
 
       initializeFeed();
     }
-  }, [categories, userLocation]);
+  }, [categories, locationFetchComplete]);
 
-  // Reload feed when category changes (and userLocation is available)
+  // Reload feed when category changes (after initial load)
   useEffect(() => {
     if (!initialLoadComplete) return;
 
-    if (selectedCategory && userLocation) {
+    if (selectedCategory) {
       loadFeedPosts(true);
       analytics.trackCategoryFilter(selectedCategory, user?.id);
     }
-  }, [selectedCategory, userLocation, initialLoadComplete]);
+  }, [selectedCategory, initialLoadComplete]);
 
 
   const fetchCategories = async () => {
@@ -134,12 +136,11 @@ export default function SocialDiscoveryFeed({
   const fetchUserLocation = async () => {
     try {
       const location = await getCurrentLocation();
-      // Always set location — use a default so the feed still loads when
-      // the user denies permission or expo-location is unavailable.
-      setUserLocation(location ?? { latitude: 0, longitude: 0 });
+      setUserLocation(location);
     } catch (error) {
       console.error('Error getting location:', error);
-      setUserLocation({ latitude: 0, longitude: 0 });
+    } finally {
+      setLocationFetchComplete(true);
     }
   };
 
@@ -163,8 +164,8 @@ export default function SocialDiscoveryFeed({
 
       // Use the new get_personalized_feed function
       const { data, error } = await supabase.rpc('get_personalized_feed', {
-        customer_lat: userLocation?.latitude || null,
-        customer_lon: userLocation?.longitude || null,
+        customer_lat: userLocation?.latitude ?? null,
+        customer_lon: userLocation?.longitude ?? null,
         profile_id_param: customerId,
         category_filter: selectedCategory === 'All' ? null : selectedCategory,
         page_num: currentPage,
@@ -590,7 +591,7 @@ export default function SocialDiscoveryFeed({
         postImage={item.image_url}
         serviceName={item.service_name || item.caption || 'View Portfolio'}
         servicePrice={item.service_price ? item.service_price / 100 : undefined}
-        distance={typeof item.distance === 'number' ? formatTravelTimeDistance(item.distance) : 'N/A'}
+        distance={typeof item.distance === 'number' ? formatTravelTimeDistance(item.distance) : undefined}
         caption={item.caption}
         likeCount={item.like_count}
         viewCount={item.view_count}
