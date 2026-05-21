@@ -420,6 +420,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (customerError) {
           console.error('[AuthContext] Error fetching customer profile:', customerError);
+          // Cannot determine onboarding status — preserve the current value rather
+          // than incorrectly resetting needsOnboarding to true and bouncing the user
+          // back to PersonalizationScreen right after they complete it.
+          return;
         }
 
         console.log('[AuthContext] Customer onboarding_completed:', customerProfile?.onboarding_completed);
@@ -435,6 +439,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (providerError) {
           console.error('[AuthContext] Error fetching provider profile:', providerError);
+          // Same guard as customer — don't revert navigation on a read error.
+          return;
         }
 
         console.log('[AuthContext] Provider onboarding_completed:', providerProfile?.onboarding_completed);

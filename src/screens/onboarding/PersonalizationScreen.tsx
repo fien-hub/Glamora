@@ -205,10 +205,12 @@ export default function PersonalizationScreen() {
 
       console.log('[Personalization] Profile ID:', profileData.id);
 
-      // Save preferences to customer profile
+      // Save preferences to customer profile.
+      // Use upsert so the row is created if it doesn't already exist for this profile id.
       const { error } = await supabase
         .from('customer_profiles')
-        .update({
+        .upsert({
+          id: profileData.id,
           preferred_categories: selectedCategories,
           location_address: address,
           location_city: city,
@@ -217,8 +219,7 @@ export default function PersonalizationScreen() {
           booking_time_preference: bookingTime,
           budget_preference: budget,
           onboarding_completed: true,
-        })
-        .eq('id', profileData.id);
+        }, { onConflict: 'id' });
 
       if (error) throw error;
 
