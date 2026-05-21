@@ -348,9 +348,42 @@ export default function AppRuntime() {
   }
   const queryClient = queryClientRef.current;
 
-  // Fonts are registered natively at iOS startup via UIAppFonts in Info.plist
-  // (all @expo/vector-icons TTFs are listed there and copied into the app bundle).
-  // No JS-side font loading is required — icons render correctly from first paint.
+  // Fire-and-forget: pre-register fonts with expo-font's JS tracking so that
+  // any @expo/vector-icons component that checks Font.isLoaded() sees them as
+  // loaded. Uses correct v15 paths under build/vendor/. Does NOT gate navigation.
+  // Our custom NativeIonicons in icons.ts renders independently of this via
+  // UIAppFonts, so icons display even if this call fails.
+  useEffect(() => {
+    (async () => {
+      try {
+        /* eslint-disable @typescript-eslint/no-var-requires */
+        const Font = require('expo-font') as typeof import('expo-font');
+        await Font.loadAsync({
+          // Keys must match what @expo/vector-icons v15 uses internally
+          ionicons:                require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
+          material:                require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf'),
+          'material-community':    require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf'),
+          anticon:                 require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/AntDesign.ttf'),
+          feather:                 require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Feather.ttf'),
+          FontAwesome:             require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/FontAwesome.ttf'),
+          entypo:                  require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Entypo.ttf'),
+          evilicons:               require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/EvilIcons.ttf'),
+          foundation:              require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Foundation.ttf'),
+          octicons:                require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Octicons.ttf'),
+          'simple-line-icons':     require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/SimpleLineIcons.ttf'),
+          zocial:                  require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Zocial.ttf'),
+        });
+        /* eslint-enable @typescript-eslint/no-var-requires */
+        recordStartupCheckpoint('AppRuntime.fontsPreloaded', 'ok');
+      } catch (e) {
+        // Non-fatal — NativeIonicons renders from UIAppFonts regardless
+        console.warn('[AppRuntime] Font preload (non-fatal):', e);
+        recordStartupCheckpoint('AppRuntime.fontsPreloaded', 'warn', {
+          reason: e instanceof Error ? e.message : String(e),
+        });
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     recordStartupCheckpoint('AppRuntime.componentMounted', 'ok');
