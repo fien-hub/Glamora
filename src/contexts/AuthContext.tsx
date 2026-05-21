@@ -611,15 +611,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('profiles')
         .update({ email_verified: false })
         .eq('user_id', data.user.id);
-      setNeedsVerification(true);
-      setNeedsOnboarding(false);
 
-      // Check onboarding status BEFORE setting the role so that when navigation
-      // first renders with a role, needsOnboarding is already correct.
-      // (Previously role was set first → navigation jumped to CustomerMain before
-      // needsOnboarding could be updated, skipping the personalization screens.)
-      await checkOnboardingStatus(data.user.id, role);
-      console.log('[AuthContext] Onboarding status checked');
+      // New sign-ups must verify email first. Set state directly — do NOT call
+      // checkOnboardingStatus here because it calls checkVerificationStatus which
+      // may still read null (DB write hasn't propagated) and clear needsVerification.
+      // onboarding_completed is always false for a brand-new account so
+      // needsOnboarding=true is correct, but navigation gates it behind verification.
+      setNeedsVerification(true);
+      setNeedsOnboarding(true);
 
       setUserRole(role);
       console.log('[AuthContext] Role set to:', role);

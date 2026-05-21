@@ -16,7 +16,15 @@ export const NotificationFeedbackType = {
 export const impactAsync = async (style?: any): Promise<void> => {
   try {
     if (ExpoHaptics?.impactAsync) {
-      await ExpoHaptics.impactAsync(style ?? ExpoHaptics.ImpactFeedbackStyle?.Light);
+      // Always use the real enum from the native module — never pass our string shim
+      const realStyle = ExpoHaptics.ImpactFeedbackStyle?.Light !== undefined
+        ? (style === ImpactFeedbackStyle.Heavy
+            ? ExpoHaptics.ImpactFeedbackStyle.Heavy
+            : style === ImpactFeedbackStyle.Medium
+            ? ExpoHaptics.ImpactFeedbackStyle.Medium
+            : ExpoHaptics.ImpactFeedbackStyle.Light)
+        : undefined;
+      await ExpoHaptics.impactAsync(realStyle as any);
     }
   } catch (_) {}
 };
@@ -24,7 +32,14 @@ export const impactAsync = async (style?: any): Promise<void> => {
 export const notificationAsync = async (type?: any): Promise<void> => {
   try {
     if (ExpoHaptics?.notificationAsync) {
-      await ExpoHaptics.notificationAsync(type ?? ExpoHaptics.NotificationFeedbackType?.Success);
+      const realType = ExpoHaptics.NotificationFeedbackType?.Success !== undefined
+        ? (type === NotificationFeedbackType.Error
+            ? ExpoHaptics.NotificationFeedbackType.Error
+            : type === NotificationFeedbackType.Warning
+            ? ExpoHaptics.NotificationFeedbackType.Warning
+            : ExpoHaptics.NotificationFeedbackType.Success)
+        : undefined;
+      await ExpoHaptics.notificationAsync(realType as any);
     }
   } catch (_) {}
 };

@@ -590,7 +590,7 @@ export default function SocialDiscoveryFeed({
         postImage={item.image_url}
         serviceName={item.service_name || item.caption || 'View Portfolio'}
         servicePrice={item.service_price ? item.service_price / 100 : undefined}
-        distance={typeof item.distance === 'number' ? formatTravelTimeDistance(item.distance) : undefined}
+        distance={typeof item.distance === 'number' && item.distance >= 0 && Number.isFinite(item.distance) ? formatTravelTimeDistance(item.distance) : undefined}
         caption={item.caption}
         likeCount={item.like_count}
         viewCount={item.view_count}
