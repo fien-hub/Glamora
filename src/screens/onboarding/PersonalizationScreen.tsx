@@ -224,11 +224,16 @@ export default function PersonalizationScreen() {
 
       console.log('[Personalization] Preferences saved successfully');
 
-      // Force navigation immediately via direct state change, then also
-      // refresh from DB so subsequent restarts land on the correct screen.
-      markOnboardingComplete();
+      // markOnboardingComplete() sets needsOnboarding=false in the auth context
+      // immediately, which causes the navigator to switch to CustomerMain.
+      // Do NOT call refreshOnboardingStatus() here — it re-queries the DB and
+      // its internal catch blocks can set needsOnboarding=true or
+      // needsVerification=true, undoing the navigation and sending the user
+      // back to Personalization or AccountVerification.
+      // The DB already has onboarding_completed=true, so future app launches
+      // will land on the correct screen without any extra refresh needed.
       setLoading(false);
-      await refreshOnboardingStatus();
+      markOnboardingComplete();
     } catch (error: any) {
       console.error('[Personalization] Error saving preferences:', error);
       Alert.alert('Error', error.message || 'Failed to save preferences');
@@ -252,14 +257,14 @@ export default function PersonalizationScreen() {
           .eq('id', profileData.id);
       }
 
-      // Force navigation immediately, then refresh DB state for future restarts
+      // markOnboardingComplete() switches navigation immediately.
+      // refreshOnboardingStatus() is intentionally omitted — see savePreferences()
+      // for a full explanation of why calling it here causes navigation to break.
       markOnboardingComplete();
-      await refreshOnboardingStatus();
     } catch (error) {
       console.error('[Personalization] Error skipping:', error);
-      // Still navigate even if DB update failed
+      // Navigate even if the DB update failed; the user can re-complete later.
       markOnboardingComplete();
-      await refreshOnboardingStatus().catch(() => {});
     }
   };
 
