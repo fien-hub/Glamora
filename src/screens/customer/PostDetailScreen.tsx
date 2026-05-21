@@ -9,10 +9,11 @@ import {
   ActivityIndicator,
   FlatList,
   StatusBar,
+  Image as RNImage,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-let Image: any = View;
-try { Image = require('expo-image').Image; } catch (e) { console.warn('[PostDetailScreen] expo-image unavailable:', e); }
+let Image: any = RNImage;
+try { Image = require('expo-image').Image; } catch (e) { console.warn('[PostDetailScreen] expo-image unavailable, using RN Image:', e); }
 import { Ionicons } from '../../utils/icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 let Haptics: typeof import('expo-haptics') = {} as any;

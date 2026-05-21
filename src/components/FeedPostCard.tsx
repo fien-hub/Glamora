@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-let Image: any = View;
-try { Image = require('expo-image').Image; } catch (e) { console.warn('[FeedPostCard] expo-image unavailable:', e); }
+import { View, Text, TouchableOpacity, StyleSheet, Image as RNImage } from 'react-native';
+let Image: any = RNImage;
+try { Image = require('expo-image').Image; } catch (e) { console.warn('[FeedPostCard] expo-image unavailable, using RN Image:', e); }
 import { Ionicons } from '../utils/icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../constants/theme';
 
