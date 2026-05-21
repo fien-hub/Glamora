@@ -254,8 +254,7 @@ export default function PersonalizationScreen() {
       if (profileData) {
         await supabase
           .from('customer_profiles')
-          .update({ onboarding_completed: true })
-          .eq('id', profileData.id);
+          .upsert({ id: profileData.id, onboarding_completed: true }, { onConflict: 'id' });
       }
 
       // markOnboardingComplete() switches navigation immediately.

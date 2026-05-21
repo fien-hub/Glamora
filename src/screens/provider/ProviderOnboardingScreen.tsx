@@ -314,7 +314,8 @@ export default function ProviderOnboardingScreen() {
 
       const { error: providerError } = await supabase
         .from('provider_profiles')
-        .update({
+        .upsert({
+          id: profileData.id,
           business_name: businessName,
           years_experience: parseInt(yearsExperience) || 0,
           certifications: certifications.split(',').map((c) => c.trim()).filter(Boolean),
@@ -324,8 +325,7 @@ export default function ProviderOnboardingScreen() {
           latitude,
           longitude,
           onboarding_completed: true,
-        })
-        .eq('id', profileData.id);
+        }, { onConflict: 'id' });
 
       if (providerError) {
         throw providerError;
@@ -337,9 +337,6 @@ export default function ProviderOnboardingScreen() {
         .eq('id', profileData.id);
 
       markOnboardingComplete();
-      refreshOnboardingStatus().catch((error) => {
-        console.error('[Onboarding] Failed to refresh onboarding status after skip:', error);
-      });
     } catch (error: any) {
       console.error('[Onboarding] Error skipping verification step:', error);
       Alert.alert('Error', error.message || 'Failed to skip verification step');
@@ -403,7 +400,8 @@ export default function ProviderOnboardingScreen() {
       console.log('[Onboarding] Updating provider profile...');
       const { error: providerError } = await supabase
         .from('provider_profiles')
-        .update({
+        .upsert({
+          id: profileData.id,
           business_name: businessName,
           years_experience: parseInt(yearsExperience) || 0,
           certifications: certifications.split(',').map((c) => c.trim()).filter(Boolean),
@@ -413,8 +411,7 @@ export default function ProviderOnboardingScreen() {
           latitude: latitude,
           longitude: longitude,
           onboarding_completed: true,
-        })
-        .eq('id', profileData.id);
+        }, { onConflict: 'id' });
 
       if (providerError) {
         console.error('[Onboarding] Provider update error:', providerError);
@@ -500,12 +497,11 @@ export default function ProviderOnboardingScreen() {
       console.log('[Onboarding] Availability added');
       console.log('[Onboarding] All steps completed successfully!');
 
-      // Mark onboarding complete immediately so navigation can switch right away
+      // Mark onboarding complete immediately so navigation can switch right away.
+      // refreshOnboardingStatus() is intentionally NOT called — it re-queries the DB
+      // and can set needsOnboarding=true if there's any transient read error, bouncing
+      // the user back to onboarding right after they just completed it.
       markOnboardingComplete();
-      console.log('[Onboarding] Onboarding marked complete locally; refreshing status in background...');
-      refreshOnboardingStatus().catch((error) => {
-        console.error('[Onboarding] Failed to refresh onboarding status after completion:', error);
-      });
 
       setLoading(false);
     } catch (error: any) {
