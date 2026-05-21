@@ -504,9 +504,11 @@ export default function SearchScreen() {
               <Ionicons name="star" size={14} color={colors.warning} />
               <Text style={styles.ratingText}>{ps.provider.rating.toFixed(1)}</Text>
               <Text style={styles.reviewsText}>({ps.provider.total_reviews})</Text>
-              <Text style={styles.distanceText}>
-                • {typeof ps.distanceKm === 'number' ? formatTravelTimeDistance(ps.distanceKm) : 'N/A'}
-              </Text>
+              {typeof ps.distanceKm === 'number' && (
+                <Text style={styles.distanceText}>
+                  • {formatTravelTimeDistance(ps.distanceKm)}
+                </Text>
+              )}
             </View>
           </View>
           <AnimatedHeart

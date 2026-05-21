@@ -73,6 +73,25 @@ export default function ServiceProvidersScreen() {
     }
   };
 
+  // Recalculate distances if location resolves after providers are already loaded
+  useEffect(() => {
+    if (!userLocation || providers.length === 0) return;
+    setProviders(prev =>
+      prev.map(provider => {
+        if (provider.latitude && provider.longitude) {
+          return {
+            ...provider,
+            distance: calculateDistance(userLocation, {
+              latitude: provider.latitude,
+              longitude: provider.longitude,
+            }),
+          };
+        }
+        return provider;
+      })
+    );
+  }, [userLocation]);
+
   // Fetch profile ID from profiles table (needed for favorite_providers)
   const fetchProfileId = async () => {
     if (!user) return;
