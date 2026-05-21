@@ -31,7 +31,6 @@ import CachedImage, { CachedAvatarImage, CachedHeroImage } from '../../component
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_WIDTH = 130;
 const HERO_BANNER_WIDTH = SCREEN_WIDTH - spacing.lg * 2;
-const HERO_SCALLOP_COUNT = 8;
 const getWelcomeMessageKey = (userId: string) => `glamora_show_welcome_${userId}`;
 const getTourCompletedKey = (userId: string) => `glamora_home_tour_completed_${userId}`;
 
@@ -861,28 +860,6 @@ export default function HomeScreen() {
               >
                 <Text style={styles.heroCtaText}>{banner.cta}</Text>
               </TouchableOpacity>
-              <View pointerEvents="none" style={styles.heroScallopColumn}>
-                {Array.from({ length: HERO_SCALLOP_COUNT }).map((_, index) => (
-                  (() => {
-                    const slantShift = HERO_SCALLOP_COUNT > 1
-                      ? 4 - (index * 20) / (HERO_SCALLOP_COUNT - 1)
-                      : 0;
-
-                    return (
-                  <View
-                    key={`${banner.id}-scallop-${index}`}
-                    style={[
-                      styles.heroScallopBubble,
-                      {
-                        backgroundColor: banner.bg,
-                        transform: [{ translateX: slantShift }],
-                      },
-                    ]}
-                  />
-                    );
-                  })()
-                ))}
-              </View>
             </View>
             <LinearGradient
               pointerEvents="none"
@@ -1424,20 +1401,6 @@ const styles = StyleSheet.create({
   heroShimmerGradient: {
     flex: 1,
     borderRadius: borderRadius.round,
-  },
-  heroScallopColumn: {
-    position: 'absolute',
-    right: -6,
-    top: 0,
-    bottom: 0,
-    width: 42,
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  heroScallopBubble: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
   },
   heroDots: {
     position: 'absolute',
