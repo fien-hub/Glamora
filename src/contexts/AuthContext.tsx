@@ -602,6 +602,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log('[AuthContext] Profile verified in database with role:', verifyData.role);
 
+      // New email sign-ups must verify their email before reaching personalization.
+      // The create_user_profile RPC leaves email_verified as null, which
+      // checkVerificationStatus() treats as "already verified" (to avoid locking out
+      // pre-existing users). Explicitly set it to false so the verification screen
+      // is shown, then checkOnboardingStatus will correctly gate onboarding behind it.
+      await supabase
+        .from('profiles')
+        .update({ email_verified: false })
+        .eq('user_id', data.user.id);
+      setNeedsVerification(true);
+      setNeedsOnboarding(false);
+
       // Check onboarding status BEFORE setting the role so that when navigation
       // first renders with a role, needsOnboarding is already correct.
       // (Previously role was set first → navigation jumped to CustomerMain before
