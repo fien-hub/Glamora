@@ -99,7 +99,80 @@ export default function AccountVerificationScreen() {
     }
   }, [countdown]);
 
-  const navigateToNextStep = () => {
+  const navigateToNextStep = async () => {
+    if (!user?.id || !userRole) {
+      navigation.navigate('RoleSelection');
+      return;
+    }
+
+    try {
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+
+      let needsFreshOnboarding = true;
+
+      if (profileData?.id) {
+        if (userRole === 'customer') {
+          const { data: customerProfile, error: customerError } = await supabase
+            .from('customer_profiles')
+            .select('onboarding_completed')
+            .eq('id', profileData.id)
+            .single();
+
+          if (customerError) throw customerError;
+          needsFreshOnboarding = !customerProfile?.onboarding_completed;
+        } else if (userRole === 'provider') {
+          const { data: providerProfile, error: providerError } = await supabase
+            .from('provider_profiles')
+            .select('onboarding_completed')
+            .eq('id', profileData.id)
+            .single();
+
+          if (providerError) throw providerError;
+          needsFreshOnboarding = !providerProfile?.onboarding_completed;
+        }
+      }
+
+      if (userRole === 'customer' && needsFreshOnboarding) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Personalization' }],
+        });
+        return;
+      }
+
+      if (userRole === 'provider' && needsFreshOnboarding) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'ProviderOnboarding' }],
+        });
+        return;
+      }
+
+      if (userRole === 'customer') {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'CustomerMain' }],
+        });
+        return;
+      }
+
+      if (userRole === 'provider') {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'ProviderMain' }],
+        });
+        return;
+      }
+    } catch (error) {
+      console.warn('[AccountVerification] Falling back to context-based navigation:', error);
+    }
+
     if (userRole === 'customer' && needsOnboarding) {
       navigation.reset({
         index: 0,
@@ -197,7 +270,7 @@ export default function AccountVerificationScreen() {
           text: 'OK',
           onPress: async () => {
             await refreshVerificationStatus?.();
-            navigateToNextStep();
+            await navigateToNextStep();
           },
         },
       ]);
@@ -230,7 +303,7 @@ export default function AccountVerificationScreen() {
           text: 'Continue',
           onPress: async () => {
             await refreshVerificationStatus?.();
-            navigateToNextStep();
+            await navigateToNextStep();
           },
         },
       ]);
