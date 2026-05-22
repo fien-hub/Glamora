@@ -21,10 +21,9 @@ type Step = 'prompt' | 'confirm';
 export default function AppRatingScreen() {
   const { markOnboardingComplete } = useAuth();
   const [step, setStep] = useState<Step>('prompt');
-  const [userRated, setUserRated] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(1));
 
-  const transition = (nextStep: Step, didRate = false) => {
+  const transition = (nextStep: Step) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Animated.timing(fadeAnim, {
       toValue: 0,
@@ -32,7 +31,6 @@ export default function AppRatingScreen() {
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start(() => {
-      setUserRated(didRate);
       setStep(nextStep);
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -51,11 +49,11 @@ export default function AppRatingScreen() {
     } catch (e) {
       console.warn('[AppRatingScreen] StoreReview.requestReview failed:', e);
     }
-    transition('confirm', true);
+    transition('confirm');
   };
 
   const handleSkip = () => {
-    transition('confirm', false);
+    transition('confirm');
   };
 
   const handleDone = () => {
@@ -71,7 +69,7 @@ export default function AppRatingScreen() {
             <Text style={styles.appIcon}>✨</Text>
           </View>
 
-          <Text style={styles.heading}>Enjoying Glamora?</Text>
+          <Text style={styles.heading}>Enjoying Eve Beauty?</Text>
           <Text style={styles.sub}>
             Your review helps us reach more people who need beautiful, convenient beauty services.
           </Text>
@@ -84,7 +82,7 @@ export default function AppRatingScreen() {
 
           <TouchableOpacity style={styles.primaryBtn} onPress={handleRateNow} activeOpacity={0.85}>
             <Ionicons name="star" size={18} color={colors.white} />
-            <Text style={styles.primaryBtnText}>Rate Glamora on the App Store</Text>
+            <Text style={styles.primaryBtnText}>Rate Eve Beauty on the App Store</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.secondaryBtn} onPress={handleSkip} activeOpacity={0.7}>
@@ -99,33 +97,25 @@ export default function AppRatingScreen() {
     <SafeAreaView style={styles.safe}>
       <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
         <View style={styles.iconWrap}>
-          <Text style={styles.appIcon}>{userRated ? '🎉' : '🙏'}</Text>
+          <Text style={styles.appIcon}>🙏</Text>
         </View>
 
-        <Text style={styles.heading}>
-          {userRated ? 'Thank you so much!' : 'Did you rate Glamora?'}
-        </Text>
+        <Text style={styles.heading}>Did you rate Eve Beauty?</Text>
         <Text style={styles.sub}>
-          {userRated
-            ? 'Your support means the world to us. We hope Glamora brings beauty right to your door.'
-            : 'No worries! You can always rate us later in the App Store. We appreciate your support either way.'}
+          Please confirm before continuing. If you have not rated yet, we will take you back to the rating step.
         </Text>
 
-        {!userRated && (
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleDone} activeOpacity={0.85}>
-            <Ionicons name="checkmark-circle" size={18} color={colors.white} />
-            <Text style={styles.primaryBtnText}>Yes, I rated it! 🌟</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity style={styles.primaryBtn} onPress={handleDone} activeOpacity={0.85}>
+          <Ionicons name="checkmark-circle" size={18} color={colors.white} />
+          <Text style={styles.primaryBtnText}>Yes, I rated it! 🌟</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
-          style={userRated ? styles.primaryBtn : styles.secondaryBtn}
-          onPress={handleDone}
-          activeOpacity={userRated ? 0.85 : 0.7}
+          style={styles.secondaryBtn}
+          onPress={() => transition('prompt')}
+          activeOpacity={0.7}
         >
-          <Text style={userRated ? styles.primaryBtnText : styles.secondaryBtnText}>
-            {userRated ? "Let's get started!" : 'Not yet'}
-          </Text>
+          <Text style={styles.secondaryBtnText}>Not yet</Text>
         </TouchableOpacity>
       </Animated.View>
     </SafeAreaView>
