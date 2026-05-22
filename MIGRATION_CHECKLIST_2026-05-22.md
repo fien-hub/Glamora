@@ -14,7 +14,7 @@ Legacy source copy: /Users/twin1/Documents/Glamora/src
 - Port only behavior-level improvements from legacy copy.
 - Avoid reverting stability wrappers (safe imports/icons/gradients/haptics/calendar/video fallbacks).
 
-## High-Value Area Audit (Started)
+## High-Value Area Audit (In Progress)
 
 ### 1) Auth + Verification + Onboarding Gates
 Status: reviewed
@@ -66,11 +66,75 @@ Result:
 - No booking/discovery code has been ported from legacy in this batch.
 - Current copy remains the source of truth for stability.
 
+### 3) Payment + Checkout Paths
+Status: reviewed
+
+Files reviewed:
+- `src/components/PaymentVerificationPrompt.tsx`
+- `src/components/BookingModal.tsx`
+- `src/components/BookingConfirmationModal.tsx`
+- `src/screens/customer/BookingFlowScreen.tsx`
+- `src/screens/customer/BookingScreen.tsx`
+- `src/screens/customer/BookingsScreen.tsx`
+- `src/screens/provider/EarningsScreen.tsx`
+- `src/screens/provider/MyCustomerBookingsScreen.tsx`
+
+Decisions:
+- Keep current glamora-app implementation.
+- Diffs are primarily resiliency imports/fallbacks (`utils/icons`, guarded calendar/web-browser/haptics usage).
+- No business-rule payment logic in legacy copy was found to be newer than current.
+
+Result:
+- No payment/checkout code is ported from legacy copy in this batch.
+- Current copy remains safer for production startup/runtime behavior.
+
+### 4) Messaging + Media Rendering Paths
+Status: reviewed
+
+Files reviewed:
+- `src/screens/shared/ChatScreen.tsx`
+- `src/screens/customer/MessagesScreen.tsx`
+- `src/screens/provider/MessagesScreen.tsx`
+- `src/components/FeedPostCard.tsx`
+- `src/utils/imageUpload.ts`
+- `src/screens/provider/CreatePostScreen.tsx`
+- `src/screens/provider/PortfolioScreen.tsx`
+- `src/components/DocumentUpload.tsx`
+
+Decisions:
+- Keep current glamora-app implementation.
+- Current copy includes lazy native-module loading and guarded fallbacks (image picker, file system, sharing, media library, expo-image).
+- Preserve optional distance rendering behavior in `FeedPostCard` (show tag only when distance is known).
+
+Result:
+- No messaging/media rollback from legacy copy should be applied.
+- Current copy is more resilient in production environments.
+
+### 5) Provider/Admin Dashboards + Analytics
+Status: reviewed
+
+Files reviewed:
+- `src/screens/provider/AnalyticsScreen.tsx`
+- `src/screens/provider/ProfileScreen.tsx`
+- `src/screens/provider/KYCVerificationScreen.tsx`
+- `src/screens/provider/NotificationSettingsScreen.tsx`
+- `src/screens/provider/TravelSettingsScreen.tsx`
+- `src/navigation/ProviderTabNavigator.tsx`
+- `src/navigation/AdminTabNavigator.tsx`
+
+Decisions:
+- Keep current glamora-app implementation.
+- Differences are mostly icon/native-import hardening and safe fallback patterns (for example guarded `react-native-svg` usage in analytics).
+- No confirmed newer business-flow logic in legacy copy to port.
+
+Result:
+- No provider/admin dashboard code is ported from legacy copy in this batch.
+- Current copy remains the preferred baseline.
+
 ## Next Batches
-1. Payment and checkout paths (customer + provider payout screens)
-2. Messaging and media rendering paths
-3. Admin/provider dashboards and analytics screens
-4. Non-functional/UI polish-only differences
+1. Non-functional/UI polish-only differences (intentional visual changes only)
+2. Optional feature additions that are not startup-critical
+3. Regression test pass per user role after each optional port
 
 ## Merge Protocol for Every Future Batch
 1. Diff only one feature area.
