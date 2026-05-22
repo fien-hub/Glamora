@@ -165,7 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // cached session is still valid and Supabase will retry automatically
       // once connectivity is restored. Treating it as a logout would kick
       // the user out every time they lose signal briefly.
-      if (_event === 'TOKEN_REFRESH_FAILED') {
+      if (String(_event) === 'TOKEN_REFRESH_FAILED') {
         console.warn('[AuthContext] Token refresh failed (network issue) — keeping existing session, will retry when online');
         return;
       }
