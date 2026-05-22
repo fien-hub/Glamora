@@ -131,10 +131,35 @@ Result:
 - No provider/admin dashboard code is ported from legacy copy in this batch.
 - Current copy remains the preferred baseline.
 
+### 6) Non-Functional / UI Polish Differences
+Status: reviewed
+
+Files reviewed:
+- `src/screens/auth/WelcomeScreen.tsx`
+- `src/screens/auth/OnboardingScreen.tsx`
+- `src/screens/auth/RoleSelectionScreen.tsx`
+- `src/screens/auth/LoginScreen.tsx`
+- `src/screens/auth/SignupScreen.tsx`
+- `src/screens/customer/HomeScreen.tsx`
+- `src/screens/customer/SearchScreen.tsx`
+- `src/screens/customer/SavedPostsScreen.tsx`
+- `src/screens/customer/BookingsScreen.tsx`
+- `src/components/BookingConfirmationAnimation.tsx`
+- `src/components/BookingConfirmationModal.tsx`
+
+Decisions:
+- Keep current glamora-app copy for all reviewed UI files.
+- Most differences are stability wrappers (`utils/icons`, guarded module imports) or already-improved UX behavior in current copy.
+- Do not port legacy HomeScreen decorative scallop column back in; current copy intentionally removed it and keeps cleaner hero layout.
+- Keep current Search distance rendering (show only when distance exists) to avoid noisy `N/A` text in UI.
+
+Result:
+- Final UI-polish batch complete with no legacy ports applied.
+- Migration focus can now shift to optional, explicitly requested feature additions only.
+
 ## Next Batches
-1. Non-functional/UI polish-only differences (intentional visual changes only)
-2. Optional feature additions that are not startup-critical
-3. Regression test pass per user role after each optional port
+1. Optional feature additions that are not startup-critical
+2. Regression test pass per user role after each optional port
 
 ## Merge Protocol for Every Future Batch
 1. Diff only one feature area.
