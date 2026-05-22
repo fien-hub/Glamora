@@ -16,6 +16,7 @@
     "test:e2e:search": "maestro test e2e/flows/04-search-flow.yaml",
     "test:e2e:report": "maestro test --format html e2e/flows/",
     "test:e2e:studio": "maestro studio",
+    "release:check": "bash scripts/release-check.sh",
     "lint": "eslint .",
     "type-check": "tsc --noEmit"
   },
