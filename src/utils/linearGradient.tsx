@@ -1,9 +1,10 @@
 /**
- * Drop-in LinearGradient wrapper backed by react-native-linear-gradient.
+ * Runtime-aware LinearGradient wrapper.
  *
- * react-native-linear-gradient has full New Architecture (Fabric) support,
- * unlike expo-linear-gradient which crashes the JS thread on RN 0.81 + Hermes
- * before SplashScreen.hideAsync() can fire.
+ * - Expo Go (store client): use expo-linear-gradient to avoid missing native
+ *   registration for BVLinearGradient.
+ * - Development/production native builds: use react-native-linear-gradient,
+ *   which supports New Architecture (Fabric) on RN 0.81.
  *
  * API mirrors expo-linear-gradient so all call-sites are unchanged:
  *   colors, start, end, locations, style, children
@@ -12,9 +13,12 @@
  * react-native-linear-gradient's useAngle=false mode — no conversion needed.
  */
 import React from 'react';
+import Constants from 'expo-constants';
+import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
 import RNLinearGradient from 'react-native-linear-gradient';
 
 type ExpoLinearGradientProps = React.ComponentProps<typeof import('expo-linear-gradient').LinearGradient>;
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 // react-native-linear-gradient accepts string[] not readonly (string|number)[]
 function toStringArray(colors: readonly (string | number)[] | undefined): string[] {
@@ -31,8 +35,21 @@ export const LinearGradient: React.FC<ExpoLinearGradientProps> = ({
   children,
   ...rest
 }) => {
-  // Convert expo {x,y} start/end to react-native-linear-gradient angle via
-  // x1/y1/x2/y2 props (it accepts them as fractions when useAngle is false)
+  if (isExpoGo) {
+    return (
+      <ExpoLinearGradient
+        colors={toStringArray(colors)}
+        start={start ?? { x: 0, y: 0 }}
+        end={end ?? { x: 1, y: 0 }}
+        locations={locations ? [...locations] : undefined}
+        style={style as any}
+        {...rest}
+      >
+        {children}
+      </ExpoLinearGradient>
+    );
+  }
+
   return (
     <RNLinearGradient
       colors={toStringArray(colors)}
