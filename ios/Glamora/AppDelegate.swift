@@ -13,34 +13,16 @@ public class AppDelegate: ExpoAppDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
-    NSLog("[GlamoraBoot] didFinishLaunching start")
-
     let delegate = ReactNativeDelegate()
     let factory = ExpoReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
-
-    NSLog("[GlamoraBoot] ReactNative factory created")
 
     reactNativeDelegate = delegate
     reactNativeFactory = factory
     bindReactNativeFactory(factory)
 
-    let bundlePath = Bundle.main.path(forResource: "main", ofType: "jsbundle") ?? "<missing>"
-    NSLog("[GlamoraBoot] bundled JS path: \(bundlePath)")
-
-#if os(iOS) || os(tvOS)
-    window = UIWindow(frame: UIScreen.main.bounds)
-    NSLog("[GlamoraBoot] starting ReactNative module=main")
-    factory.startReactNative(
-      withModuleName: "main",
-      in: window,
-      launchOptions: launchOptions)
-    NSLog("[GlamoraBoot] startReactNative returned")
-#endif
-
-    let result = super.application(application, didFinishLaunchingWithOptions: launchOptions)
-    NSLog("[GlamoraBoot] super.didFinishLaunching returned: \(result)")
-    return result
+    // Let ExpoAppDelegate initialize and start React Native after modules are registered.
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
   // Linking API
@@ -75,11 +57,7 @@ class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
 #if DEBUG
     return RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: ".expo/.virtual-metro-entry")
 #else
-    let url = Bundle.main.url(forResource: "main", withExtension: "jsbundle")
-    if url == nil {
-      NSLog("[GlamoraBoot] ERROR: main.jsbundle not found in app bundle")
-    }
-    return url
+    return Bundle.main.url(forResource: "main", withExtension: "jsbundle")
 #endif
   }
 }
