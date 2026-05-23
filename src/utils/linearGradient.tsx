@@ -1,48 +1,48 @@
 /**
- * Safe replacement for expo-linear-gradient.
+ * Drop-in LinearGradient wrapper backed by react-native-linear-gradient.
  *
- * In React Native 0.81 + New Architecture (Fabric), expo-linear-gradient's
- * native ViewManager is registered via the Old Architecture interop adapter:
- *   "ViewManagerAdapter_ExpoLinearGradient_<hash>"
- * React Native renders it as visible error text on screen:
- *   "Unimplemented component: <ViewManagerAdapter_ExpoLinearGradient_...>"
+ * react-native-linear-gradient has full New Architecture (Fabric) support,
+ * unlike expo-linear-gradient which crashes the JS thread on RN 0.81 + Hermes
+ * before SplashScreen.hideAsync() can fire.
  *
- * The JS require() succeeds so try/catch around require() does NOT help —
- * the error only surfaces at native render time, crashing the JS thread on
- * Hermes before SplashScreen.hideAsync() can be called.
+ * API mirrors expo-linear-gradient so all call-sites are unchanged:
+ *   colors, start, end, locations, style, children
  *
- * Fix: render a View whose background is derived from the gradient's most
- * prominent (last) color, preserving layouts while eliminating the crash.
+ * Coordinate mapping: expo uses { x, y } fractions (0–1), same as
+ * react-native-linear-gradient's useAngle=false mode — no conversion needed.
  */
 import React from 'react';
-import { View } from 'react-native';
+import RNLinearGradient from 'react-native-linear-gradient';
 
-type LinearGradientProps = React.ComponentProps<typeof import('expo-linear-gradient').LinearGradient>;
+type ExpoLinearGradientProps = React.ComponentProps<typeof import('expo-linear-gradient').LinearGradient>;
 
-const pickBackgroundColor = (colors?: readonly (string | number)[]): string => {
-  if (!colors || colors.length === 0) return 'rgba(0,0,0,0.4)';
-  for (let i = colors.length - 1; i >= 0; i--) {
-    const c = colors[i];
-    if (typeof c === 'string' && c !== 'transparent' && !c.startsWith('rgba(0,0,0,0)')) {
-      return c;
-    }
-  }
-  return typeof colors[0] === 'string' ? (colors[0] as string) : 'rgba(0,0,0,0.4)';
-};
+// react-native-linear-gradient accepts string[] not readonly (string|number)[]
+function toStringArray(colors: readonly (string | number)[] | undefined): string[] {
+  if (!colors || colors.length === 0) return ['transparent', 'transparent'];
+  return colors.map((c) => String(c));
+}
 
-export const LinearGradient: React.FC<LinearGradientProps> = ({
+export const LinearGradient: React.FC<ExpoLinearGradientProps> = ({
   colors,
-  start: _start,
-  end: _end,
-  locations: _locations,
+  start,
+  end,
+  locations,
   style,
   children,
   ...rest
 }) => {
-  const backgroundColor = pickBackgroundColor(colors);
+  // Convert expo {x,y} start/end to react-native-linear-gradient angle via
+  // x1/y1/x2/y2 props (it accepts them as fractions when useAngle is false)
   return (
-    <View style={[{ backgroundColor }, style as any]} {...rest}>
+    <RNLinearGradient
+      colors={toStringArray(colors)}
+      start={start ?? { x: 0, y: 0 }}
+      end={end ?? { x: 1, y: 0 }}
+      locations={locations ? [...locations] : undefined}
+      style={style as any}
+      {...rest}
+    >
       {children}
-    </View>
+    </RNLinearGradient>
   );
 };
