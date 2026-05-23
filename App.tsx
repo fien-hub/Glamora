@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { recordStartupCheckpoint } from './src/utils/startupDiagnostics';
-import AppRuntime from './src/AppRuntime';
 
 // Keep the native splash screen visible until we explicitly hide it.
 // This prevents a white flash between the native splash and first React frame.
@@ -77,6 +76,7 @@ class BootstrapBoundary extends React.Component<React.PropsWithChildren, Bootstr
 function RuntimeHost() {
   const [isReady, setIsReady] = useState(false);
   const [loadError, setLoadError] = useState<unknown>(null);
+  const [RuntimeComponent, setRuntimeComponent] = useState<React.ComponentType | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -84,10 +84,16 @@ function RuntimeHost() {
 
     const initializeRuntime = () => {
       try {
-        if (typeof AppRuntime !== 'function') {
-          throw new Error(`AppRuntime is not a valid component (type: ${typeof AppRuntime})`);
+        // Load runtime lazily so any production-only import failure can be
+        // caught and surfaced instead of freezing on native splash forever.
+        const runtimeModule = require('./src/AppRuntime');
+        const LoadedRuntime = runtimeModule.default;
+
+        if (typeof LoadedRuntime !== 'function') {
+          throw new Error(`AppRuntime is not a valid component (type: ${typeof LoadedRuntime})`);
         }
         if (isMounted) {
+          setRuntimeComponent(() => LoadedRuntime as React.ComponentType);
           setIsReady(true);
           recordStartupCheckpoint('App.bootstrap.loadRuntime.success', 'ok');
         }
@@ -138,7 +144,7 @@ function RuntimeHost() {
     return <BootstrapLoadingScreen />;
   }
 
-  return <AppRuntime />;
+  return RuntimeComponent ? <RuntimeComponent /> : <BootstrapLoadingScreen />;
 }
 
 export default function App() {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,8 @@ import {
   TouchableOpacity,
   TextInput,
 } from 'react-native';
-import { Ionicons } from '../utils/icons';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../constants/theme';
 import NotificationBell from './NotificationBell';
 import { supabase } from '../services/supabase';
@@ -31,29 +32,50 @@ export default function HomeHeader({
   const [locationCity, setLocationCity] = useState<string>('');
   const [locationState, setLocationState] = useState<string>('');
 
-  useEffect(() => {
-    fetchLocation();
-  }, []);
-
-  const fetchLocation = async () => {
+  const fetchLocation = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile?.id) {
+        setLocationCity('');
+        setLocationState('');
+        return;
+      }
+
       const { data } = await supabase
         .from('customer_profiles')
         .select('location_city, location_state')
-        .eq('user_id', user.id)
+        .eq('id', profile.id)
         .single();
 
       if (data) {
         setLocationCity(data.location_city || '');
         setLocationState(data.location_state || '');
+      } else {
+        setLocationCity('');
+        setLocationState('');
       }
     } catch {
       // silently ignore
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchLocation();
+  }, [fetchLocation]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchLocation();
+    }, [fetchLocation])
+  );
 
   const locationLabel =
     locationCity

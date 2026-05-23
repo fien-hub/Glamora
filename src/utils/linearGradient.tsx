@@ -8,11 +8,11 @@
  *   "Unimplemented component: <ViewManagerAdapter_ExpoLinearGradient_...>"
  *
  * The JS require() succeeds so try/catch around require() does NOT help —
- * the error only surfaces at native render time.
+ * the error only surfaces at native render time, crashing the JS thread on
+ * Hermes before SplashScreen.hideAsync() can be called.
  *
- * Fix: never render the native LinearGradient component. Instead, use a View
- * whose background is derived from the gradient's most prominent (last) color.
- * This preserves layouts while avoiding the error text overlay.
+ * Fix: render a View whose background is derived from the gradient's most
+ * prominent (last) color, preserving layouts while eliminating the crash.
  */
 import React from 'react';
 import { View } from 'react-native';
@@ -21,7 +21,6 @@ type LinearGradientProps = React.ComponentProps<typeof import('expo-linear-gradi
 
 const pickBackgroundColor = (colors?: readonly (string | number)[]): string => {
   if (!colors || colors.length === 0) return 'rgba(0,0,0,0.4)';
-  // Prefer the last color — gradients typically fade towards the most opaque stop
   for (let i = colors.length - 1; i >= 0; i--) {
     const c = colors[i];
     if (typeof c === 'string' && c !== 'transparent' && !c.startsWith('rgba(0,0,0,0)')) {

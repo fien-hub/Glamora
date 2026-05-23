@@ -9,8 +9,8 @@ import {
   StatusBar,
 } from 'react-native';
 import { LinearGradient } from '../../utils/linearGradient';
-import { BlurView } from '../../utils/blurView';
-import { Ionicons } from '../../utils/icons';
+import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
