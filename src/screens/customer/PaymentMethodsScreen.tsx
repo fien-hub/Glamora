@@ -35,7 +35,7 @@ export default function PaymentMethodsScreen({ navigation }: any) {
         <Text style={styles.emptyIcon}>💳</Text>
         <Text style={styles.emptyTitle}>No Saved Cards Needed</Text>
         <Text style={styles.emptyText}>
-          Glamora uses RevenueCat in-app purchases during booking checkout, so you don't need to add or manage cards here.
+          Eve Beauty uses RevenueCat in-app purchases during booking checkout, so you don't need to add or manage cards here.
         </Text>
       </View>
 

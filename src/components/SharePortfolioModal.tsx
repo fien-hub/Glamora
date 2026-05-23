@@ -40,7 +40,7 @@ export default function SharePortfolioModal({
   provider,
 }: SharePortfolioModalProps) {
   const getShareMessage = () => {
-    return `Check out this work by ${provider.businessName} on Glamora! 💅\n\n${portfolioItem.caption || 'Beautiful work!'}\n\nBook beauty services at home with verified professionals.\n\nhttps://glamora.app/provider/${provider.id}`;
+    return `Check out this work by ${provider.businessName} on Eve Beauty! 💅\n\n${portfolioItem.caption || 'Beautiful work!'}\n\nBook beauty services at home with verified professionals.\n\nhttps://glamora.app/provider/${provider.id}`;
   };
 
   const getShareUrl = () => {
@@ -67,7 +67,7 @@ export default function SharePortfolioModal({
           break;
         case 'twitter':
           success = await shareToTwitter(
-            `Check out this work by ${provider.businessName} on Glamora! 💅`,
+            `Check out this work by ${provider.businessName} on Eve Beauty! 💅`,
             url
           );
           break;

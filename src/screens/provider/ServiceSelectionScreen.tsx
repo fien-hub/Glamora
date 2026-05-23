@@ -304,13 +304,13 @@ export default function ServiceSelectionScreen() {
                 </Text>
                 <View style={styles.guideNote}>
                   <Text style={styles.guideNoteText}>
-                    📌  Glamora retains a{' '}
+                    📌  Eve Beauty retains a{' '}
                     <Text style={styles.guideNoteHighlight}>20% platform commission</Text>{' '}
                     from every booking. You keep the remaining 80%.
                   </Text>
                 </View>
                 <Text style={styles.guideExample}>
-                  Example: Base price $100 → You earn $80, Glamora earns $20.
+                  Example: Base price $100 → You earn $80, Eve Beauty earns $20.
                 </Text>
               </View>
 
@@ -324,7 +324,7 @@ export default function ServiceSelectionScreen() {
                   <Text style={styles.guideSectionTitle}>Travel Fee</Text>
                 </View>
                 <Text style={styles.guideSectionBody}>
-                  Since Glamora is a mobile beauty platform, you travel to your clients.
+                  Since Eve Beauty is a mobile beauty platform, you travel to your clients.
                   You can set different travel fees based on distance:
                 </Text>
 
@@ -366,7 +366,7 @@ export default function ServiceSelectionScreen() {
                   <Text style={styles.guideNoteText}>
                     📌  Travel fees are charged{' '}
                     <Text style={styles.guideNoteHighlight}>on top of the base price</Text>{' '}
-                    and go entirely to you — Glamora does not take commission on travel fees.
+                    and go entirely to you — Eve Beauty does not take commission on travel fees.
                   </Text>
                 </View>
               </View>

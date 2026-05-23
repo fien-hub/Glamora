@@ -272,7 +272,7 @@ export default function ProfileScreen() {
   const handleSwitchToProvider = () => {
     Alert.alert(
       'Switch to Provider Mode',
-      'You will switch to provider mode. If your provider profile is incomplete, Glamora will take you to provider onboarding.',
+      'You will switch to provider mode. If your provider profile is incomplete, Eve Beauty will take you to provider onboarding.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

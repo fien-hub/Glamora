@@ -175,7 +175,7 @@ export default function MessagesScreen() {
             booking_id: msg.booking_id,
             other_user_id: isSupportConversation ? otherAuthUserId : (otherProfile?.id || otherAuthUserId),
             other_user_name: isSupportConversation
-              ? 'Glamora Support'
+              ? 'Eve Beauty Support'
               : (otherProfile
                   ? `${otherProfile.first_name} ${otherProfile.last_name}`
                   : 'Unknown User'),

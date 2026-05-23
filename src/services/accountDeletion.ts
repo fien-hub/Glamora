@@ -354,8 +354,8 @@ export async function exportUserDataToFile(
       });
     } else {
       await Share.share({
-        title: 'My Glamora Data Export',
-        message: `Your Glamora data export is ready at:\n${fileResult.fileUri}`,
+        title: 'My Eve Beauty Data Export',
+        message: `Your Eve Beauty data export is ready at:\n${fileResult.fileUri}`,
         url: fileResult.fileUri,
       });
     }
@@ -389,8 +389,8 @@ export async function exportUserDataByEmail(
     if (mailAvailable) {
       await MailComposer.composeAsync({
         recipients: userEmail ? [userEmail] : [],
-        subject: 'My Glamora Data Export',
-        body: 'Attached is your requested Glamora account data export in JSON format.',
+        subject: 'My Eve Beauty Data Export',
+        body: 'Attached is your requested Eve Beauty account data export in JSON format.',
         attachments: [fileResult.fileUri],
       });
 
@@ -408,8 +408,8 @@ export async function exportUserDataByEmail(
     }
 
     await Share.share({
-      title: 'My Glamora Data Export',
-      message: `Your Glamora data export is ready at:\n${fileResult.fileUri}`,
+      title: 'My Eve Beauty Data Export',
+      message: `Your Eve Beauty data export is ready at:\n${fileResult.fileUri}`,
       url: fileResult.fileUri,
     });
 

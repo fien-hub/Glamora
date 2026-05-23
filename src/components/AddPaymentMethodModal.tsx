@@ -46,7 +46,7 @@ export default function AddPaymentMethodModal({
 
           <View style={styles.content}>
             <Text style={styles.description}>
-              Glamora now uses secure in-app purchases at checkout with RevenueCat.
+              Eve Beauty now uses secure in-app purchases at checkout with RevenueCat.
             </Text>
 
             <View style={styles.securityNote}>

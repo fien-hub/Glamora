@@ -93,7 +93,7 @@ export default function TravelSettingsScreen() {
       <View style={styles.content}>
         <Text style={styles.title}>Travel & Distance Policy</Text>
         <Text style={styles.description}>
-          Travel fees are standardized by Glamora to ensure fair and transparent pricing for all customers.
+          Travel fees are standardized by Eve Beauty to ensure fair and transparent pricing for all customers.
         </Text>
 
         {/* Platform Travel Fee Policy */}

@@ -144,8 +144,8 @@ export default function RoleSelectionScreen() {
             {/* Header fades in */}
             <FadeInView delay={0}>
               <View style={[styles.header, isSmallPhone && styles.headerCompact]}>
-                <Text style={styles.title}>Join Glamora</Text>
-                <Text style={styles.subtitle}>Choose how you want to use Glamora</Text>
+                <Text style={styles.title}>Join Eve Beauty</Text>
+                <Text style={styles.subtitle}>Choose how you want to use Eve Beauty</Text>
               </View>
             </FadeInView>
 

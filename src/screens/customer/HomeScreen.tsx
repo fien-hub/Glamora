@@ -50,7 +50,7 @@ const HERO_BANNERS = [
     id: '2',
     tag: 'Limited Offer',
     title: 'First Session\n50% Off',
-    subtitle: 'New to Glamora?\nGet your first booking half price',
+    subtitle: 'New to Eve Beauty?\nGet your first booking half price',
     cta: 'Claim Now',
     bg: '#8B6A53',
     image: require('../../../assets/home-hero-3303.jpg'),

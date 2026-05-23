@@ -238,7 +238,7 @@ export default function SplashScreen() {
           },
         ]}
       >
-        Glamora
+        Eve Beauty
       </Animated.Text>
 
       <Animated.Text

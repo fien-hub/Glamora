@@ -307,7 +307,7 @@ export default function BookingsScreen() {
     const serviceName = (booking as any).provider_services?.services?.name || 'Service';
     const price = booking.total_price ? (booking.total_price / 100).toFixed(2) : '0.00';
 
-    const message = `My Glamora Booking\n\nService: ${serviceName}\nProvider: ${providerName}\nDate: ${date}\nTime: ${time}\nPrice: $${price}\nLocation: ${booking.location_address}\n\nBooked via Glamora - Beauty services at home!\nhttps://glamora.app`;
+    const message = `My Eve Beauty Booking\n\nService: ${serviceName}\nProvider: ${providerName}\nDate: ${date}\nTime: ${time}\nPrice: $${price}\nLocation: ${booking.location_address}\n\nBooked via Eve Beauty - Beauty services at home!\nhttps://glamora.app`;
 
     Alert.alert(
       'Share Booking',
@@ -335,7 +335,7 @@ export default function BookingsScreen() {
           text: 'More Options',
           onPress: async () => {
             const success = await shareContent({
-              title: 'My Glamora Booking',
+              title: 'My Eve Beauty Booking',
               message,
             });
             if (success) {

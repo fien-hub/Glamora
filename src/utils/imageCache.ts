@@ -13,7 +13,7 @@ interface CacheMetadata {
 }
 
 /**
- * Image Caching Utility for Glamora App
+ * Image Caching Utility for Eve Beauty App
  * Provides automatic caching for remote images with expiry management
  * React Native's Image component automatically caches to disk
  */
