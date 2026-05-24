@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from '../../utils/linearGradient';
 import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
