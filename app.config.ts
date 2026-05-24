@@ -77,7 +77,7 @@ const baseConfig: ExpoConfig = {
       'expo-build-properties',
       {
         ios: {
-          newArchEnabled: true,
+          newArchEnabled: false,
         },
       },
     ],
