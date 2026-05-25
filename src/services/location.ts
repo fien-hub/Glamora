@@ -1,6 +1,6 @@
 // expo-location is required lazily to avoid module-level native module crashes
 // in New Architecture builds. All Location usage is inside async function bodies.
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 
 let Location: typeof import('expo-location') | null = null;
 try {
@@ -26,20 +26,49 @@ export interface Address {
 const KM_TO_MILES = 0.621371;
 
 /**
- * Request location permissions from the user
+ * Request location permissions from the user.
+ * @param silentDenial - if true, suppresses all Alerts on denial (for background auto-fetches)
  */
-export async function requestLocationPermission(): Promise<boolean> {
+export async function requestLocationPermission(silentDenial = false): Promise<boolean> {
+  if (!Location) {
+    console.warn('[location.ts] expo-location module unavailable during permission request.');
+    return false;
+  }
+
   try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    
-    if (status !== 'granted') {
-      Alert.alert(
-        'Permission Denied',
-        'Location permission is required to find beauty professionals near you.'
-      );
+    // Check current status before requesting to detect permanent denial.
+    const { status: currentStatus, canAskAgain } = await Location.getForegroundPermissionsAsync();
+
+    if (currentStatus === 'granted') return true;
+
+    // Permanently denied — the system won't show a dialog. Direct user to Settings.
+    if (!canAskAgain) {
+      if (!silentDenial) {
+        Alert.alert(
+          'Location Access Disabled',
+          'Please enable location permission for Eve Beauty in your device Settings to find professionals near you.',
+          [
+            { text: 'Not Now', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+      }
       return false;
     }
-    
+
+    // Ask the system (will show the native permission dialog).
+    const { status } = await Location.requestForegroundPermissionsAsync();
+
+    if (status !== 'granted') {
+      if (!silentDenial) {
+        Alert.alert(
+          'Permission Denied',
+          'Location permission is required to find beauty professionals near you.'
+        );
+      }
+      return false;
+    }
+
     return true;
   } catch (error) {
     console.error('Error requesting location permission:', error);
@@ -48,11 +77,17 @@ export async function requestLocationPermission(): Promise<boolean> {
 }
 
 /**
- * Get the user's current location
+ * Get the user's current location.
+ * @param silent - if true, suppresses permission alerts (use for background auto-fetches)
  */
-export async function getCurrentLocation(): Promise<LocationCoords | null> {
+export async function getCurrentLocation(silent = false): Promise<LocationCoords | null> {
+  if (!Location) {
+    console.warn('[location.ts] expo-location module unavailable during getCurrentLocation.');
+    return null;
+  }
+
   try {
-    const hasPermission = await requestLocationPermission();
+    const hasPermission = await requestLocationPermission(silent);
     if (!hasPermission) return null;
 
     const location = await Location.getCurrentPositionAsync({
@@ -65,7 +100,9 @@ export async function getCurrentLocation(): Promise<LocationCoords | null> {
     };
   } catch (error) {
     console.error('Error getting current location:', error);
-    Alert.alert('Error', 'Failed to get your location');
+    if (!silent) {
+      Alert.alert('Error', 'Failed to get your location');
+    }
     return null;
   }
 }
@@ -74,6 +111,11 @@ export async function getCurrentLocation(): Promise<LocationCoords | null> {
  * Geocode an address to coordinates
  */
 export async function geocodeAddress(address: string): Promise<LocationCoords | null> {
+  if (!Location) {
+    console.warn('[location.ts] expo-location module unavailable during geocodeAddress.');
+    return null;
+  }
+
   try {
     const results = await Location.geocodeAsync(address);
     
@@ -95,6 +137,11 @@ export async function geocodeAddress(address: string): Promise<LocationCoords | 
  * Reverse geocode coordinates to an address
  */
 export async function reverseGeocode(coords: LocationCoords): Promise<Address | null> {
+  if (!Location) {
+    console.warn('[location.ts] expo-location module unavailable during reverseGeocode.');
+    return null;
+  }
+
   try {
     const results = await Location.reverseGeocodeAsync(coords);
     

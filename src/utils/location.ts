@@ -17,6 +17,11 @@ export interface Coordinates {
  * Request location permissions
  */
 export const requestLocationPermissions = async (): Promise<boolean> => {
+  if (!Location) {
+    console.warn('expo-location module is unavailable; skipping foreground permission request.');
+    return false;
+  }
+
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
     return status === 'granted';
@@ -30,6 +35,11 @@ export const requestLocationPermissions = async (): Promise<boolean> => {
  * Get current user location
  */
 export const getCurrentLocation = async (): Promise<Coordinates | null> => {
+  if (!Location) {
+    console.warn('expo-location module is unavailable; cannot fetch current location.');
+    return null;
+  }
+
   try {
     const hasPermission = await requestLocationPermissions();
     

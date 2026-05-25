@@ -30,7 +30,7 @@ interface ServiceCategory {
   icon: string;
 }
 
-const getCategoryIcon = (categoryName: string): keyof typeof Ionicons.glyphMap => {
+const getCategoryIcon = (categoryName: string): string => {
   const normalized = categoryName.toLowerCase();
 
   if (normalized.includes('hair') || normalized.includes('braid') || normalized.includes('wig')) {
@@ -225,7 +225,26 @@ export default function PersonalizationScreen() {
 
       console.log('[Personalization] Preferences saved successfully');
 
-      // markOnboardingComplete() sets needsOnboarding=false in the auth context
+      // Best-effort: geocode the entered address and persist lat/lon so that
+      // the home feed can compute distances immediately without needing GPS.
+      void (async () => {
+        try {
+          const { geocodeAddress } = await import('../../services/location');
+          const addressStr = [address, city, state, zipCode].filter(Boolean).join(', ');
+          if (addressStr) {
+            const coords = await geocodeAddress(addressStr);
+            if (coords) {
+              await supabase
+                .from('customer_profiles')
+                .update({ latitude: coords.latitude, longitude: coords.longitude })
+                .eq('id', profileData.id);
+              console.log('[Personalization] Saved geocoded coords:', coords.latitude, coords.longitude);
+            }
+          }
+        } catch (e) {
+          console.warn('[Personalization] Non-blocking geocode save failed:', e);
+        }
+      })();
       // immediately, which causes the navigator to switch to CustomerMain.
       // Do NOT call refreshOnboardingStatus() here — it re-queries the DB and
       // its internal catch blocks can set needsOnboarding=true or
@@ -334,7 +353,7 @@ export default function PersonalizationScreen() {
                         ]}
                       >
                         <Ionicons
-                          name={getCategoryIcon(category.name)}
+                          name={getCategoryIcon(category.name) as any}
                           size={28}
                           color={selectedCategories.includes(category.id) ? colors.white : colors.primaryDarker}
                         />

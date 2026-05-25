@@ -187,8 +187,11 @@ export default function Navigation() {
       >
         {initialUnauthRoute === null ? (
           // AsyncStorage onboarding flag is still loading.
-          // Start on a real route immediately to avoid getting trapped on Splash.
+          // Splash is first so the animation plays immediately. All destination
+          // routes are registered here so Splash.replace() works even before
+          // initialUnauthRoute resolves.
           <>
+            <Stack.Screen name="Splash" component={SplashScreen} />
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
             <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
@@ -196,20 +199,14 @@ export default function Navigation() {
             <Stack.Screen name="Signup" component={SignupScreen} />
           </>
         ) : !user ? (
-          // Not logged in - start at correct screen based on onboarding history
+          // Not logged in - always start on Splash so the animation plays, then
+          // Splash navigates to the correct destination.
+          // Splash is first in both branches so React Navigation preserves the
+          // mounted instance when initialUnauthRoute transitions null → !user.
           <>
-            {initialUnauthRoute === 'RoleSelection' ? (
-              <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
-            ) : (
-              <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-            )}
             <Stack.Screen name="Splash" component={SplashScreen} />
-            {initialUnauthRoute !== 'Onboarding' && (
-              <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-            )}
-            {initialUnauthRoute !== 'RoleSelection' && (
-              <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
-            )}
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+            <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Signup" component={SignupScreen} />
@@ -220,6 +217,11 @@ export default function Navigation() {
               name="TwoFactorVerification"
               component={TwoFactorVerificationScreen}
               options={{ headerShown: true, title: 'Verify Identity' }}
+            />
+            <Stack.Screen
+              name="AppRating"
+              component={AppRatingScreen}
+              options={{ headerShown: false, gestureEnabled: false }}
             />
           </>
         ) : user && !userRole && !roleResolutionExpired ? (
@@ -257,6 +259,11 @@ export default function Navigation() {
             <Stack.Screen name="Personalization" component={PersonalizationScreen} options={{ headerShown: false }} />
             <Stack.Screen name="ProviderOnboarding" component={ProviderOnboardingScreen} options={{ headerShown: true, title: 'Complete Your Profile' }} />
             <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
+            <Stack.Screen
+              name="AppRating"
+              component={AppRatingScreen}
+              options={{ headerShown: false, gestureEnabled: false }}
+            />
           </>
         ) : user && needsOnboarding && userRole === 'customer' ? (
           // Customer needs onboarding

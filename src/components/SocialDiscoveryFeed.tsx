@@ -23,7 +23,8 @@ import { getCurrentLocation } from '../utils/location';
 import { getProviderAvailability, AvailabilityInfo } from '../utils/availability';
 import { useVerificationGuard } from '../hooks/useVerificationGuard';
 
-import { formatTravelTimeDistance } from '../services/location';
+import { formatTravelTimeDistance, geocodeAddress } from '../services/location';
+import * as RootNavigation from '../navigation/RootNavigation';
 
 
 interface FeedPost {
@@ -83,6 +84,13 @@ export default function SocialDiscoveryFeed({
 
   const PAGE_SIZE = 10;
 
+  const navigateTo = (routeName: string, params?: Record<string, any>) => {
+    // PostDetail/Booking live on the root stack navigator, two levels above
+    // this component's tab context. The global navigationRef is the only
+    // reliable path to them in release builds.
+    RootNavigation.navigate(routeName, params);
+  };
+
 
   // Fetch categories and user location in parallel on mount
   useEffect(() => {
@@ -134,10 +142,69 @@ export default function SocialDiscoveryFeed({
 
   const fetchUserLocation = async () => {
     try {
-      const location = await getCurrentLocation();
-      setUserLocation(location);
+      const liveLocation = await getCurrentLocation(); // silent by default — utils/location never shows permission Alerts
+
+      if (liveLocation) {
+        setUserLocation(liveLocation);
+        return;
+      }
+
+      // Fallback to stored customer profile coordinates when live permission
+      // is denied/unavailable, so distance-based UI still renders.
+      if (!user?.id) {
+        setUserLocation(null);
+        return;
+      }
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profileError || !profileData?.id) {
+        setUserLocation(null);
+        return;
+      }
+
+      // Only query the base columns that are guaranteed to exist in the schema.
+      const { data: customerProfile } = await supabase
+        .from('customer_profiles')
+        .select('latitude, longitude, location_address, location_city, location_state, location_zip_code')
+        .eq('id', profileData.id)
+        .single();
+
+      if (customerProfile?.latitude != null && customerProfile?.longitude != null) {
+        setUserLocation({
+          latitude: Number(customerProfile.latitude),
+          longitude: Number(customerProfile.longitude),
+        });
+        return;
+      }
+
+      // Last resort: geocode the stored text address to get coordinates.
+      const textParts = [
+        customerProfile?.location_address,
+        customerProfile?.location_city,
+        customerProfile?.location_state,
+      ].filter(Boolean);
+
+      if (textParts.length > 0) {
+        try {
+          const geocoded = await geocodeAddress(textParts.join(', '));
+          if (geocoded) {
+            setUserLocation({ latitude: geocoded.latitude, longitude: geocoded.longitude });
+            return;
+          }
+        } catch {
+          // Geocoding failed; distance will be unavailable.
+        }
+      }
+
+      setUserLocation(null);
     } catch (error) {
       console.error('Error getting location:', error);
+      setUserLocation(null);
     } finally {
       setLocationFetchComplete(true);
     }
@@ -261,7 +328,7 @@ export default function SocialDiscoveryFeed({
     // Record view
     recordView(post.id, post.provider_id);
     // Navigate to post detail (Pinterest-style)
-    (navigation as any).navigate('PostDetail', {
+    navigateTo('PostDetail', {
       postId: post.id,
       providerId: post.provider_id,
       imageUrl: post.image_url,
@@ -285,7 +352,7 @@ export default function SocialDiscoveryFeed({
       analytics.trackBookingStart(post.id, post.provider_id, user?.id);
 
       console.log('[Feed] Attempting to navigate to Booking screen');
-      (navigation as any).navigate('Booking', {
+      navigateTo('Booking', {
         providerId: post.provider_id,
         portfolioItemId: post.id,
         serviceId: post.provider_service_id, // Pre-select service if tagged
