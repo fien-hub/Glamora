@@ -248,6 +248,10 @@ export default function Navigation() {
           // Verification required before any onboarding/main flow.
           // Include post-verification destinations so navigation.reset() works
           // immediately after the user verifies (before the tree re-renders).
+          // Also include all customer navigation targets so that if needsVerification
+          // is re-set to true by a background auth-refresh (while email_verified=false
+          // in DB), the user can still navigate to PostDetail, Favorites, Booking, etc.
+          // without being silently blocked.
           <>
             <Stack.Screen
               name="AccountVerification"
@@ -264,6 +268,27 @@ export default function Navigation() {
               component={AppRatingScreen}
               options={{ headerShown: false, gestureEnabled: false }}
             />
+            {/* Customer destination screens — needed so navigation works even when
+                needsVerification is temporarily re-set by a background auth refresh */}
+            <Stack.Screen name="PostDetail" component={PostDetailScreen} options={{ headerShown: false, ...TransitionPresets.ModalSlideFromBottomIOS }} />
+            <Stack.Screen name="Booking" component={BookingFlowScreen} options={{ headerShown: false, ...TransitionPresets.ModalSlideFromBottomIOS }} />
+            <Stack.Screen name="Favorites" component={FavoritesScreen} options={{ headerShown: true, title: 'My Favorites' }} />
+            <Stack.Screen name="SavedPosts" component={SavedPostsScreen} options={{ headerShown: true, title: 'Saved Posts', ...TransitionPresets.SlideFromRightIOS }} />
+            <Stack.Screen name="EditProfile" component={CustomerEditProfileScreen} options={{ headerShown: true, title: 'Edit Profile' }} />
+            <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ headerShown: true, title: 'Change Password' }} />
+            <Stack.Screen name="SecuritySettings" component={SecuritySettingsScreen} options={{ headerShown: true, title: 'Security Settings' }} />
+            <Stack.Screen name="PaymentMethods" component={PaymentMethodsScreen} options={{ headerShown: true, title: 'Payment Methods' }} />
+            <Stack.Screen name="PaymentHistory" component={PaymentHistoryScreen} options={{ headerShown: true, title: 'Payment History' }} />
+            <Stack.Screen name="NotificationSettings" component={CustomerNotificationSettingsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="HelpSupport" component={HelpSupportScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Chat" component={ChatScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Loyalty" component={LoyaltyScreen} options={{ headerShown: true, title: 'Rewards & Promos' }} />
+            <Stack.Screen name="ProviderPortfolio" component={ProviderPortfolioScreen} options={{ headerShown: true, title: 'Portfolio', ...TransitionPresets.ModalSlideFromBottomIOS }} />
+            <Stack.Screen name="ProviderReviews" component={ProviderReviewsScreen} options={{ headerShown: true, title: 'Reviews' }} />
+            <Stack.Screen name="ServiceProviders" component={ServiceProvidersScreen} options={{ headerShown: true, title: 'Choose Provider', ...TransitionPresets.SlideFromRightIOS }} />
+            <Stack.Screen name="BookingLegacy" component={BookingScreen} options={{ headerShown: true, title: 'Book Service', ...TransitionPresets.ModalSlideFromBottomIOS }} />
           </>
         ) : user && needsOnboarding && userRole === 'customer' ? (
           // Customer needs onboarding

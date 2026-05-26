@@ -470,6 +470,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Also clear needsVerification so the navigator moves out of the
     // verification branch and into the customer/provider main branch.
     setNeedsVerification(false);
+
+    // Persist verification in DB so that subsequent checkVerificationStatus()
+    // calls (triggered by auth events / token refresh) do NOT re-set
+    // needsVerification=true and trap the user back in the needsVerification
+    // branch where PostDetail/Favorites/Booking etc. are not registered.
+    if (user) {
+      supabase
+        .from('profiles')
+        .update({ email_verified: true })
+        .eq('user_id', user.id)
+        .then(({ error }) => {
+          if (error) {
+            console.warn('[AuthContext] markOnboardingComplete: failed to set email_verified=true:', error.message);
+          } else {
+            console.log('[AuthContext] markOnboardingComplete: email_verified set to true in DB');
+          }
+        });
+    }
   };
 
   const refreshVerificationStatus = async () => {
