@@ -100,7 +100,8 @@ export default function EditProfileScreen() {
     try {
       const location = await getCurrentLocation();
       if (!location) {
-        Alert.alert('Location Unavailable', 'Could not get your location. Please enter it manually.');
+        // getCurrentLocation already shows an appropriate alert (permission denied,
+        // open settings, etc). Just return quietly so the user can enter manually.
         return;
       }
       const { reverseGeocode } = await import('../../services/location');
@@ -114,12 +115,9 @@ export default function EditProfileScreen() {
           locationZipCode: addressData.zipCode,
         }));
         Alert.alert('Success', 'Location filled from your current position');
-      } else {
-        Alert.alert('Location Unavailable', 'Could not determine your address. Please enter it manually.');
       }
     } catch (error) {
       console.error('Error using current location:', error);
-      Alert.alert('Error', 'Failed to get your current location. Please enter manually.');
     } finally {
       setLoadingLocation(false);
     }

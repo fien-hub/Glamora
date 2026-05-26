@@ -1,11 +1,17 @@
-// expo-location is required lazily to prevent module-level native module crashes
-// in New Architecture builds. All Location usage is inside async function bodies.
-let Location: typeof import('expo-location') | null = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  Location = require('expo-location') as typeof import('expo-location');
-} catch (e) {
-  console.warn('[utils/location.ts] expo-location failed to load:', e);
+// expo-location MUST be required lazily (inside function bodies) to avoid native
+// module registration crashes in New Architecture builds. At bundle-evaluation time,
+// JSI native modules may not yet be registered.
+let _Location: typeof import('expo-location') | null = null;
+function getExpoLocation(): typeof import('expo-location') | null {
+  if (_Location !== null) return _Location;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _Location = require('expo-location') as typeof import('expo-location');
+    return _Location;
+  } catch (e) {
+    console.warn('[utils/location.ts] expo-location failed to load:', e);
+    return null;
+  }
 }
 
 export interface Coordinates {
@@ -17,6 +23,7 @@ export interface Coordinates {
  * Request location permissions
  */
 export const requestLocationPermissions = async (): Promise<boolean> => {
+  const Location = getExpoLocation();
   if (!Location) {
     console.warn('expo-location module is unavailable; skipping foreground permission request.');
     return false;
@@ -35,6 +42,7 @@ export const requestLocationPermissions = async (): Promise<boolean> => {
  * Get current user location
  */
 export const getCurrentLocation = async (): Promise<Coordinates | null> => {
+  const Location = getExpoLocation();
   if (!Location) {
     console.warn('expo-location module is unavailable; cannot fetch current location.');
     return null;
