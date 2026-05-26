@@ -8,6 +8,7 @@ import {
   Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from '../../utils/linearGradient';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
@@ -20,9 +21,18 @@ try { StoreReview = require('expo-store-review'); } catch (e) { console.warn('[A
 type Step = 'prompt' | 'confirm';
 
 export default function AppRatingScreen() {
-  const { markOnboardingComplete } = useAuth();
+  const { markOnboardingComplete, userRole } = useAuth();
+  const navigation = useNavigation<any>();
   const [step, setStep] = useState<Step>('prompt');
   const [fadeAnim] = useState(new Animated.Value(1));
+
+  // Explicit navigation to main app — more reliable than relying solely on
+  // the navigator branch switching after markOnboardingComplete().
+  const finishOnboarding = () => {
+    markOnboardingComplete();
+    const dest = userRole === 'provider' ? 'ProviderMain' : 'CustomerMain';
+    navigation.reset({ index: 0, routes: [{ name: dest }] });
+  };
 
   const transition = (nextStep: Step) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -56,12 +66,12 @@ export default function AppRatingScreen() {
   const handleSkip = () => {
     // Skip entirely — don't force users through the confirm step.
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    markOnboardingComplete();
+    finishOnboarding();
   };
 
   const handleDone = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    markOnboardingComplete();
+    finishOnboarding();
   };
 
   if (step === 'prompt') {
