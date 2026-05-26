@@ -16,6 +16,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { trackProfileEdited } from '../../utils/analytics';
+import { geocodeAddress } from '../../services/location';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 
@@ -136,6 +137,27 @@ export default function EditProfileScreen() {
         .eq('id', profile.id);
 
       if (customerError) throw customerError;
+
+      // Geocode the text address and persist coordinates so distance-based
+      // features work even when live GPS permission is denied.
+      const addressParts = [
+        profileData.locationAddress.trim(),
+        profileData.locationCity.trim(),
+        profileData.locationState.trim(),
+      ].filter(Boolean);
+      if (addressParts.length > 0) {
+        try {
+          const coords = await geocodeAddress(addressParts.join(', '));
+          if (coords) {
+            await supabase
+              .from('customer_profiles')
+              .update({ latitude: coords.latitude, longitude: coords.longitude })
+              .eq('id', profile.id);
+          }
+        } catch {
+          // Geocoding is best-effort; don't block the save.
+        }
+      }
 
       // Track profile edit
       trackProfileEdited();

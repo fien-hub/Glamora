@@ -43,7 +43,7 @@ export default function FloatingTabBar({ state, descriptors, navigation }: Botto
   }, [state.index]);
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} pointerEvents="box-none">
       <View style={styles.tabBar}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];

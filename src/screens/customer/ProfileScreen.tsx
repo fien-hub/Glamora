@@ -25,6 +25,7 @@ import { VerificationStatusCard } from '../../components/VerificationBadge';
 import PaymentVerificationPrompt from '../../components/PaymentVerificationPrompt';
 import CachedImage, { CachedAvatarImage } from '../../components/CachedImage';
 import { getUserVerificationStatus, sendEmailVerification, UserVerificationStatus } from '../../services/verification';
+import * as RootNavigation from '../../navigation/RootNavigation';
 
 interface CategoryInfo {
   id: string;
@@ -59,6 +60,13 @@ export default function ProfileScreen() {
   const [favoritesCount, setFavoritesCount] = useState({ services: 0, providers: 0 });
   const [verificationStatus, setVerificationStatus] = useState<UserVerificationStatus | null>(null);
   const [sendingEmailVerification, setSendingEmailVerification] = useState(false);
+
+  const navigateTo = (routeName: string, params?: Record<string, any>) => {
+    // Routes like EditProfile, Favorites, PaymentMethods, etc. live on the
+    // root stack navigator, two levels above the tab screen. Using the global
+    // navigationRef is the only reliable way to reach them in release builds.
+    RootNavigation.navigate(routeName, params);
+  };
 
   // Track screen view
   useScreenTracking('Customer Profile');
@@ -262,11 +270,11 @@ export default function ProfileScreen() {
   };
 
   const handleEditProfile = () => {
-    (navigation as any).navigate('EditProfile');
+    navigateTo('EditProfile');
   };
 
   const handleChangePassword = () => {
-    (navigation as any).navigate('ChangePassword');
+    navigateTo('ChangePassword');
   };
 
   const handleSwitchToProvider = () => {
@@ -401,13 +409,13 @@ export default function ProfileScreen() {
                   { text: sendingEmailVerification ? 'Sending...' : 'Send', onPress: handleSendEmailVerification },
                 ]
               )}
-              onVerifyPayment={() => navigation.navigate('PaymentMethods')}
+              onVerifyPayment={() => navigateTo('PaymentMethods')}
             />
 
             {!verificationStatus.paymentMethodVerified && (
               <PaymentVerificationPrompt
                 containerStyle={{ marginTop: spacing.sm }}
-                onPress={() => navigation.navigate('PaymentMethods')}
+                onPress={() => navigateTo('PaymentMethods')}
               />
             )}
           </View>
@@ -577,7 +585,7 @@ export default function ProfileScreen() {
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => navigation.navigate('Favorites')}
+          onPress={() => navigateTo('Favorites')}
         >
           <Ionicons name="heart-outline" size={20} color={colors.primaryDarker} style={styles.actionIconIonicons} />
           <View style={styles.actionTextContainer}>
@@ -595,7 +603,7 @@ export default function ProfileScreen() {
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => navigation.navigate('SavedPosts')}
+          onPress={() => navigateTo('SavedPosts')}
         >
           <Ionicons name="bookmark-outline" size={20} color={colors.primaryDarker} style={styles.actionIconIonicons} />
           <Text style={styles.actionText}>Saved Posts</Text>
@@ -610,7 +618,7 @@ export default function ProfileScreen() {
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => navigation.navigate('SecuritySettings')}
+          onPress={() => navigateTo('SecuritySettings')}
         >
           <Ionicons name="shield-checkmark-outline" size={20} color={colors.primaryDarker} style={styles.actionIconIonicons} />
           <Text style={styles.actionText}>Security Settings</Text>
@@ -619,7 +627,7 @@ export default function ProfileScreen() {
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => (navigation as any).navigate('PaymentHistory')}
+          onPress={() => navigateTo('PaymentHistory')}
         >
           <Ionicons name="receipt-outline" size={20} color={colors.primaryDarker} style={styles.actionIconIonicons} />
           <Text style={styles.actionText}>Payment History</Text>
@@ -628,7 +636,7 @@ export default function ProfileScreen() {
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => (navigation as any).navigate('PaymentMethods')}
+          onPress={() => navigateTo('PaymentMethods')}
         >
           <Ionicons name="card-outline" size={20} color={colors.primaryDarker} style={styles.actionIconIonicons} />
           <Text style={styles.actionText}>Payment Methods</Text>
@@ -637,7 +645,7 @@ export default function ProfileScreen() {
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => (navigation as any).navigate('NotificationSettings')}
+          onPress={() => navigateTo('NotificationSettings')}
         >
           <Ionicons name="notifications-outline" size={20} color={colors.primaryDarker} style={styles.actionIconIonicons} />
           <Text style={styles.actionText}>Notification Settings</Text>
@@ -646,7 +654,7 @@ export default function ProfileScreen() {
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => (navigation as any).navigate('HelpSupport')}
+          onPress={() => navigateTo('HelpSupport')}
         >
           <Ionicons name="help-circle-outline" size={20} color={colors.primaryDarker} style={styles.actionIconIonicons} />
           <Text style={styles.actionText}>Help & Support</Text>
@@ -655,7 +663,7 @@ export default function ProfileScreen() {
 
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => (navigation as any).navigate('AccountSettings')}
+          onPress={() => navigateTo('AccountSettings')}
         >
           <Ionicons name="settings-outline" size={20} color={colors.primaryDarker} style={styles.actionIconIonicons} />
           <Text style={styles.actionText}>Account Settings</Text>

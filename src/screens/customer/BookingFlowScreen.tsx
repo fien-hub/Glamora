@@ -301,6 +301,46 @@ export default function BookingFlowScreen() {
   const handleUseCurrentLocation = async () => {
     setLoadingLocation(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const applyStoredProfileLocation = async (): Promise<boolean> => {
+      if (!user?.id) return false;
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profileError || !profileData?.id) {
+        return false;
+      }
+
+      const { data: customerProfile, error: customerError } = await supabase
+        .from('customer_profiles')
+        .select('location_address, location_city, location_state, location_zip_code')
+        .eq('id', profileData.id)
+        .single();
+
+      if (customerError || !customerProfile) {
+        return false;
+      }
+
+      const nextAddress = customerProfile.location_address || '';
+      const nextCity = customerProfile.location_city || '';
+      const nextState = customerProfile.location_state || '';
+      const nextZip = customerProfile.location_zip_code || '';
+
+      if (!nextAddress && !nextCity && !nextState && !nextZip) {
+        return false;
+      }
+
+      setAddress(nextAddress);
+      setCity(nextCity);
+      setState(nextState);
+      setZipCode(nextZip);
+      return true;
+    };
+
     try {
       const location = await getCurrentLocation();
       if (location) {
@@ -311,11 +351,25 @@ export default function BookingFlowScreen() {
           setCity(addressInfo.city || '');
           setState(addressInfo.state || '');
           setZipCode(addressInfo.zipCode || '');
+          return;
         }
+      }
+
+      const usedStoredLocation = await applyStoredProfileLocation();
+      if (!usedStoredLocation) {
+        Alert.alert('Location Error', 'Could not get your location');
       }
     } catch (error) {
       console.error('Error using current location:', error);
-      Alert.alert('Location Error', 'Could not get your location');
+
+      try {
+        const usedStoredLocation = await applyStoredProfileLocation();
+        if (!usedStoredLocation) {
+          Alert.alert('Location Error', 'Could not get your location');
+        }
+      } catch {
+        Alert.alert('Location Error', 'Could not get your location');
+      }
     } finally {
       setLoadingLocation(false);
     }

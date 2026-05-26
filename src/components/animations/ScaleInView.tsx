@@ -43,7 +43,7 @@ export default function ScaleInView({
   });
 
   return (
-    <Animated.View style={[style, animatedStyle]} pointerEvents="box-none">
+    <Animated.View style={[style, animatedStyle]}>
       {children}
     </Animated.View>
   );

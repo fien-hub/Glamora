@@ -467,6 +467,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const markOnboardingComplete = () => {
     setNeedsOnboarding(false);
+    // Also clear needsVerification so the navigator moves out of the
+    // verification branch and into the customer/provider main branch.
+    setNeedsVerification(false);
   };
 
   const refreshVerificationStatus = async () => {

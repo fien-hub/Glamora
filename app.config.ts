@@ -202,6 +202,10 @@ const removePlugin = (
 export default (): ExpoConfig => {
   const metaAppIdFromEnv = process.env.EXPO_PUBLIC_META_APP_ID;
   const metaClientTokenFromEnv = process.env.EXPO_PUBLIC_META_CLIENT_TOKEN;
+  const easBuildProfile = process.env.EAS_BUILD_PROFILE || 'local';
+  const enableIosNewArch = easBuildProfile === 'development';
+  const enableMetaSdk = process.env.EXPO_ENABLE_META_SDK === '1'
+    || process.env.EXPO_PUBLIC_ENABLE_META_SDK === '1';
 
   const hasMetaCredentials = isValidEnvValue(metaAppIdFromEnv) && isValidEnvValue(metaClientTokenFromEnv);
 
@@ -209,13 +213,21 @@ export default (): ExpoConfig => {
     try { require.resolve('react-native-fbsdk-next'); return true; } catch { return false; }
   })();
 
-  const isMetaConfigured = hasMetaCredentials && isFbsdkInstalled;
+  const isMetaConfigured = hasMetaCredentials && isFbsdkInstalled && enableMetaSdk;
 
   // CRITICAL FIX: Only include react-native-fbsdk-next when BOTH Meta credentials
   // are present AND the package is installed. Including this plugin when the package
   // is not installed causes "Failed to resolve plugin" which breaks every EAS build.
   // Including it with a bad App ID causes a TurboModule SIGABRT crash on iOS.
   let plugins = (baseConfig.plugins || []) as NonNullable<ExpoConfig['plugins']>;
+
+  // TestFlight/stores are significantly more stable on the old architecture
+  // for this app's current dependency mix.
+  plugins = replacePlugin(plugins, 'expo-build-properties', {
+    ios: {
+      newArchEnabled: enableIosNewArch,
+    },
+  });
 
   if (isMetaConfigured) {
     plugins = replacePlugin(plugins, 'react-native-fbsdk-next', {
@@ -228,7 +240,8 @@ export default (): ExpoConfig => {
       isAutoInitEnabled: true,
     });
   } else {
-    // Remove the plugin entirely when credentials are missing.
+    // Remove the plugin entirely when credentials are missing or plugin is
+    // not explicitly enabled for this build.
     // A partially-configured Facebook SDK is far worse than no SDK at all.
     plugins = removePlugin(plugins, 'react-native-fbsdk-next');
   }

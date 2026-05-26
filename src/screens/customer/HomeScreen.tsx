@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from '../../utils/linearGradient';
-import { useNavigation } from '@react-navigation/native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '../../utils/icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { HOME_HEADER_HEIGHT } from '../../components/HomeHeader';
@@ -113,6 +113,7 @@ interface TourStep {
 export default function HomeScreen() {
   useScreenTracking('Home');
   const navigation = useNavigation<any>();
+  const isScreenFocused = useIsFocused();
   const { user } = useAuth();
 
   const [heroBannerIndex, setHeroBannerIndex] = useState(0);
@@ -640,6 +641,10 @@ export default function HomeScreen() {
   };
 
   const renderHomeTourModal = () => {
+    if (!isScreenFocused) {
+      return null;
+    }
+
     if (!showTour) {
       return null;
     }
@@ -753,6 +758,10 @@ export default function HomeScreen() {
   };
 
   const renderWelcomeModal = () => {
+    if (!isScreenFocused) {
+      return null;
+    }
+
     if (!welcomeMessage) {
       return null;
     }
