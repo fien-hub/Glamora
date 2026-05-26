@@ -1,13 +1,22 @@
-// expo-location is required lazily to avoid module-level native module crashes
-// in New Architecture builds. All Location usage is inside async function bodies.
+// expo-location MUST be required lazily (inside function bodies, not at module
+// level) to avoid native module registration crashes in New Architecture builds.
+// At bundle-evaluation time, JSI native modules may not yet be registered.
+// Calling require() inside an async function ensures it runs after the native
+// bridge is fully initialised — matching the same pattern used in locationTracking.ts.
 import { Alert, Linking } from 'react-native';
 
-let Location: typeof import('expo-location') | null = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  Location = require('expo-location') as typeof import('expo-location');
-} catch (e) {
-  console.warn('[location.ts] expo-location failed to load:', e);
+let _Location: typeof import('expo-location') | null = null;
+
+function getExpoLocation(): typeof import('expo-location') | null {
+  if (_Location !== null) return _Location;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    _Location = require('expo-location') as typeof import('expo-location');
+    return _Location;
+  } catch (e) {
+    console.warn('[location.ts] expo-location failed to load:', e);
+    return null;
+  }
 }
 
 export interface LocationCoords {
@@ -30,6 +39,7 @@ const KM_TO_MILES = 0.621371;
  * @param silentDenial - if true, suppresses all Alerts on denial (for background auto-fetches)
  */
 export async function requestLocationPermission(silentDenial = false): Promise<boolean> {
+  const Location = getExpoLocation();
   if (!Location) {
     console.warn('[location.ts] expo-location module unavailable during permission request.');
     return false;
@@ -81,6 +91,7 @@ export async function requestLocationPermission(silentDenial = false): Promise<b
  * @param silent - if true, suppresses permission alerts (use for background auto-fetches)
  */
 export async function getCurrentLocation(silent = false): Promise<LocationCoords | null> {
+  const Location = getExpoLocation();
   if (!Location) {
     console.warn('[location.ts] expo-location module unavailable during getCurrentLocation.');
     return null;
@@ -90,18 +101,28 @@ export async function getCurrentLocation(silent = false): Promise<LocationCoords
     const hasPermission = await requestLocationPermission(silent);
     if (!hasPermission) return null;
 
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
+    // Try last-known position first for speed (no GPS cold-start delay).
+    // Fall back to a fresh fix with a timeout to avoid hanging indefinitely
+    // in production (Hermes/New Architecture) when GPS is slow to acquire.
+    let position = await Location.getLastKnownPositionAsync({ maxAge: 5 * 60 * 1000 });
+
+    if (!position) {
+      position = await Promise.race([
+        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Location timeout after 10s')), 10_000)
+        ),
+      ]);
+    }
 
     return {
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
     };
   } catch (error) {
     console.error('Error getting current location:', error);
     if (!silent) {
-      Alert.alert('Error', 'Failed to get your location');
+      Alert.alert('Error', 'Failed to get your location. Please enter it manually.');
     }
     return null;
   }
@@ -111,6 +132,7 @@ export async function getCurrentLocation(silent = false): Promise<LocationCoords
  * Geocode an address to coordinates
  */
 export async function geocodeAddress(address: string): Promise<LocationCoords | null> {
+  const Location = getExpoLocation();
   if (!Location) {
     console.warn('[location.ts] expo-location module unavailable during geocodeAddress.');
     return null;
@@ -137,6 +159,7 @@ export async function geocodeAddress(address: string): Promise<LocationCoords | 
  * Reverse geocode coordinates to an address
  */
 export async function reverseGeocode(coords: LocationCoords): Promise<Address | null> {
+  const Location = getExpoLocation();
   if (!Location) {
     console.warn('[location.ts] expo-location module unavailable during reverseGeocode.');
     return null;
