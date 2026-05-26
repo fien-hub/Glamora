@@ -16,7 +16,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { trackProfileEdited } from '../../utils/analytics';
-import { geocodeAddress } from '../../services/location';
+import { geocodeAddress, getCurrentLocation } from '../../services/location';
+import { Ionicons } from '@expo/vector-icons';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 
@@ -36,6 +37,7 @@ export default function EditProfileScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadingLocation, setLoadingLocation] = useState(false);
   const [profileData, setProfileData] = useState<ProfileData>({
     firstName: '',
     lastName: '',
@@ -90,6 +92,36 @@ export default function EditProfileScreen() {
       Alert.alert('Error', error.message || 'Failed to load profile');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUseCurrentLocation = async () => {
+    setLoadingLocation(true);
+    try {
+      const location = await getCurrentLocation();
+      if (!location) {
+        Alert.alert('Location Unavailable', 'Could not get your location. Please enter it manually.');
+        return;
+      }
+      const { reverseGeocode } = await import('../../services/location');
+      const addressData = await reverseGeocode(location);
+      if (addressData) {
+        setProfileData((prev) => ({
+          ...prev,
+          locationAddress: addressData.street,
+          locationCity: addressData.city,
+          locationState: addressData.state,
+          locationZipCode: addressData.zipCode,
+        }));
+        Alert.alert('Success', 'Location filled from your current position');
+      } else {
+        Alert.alert('Location Unavailable', 'Could not determine your address. Please enter it manually.');
+      }
+    } catch (error) {
+      console.error('Error using current location:', error);
+      Alert.alert('Error', 'Failed to get your current location. Please enter manually.');
+    } finally {
+      setLoadingLocation(false);
     }
   };
 
@@ -245,6 +277,26 @@ export default function EditProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Location</Text>
 
+          <TouchableOpacity
+            style={[styles.locationButton, loadingLocation && styles.locationButtonDisabled]}
+            onPress={handleUseCurrentLocation}
+            disabled={loadingLocation}
+          >
+            {loadingLocation ? (
+              <>
+                <ActivityIndicator color={colors.white} size="small" style={{ marginRight: 8 }} />
+                <Text style={styles.locationButtonText}>Locating...</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="locate" size={18} color={colors.white} style={{ marginRight: 8 }} />
+                <Text style={styles.locationButtonText}>Use Current Location</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <Text style={styles.orText}>Or enter manually</Text>
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Address</Text>
             <TextInput
@@ -392,5 +444,28 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+  },
+  locationButtonDisabled: {
+    opacity: 0.6,
+  },
+  locationButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+  },
+  orText: {
+    textAlign: 'center',
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    marginBottom: spacing.md,
   },
 });
