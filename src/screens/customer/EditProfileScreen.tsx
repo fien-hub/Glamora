@@ -17,7 +17,7 @@ import { supabase } from '../../services/supabase';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { trackProfileEdited } from '../../utils/analytics';
 import { geocodeAddress, getCurrentLocation } from '../../services/location';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '../../utils/icons';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 
