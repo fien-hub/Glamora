@@ -15,11 +15,14 @@ import {
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
+import * as Location from 'expo-location';
+import { Ionicons } from '../../utils/icons';
 
 export default function LocationScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
 
   // Location fields
@@ -171,6 +174,48 @@ export default function LocationScreen() {
     Linking.openURL(url);
   };
 
+  const handleUseCurrentLocation = async () => {
+    try {
+      setLocating(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Denied',
+          'Location permission is required to use this feature. Please enable it in Settings.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+        return;
+      }
+
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude: lat, longitude: lng } = loc.coords;
+
+      setLatitude(lat.toFixed(6));
+      setLongitude(lng.toFixed(6));
+
+      // Reverse geocode to fill address fields
+      const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+      if (place) {
+        if (place.street && place.streetNumber) {
+          setAddress(`${place.streetNumber} ${place.street}`);
+        } else if (place.street) {
+          setAddress(place.street);
+        }
+        if (place.city) setCity(place.city);
+        if (place.region) setState(place.region);
+        if (place.postalCode) setZipCode(place.postalCode);
+      }
+    } catch (err) {
+      console.error('[LocationScreen] useCurrentLocation error:', err);
+      Alert.alert('Error', 'Could not retrieve your location. Please try again.');
+    } finally {
+      setLocating(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -194,6 +239,22 @@ export default function LocationScreen() {
         <Text style={styles.sectionDescription}>
           Set your business location to help customers find you
         </Text>
+
+        <TouchableOpacity
+          style={[styles.currentLocationBtn, locating && styles.currentLocationBtnDisabled]}
+          onPress={handleUseCurrentLocation}
+          disabled={locating}
+          activeOpacity={0.8}
+        >
+          {locating ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Ionicons name="locate" size={18} color={colors.primary} />
+          )}
+          <Text style={styles.currentLocationBtnText}>
+            {locating ? 'Getting location…' : 'Use Current Location'}
+          </Text>
+        </TouchableOpacity>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Street Address *</Text>
@@ -359,6 +420,26 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     color: colors.textSecondary,
     marginBottom: spacing.lg,
+  },
+  currentLocationBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.lg,
+    backgroundColor: '#FBF4F0',
+  },
+  currentLocationBtnDisabled: {
+    opacity: 0.5,
+  },
+  currentLocationBtnText: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+    color: colors.primary,
   },
   inputGroup: {
     marginBottom: spacing.md,
