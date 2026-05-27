@@ -44,19 +44,11 @@ export default function ServiceSelectionScreen() {
     checkPricingGuide();
   }, [user]);
 
-  const checkPricingGuide = async () => {
-    if (!user) return;
-    const key = `glamora_pricing_guide_seen_${user.id}`;
-    const seen = await AsyncStorage.getItem(key);
-    if (!seen) {
-      setShowPricingGuide(true);
-    }
+  const checkPricingGuide = () => {
+    setShowPricingGuide(true);
   };
 
-  const dismissPricingGuide = async () => {
-    if (!user) return;
-    const key = `glamora_pricing_guide_seen_${user.id}`;
-    await AsyncStorage.setItem(key, 'true');
+  const dismissPricingGuide = () => {
     setShowPricingGuide(false);
   };
 
