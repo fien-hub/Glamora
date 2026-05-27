@@ -27,6 +27,7 @@ import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 import CustomerTabNavigator from './CustomerTabNavigator';
 import ProviderTabNavigator from './ProviderTabNavigator';
 import AdminTabNavigator from './AdminTabNavigator';
+import ProviderApprovalScreen from '../screens/admin/ProviderApprovalScreen';
 
 // Additional Screens
 import ChatScreen from '../screens/shared/ChatScreen';
@@ -690,6 +691,16 @@ export default function Navigation() {
           // Admin screens
           <>
             <Stack.Screen name="AdminMain" component={AdminTabNavigator} />
+            <Stack.Screen
+              name="ProviderApproval"
+              component={ProviderApprovalScreen}
+              options={{
+                headerShown: true,
+                title: 'Provider Approvals',
+                headerStyle: { backgroundColor: colors.white },
+                headerTintColor: colors.text,
+              }}
+            />
           </>
         ) : (
           // Fallback - show welcome if role is not set

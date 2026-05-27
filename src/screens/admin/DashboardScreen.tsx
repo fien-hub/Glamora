@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { supabase } from '../../services/supabase';
 
@@ -22,6 +23,7 @@ interface Stats {
 }
 
 export default function AdminDashboardScreen() {
+  const navigation = useNavigation<any>();
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,
     totalProviders: 0,
@@ -177,7 +179,10 @@ export default function AdminDashboardScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
 
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('ProviderApproval')}
+        >
           <Text style={styles.actionButtonText}>
             🔍 Review Pending Verifications ({stats.pendingVerifications})
           </Text>
