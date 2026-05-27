@@ -32,10 +32,15 @@ export default function LocationScreen() {
   const [serviceRadius, setServiceRadius] = useState('10');
 
   useEffect(() => {
-    fetchLocationData();
-  }, []);
+    if (user?.id) {
+      fetchLocationData();
+    } else {
+      setLoading(false);
+    }
+  }, [user?.id]);
 
   const fetchLocationData = async () => {
+    if (!user?.id) { setLoading(false); return; }
     try {
       setLoading(true);
 
