@@ -292,6 +292,60 @@ export default function ServiceSelectionScreen() {
 
             <ScrollView style={styles.guideScroll} showsVerticalScrollIndicator={false}>
 
+              {/* How to add services */}
+              <View style={styles.guideSection}>
+                <View style={styles.guideSectionTitleRow}>
+                  <Text style={styles.guideSectionIcon}>➕</Text>
+                  <Text style={styles.guideSectionTitle}>Adding Services</Text>
+                </View>
+                <Text style={styles.guideSectionBody}>
+                  Tap any service card in the list to configure it and add it to your
+                  profile. You can add as many services as you like.
+                </Text>
+
+                <View style={styles.guideStepList}>
+                  <View style={styles.guideStepRow}>
+                    <View style={styles.guideStepBadge}>
+                      <Text style={styles.guideStepNum}>1</Text>
+                    </View>
+                    <Text style={styles.guideStepText}>
+                      Browse the list and tap a service you offer.
+                    </Text>
+                  </View>
+                  <View style={styles.guideStepRow}>
+                    <View style={styles.guideStepBadge}>
+                      <Text style={styles.guideStepNum}>2</Text>
+                    </View>
+                    <Text style={styles.guideStepText}>
+                      Set your price, duration, and travel fees, then tap{' '}
+                      <Text style={styles.bold}>Save</Text>.
+                    </Text>
+                  </View>
+                  <View style={styles.guideStepRow}>
+                    <View style={styles.guideStepBadge}>
+                      <Text style={styles.guideStepNum}>3</Text>
+                    </View>
+                    <Text style={styles.guideStepText}>
+                      Repeat for every service you want to offer.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.guideNote}>
+                  <Text style={styles.guideNoteText}>
+                    ✨{' '}
+                    <Text style={styles.guideNoteHighlight}>
+                      Don't see your service?
+                    </Text>{' '}
+                    Tap <Text style={styles.bold}>"Create Your Own"</Text> at the top
+                    to add a completely custom service with your own name and description.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Divider */}
+              <View style={styles.guideDivider} />
+
               {/* Base Price */}
               <View style={styles.guideSection}>
                 <View style={styles.guideSectionTitleRow}>
@@ -649,6 +703,36 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 22,
     marginBottom: spacing.xs,
+  },
+  guideStepList: {
+    marginTop: spacing.md,
+    gap: spacing.sm,
+  },
+  guideStepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  guideStepBadge: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+    flexShrink: 0,
+  },
+  guideStepNum: {
+    fontSize: fontSize.xs,
+    fontWeight: fontWeight.bold,
+    color: colors.white,
+  },
+  guideStepText: {
+    flex: 1,
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    lineHeight: 20,
   },
   bold: {
     fontWeight: fontWeight.bold,
