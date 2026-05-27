@@ -225,9 +225,14 @@ export default function Navigation() {
             />
           </>
         ) : user && !userRole && !roleResolutionExpired ? (
-          // A session exists, but role hydration has not completed yet.
-          // Render a safe unauth flow instead of Splash to prevent startup deadlocks.
+          // A session exists but role hydration is still in progress.
+          // Show Splash (which does nothing when user is set and just waits for
+          // the navigator to switch) instead of RoleSelection to avoid a flash
+          // of the wrong screen while the role DB query is in flight.
           <>
+            <Stack.Screen name="Splash" component={SplashScreen} />
+            <Stack.Screen name="CustomerMain" component={CustomerTabNavigator} />
+            <Stack.Screen name="ProviderMain" component={ProviderTabNavigator} />
             <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
