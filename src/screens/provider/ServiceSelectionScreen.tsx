@@ -129,6 +129,7 @@ export default function ServiceSelectionScreen() {
     travelFee11to15?: number;
     travelFee16to25?: number;
     acceptsOver25km?: boolean;
+    travelFeeOver25km?: number;
   }) => {
     if (!user || !selectedService) return;
 
@@ -156,6 +157,8 @@ export default function ServiceSelectionScreen() {
           travel_fee_0_10km: data.travelFee0to10,
           travel_fee_11_15km: data.travelFee11to15,
           travel_fee_16_25km: data.travelFee16to25,
+          accepts_over_25km: data.acceptsOver25km ?? false,
+          travel_fee_over_25km: data.travelFeeOver25km ?? null,
         });
 
       if (error) throw error;

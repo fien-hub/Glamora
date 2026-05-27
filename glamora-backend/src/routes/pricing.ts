@@ -139,6 +139,7 @@ router.post('/calculate', async (req: Request, res: Response) => {
         duration_minutes,
         base_price,
         accepts_over_25km,
+        travel_fee_over_25km,
         services(name)
       `)
       .eq('id', service_id)
@@ -169,6 +170,11 @@ router.post('/calculate', async (req: Request, res: Response) => {
       distance_km,
       serviceData.accepts_over_25km || false
     );
+
+    // Use provider's custom 25+ km fee if set, otherwise keep the standard fee
+    if (travelResult.tier === '15+ mi' && serviceData.travel_fee_over_25km != null) {
+      travelResult.travel_fee_cents = serviceData.travel_fee_over_25km;
+    }
 
     // Calculate total price
     const priceBreakdown = calculateTotalPrice(

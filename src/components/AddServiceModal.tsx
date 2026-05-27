@@ -30,6 +30,7 @@ interface AddServiceModalProps {
     isActive?: boolean;
     basePrice?: string;
     acceptsOver25km?: boolean;
+    travelFeeOver25km?: string;
   };
   onClose: () => void;
   onSave: (data: {
@@ -39,6 +40,7 @@ interface AddServiceModalProps {
     isActive: boolean;
     basePrice: number;
     acceptsOver25km: boolean;
+    travelFeeOver25km?: number;
   }) => void;
 }
 
@@ -75,6 +77,7 @@ export default function AddServiceModal({
   // Simple base price (provider's earnings before commission)
   const [basePrice, setBasePrice] = useState('');
   const [acceptsOver25km, setAcceptsOver25km] = useState(false);
+  const [travelFeeOver25km, setTravelFeeOver25km] = useState('');
 
   useEffect(() => {
     if (visible && service) {
@@ -85,6 +88,7 @@ export default function AddServiceModal({
         setIsActive(initialData.isActive ?? true);
         setBasePrice(initialData.basePrice || '');
         setAcceptsOver25km(initialData.acceptsOver25km ?? false);
+        setTravelFeeOver25km(initialData.travelFeeOver25km || '');
       } else {
         // New service - default values
         setDuration('');
@@ -93,6 +97,7 @@ export default function AddServiceModal({
         setIsActive(true);
         setBasePrice('');
         setAcceptsOver25km(false);
+        setTravelFeeOver25km('');
       }
     }
   }, [visible, service, initialData]);
@@ -125,6 +130,7 @@ export default function AddServiceModal({
       return;
     }
 
+    const feeOver25 = parseFloat(travelFeeOver25km) || 0;
     onSave({
       duration: durationNum,
       customDescription: customDescription.trim(),
@@ -132,6 +138,7 @@ export default function AddServiceModal({
       isActive,
       basePrice: Math.round(basePriceNum * 100), // Convert to cents
       acceptsOver25km,
+      travelFeeOver25km: acceptsOver25km ? Math.round(feeOver25 * 100) : undefined,
     });
 
     // Reset form
@@ -145,6 +152,7 @@ export default function AddServiceModal({
     setIsActive(true);
     setBasePrice('');
     setAcceptsOver25km(false);
+    setTravelFeeOver25km('');
   };
 
   const handleClose = () => {
@@ -285,6 +293,27 @@ export default function AddServiceModal({
                 />
               </View>
 
+              {/* Custom 15+ mi fee (shown when opted in) */}
+              {acceptsOver25km && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>15+ Mile Travel Fee</Text>
+                  <View style={styles.basePriceInputWrapper}>
+                    <Text style={styles.dollarSign}>$</Text>
+                    <TextInput
+                      style={styles.basePriceInput}
+                      placeholder={`${STANDARD_TRAVEL_FEES['15+ mi'].toFixed(2)} (platform default)`}
+                      keyboardType="decimal-pad"
+                      value={travelFeeOver25km}
+                      onChangeText={setTravelFeeOver25km}
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                  </View>
+                  <Text style={styles.inputHint}>
+                    Leave blank to use the platform default (${STANDARD_TRAVEL_FEES['15+ mi']})
+                  </Text>
+                </View>
+              )}
+
               {/* Price Breakdown Preview */}
               {showPricing && (
                 <View style={styles.earningsCard}>
@@ -324,7 +353,7 @@ export default function AddServiceModal({
                     <View style={styles.earningsRow}>
                       <Text style={styles.earningsLabel}>15+ mi:</Text>
                       <Text style={styles.earningsValue}>
-                        ${calculateCustomerPrice(basePriceNum, STANDARD_TRAVEL_FEES['15+ mi']).toFixed(2)}
+                        ${calculateCustomerPrice(basePriceNum, parseFloat(travelFeeOver25km) || STANDARD_TRAVEL_FEES['15+ mi']).toFixed(2)}
                       </Text>
                     </View>
                   )}
@@ -366,7 +395,7 @@ export default function AddServiceModal({
                     <View style={styles.earningsRow}>
                       <Text style={styles.earningsLabelSmall}>15+ mi:</Text>
                       <Text style={styles.earningsValueGreen}>
-                        ${calculateProviderEarnings(basePriceNum, STANDARD_TRAVEL_FEES['15+ mi']).toFixed(2)}
+                        ${calculateProviderEarnings(basePriceNum, parseFloat(travelFeeOver25km) || STANDARD_TRAVEL_FEES['15+ mi']).toFixed(2)}
                       </Text>
                     </View>
                   )}

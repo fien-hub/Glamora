@@ -36,6 +36,8 @@ interface ProviderService {
   travel_fee_0_10km?: number;
   travel_fee_11_15km?: number;
   travel_fee_16_25km?: number;
+  accepts_over_25km?: boolean;
+  travel_fee_over_25km?: number;
   service: Service;
 }
 
@@ -71,6 +73,8 @@ export default function AddEditServiceScreen() {
   const [travelFee0to10, setTravelFee0to10] = useState('');
   const [travelFee11to15, setTravelFee11to15] = useState('');
   const [travelFee16to25, setTravelFee16to25] = useState('');
+  const [acceptsOver25km, setAcceptsOver25km] = useState(false);
+  const [travelFeeOver25km, setTravelFeeOver25km] = useState('');
 
   useEffect(() => {
     if (editMode && editingService) {
@@ -87,6 +91,9 @@ export default function AddEditServiceScreen() {
       setTravelFee0to10(fee0to10 !== null && fee0to10 !== undefined ? (fee0to10 / 100).toFixed(2) : '');
       setTravelFee11to15(fee11to15 !== null && fee11to15 !== undefined ? (fee11to15 / 100).toFixed(2) : '');
       setTravelFee16to25(fee16to25 !== null && fee16to25 !== undefined ? (fee16to25 / 100).toFixed(2) : '');
+      setAcceptsOver25km(editingService.accepts_over_25km ?? false);
+      const feeOver25 = editingService.travel_fee_over_25km;
+      setTravelFeeOver25km(feeOver25 != null ? (feeOver25 / 100).toFixed(2) : '');
     } else if (selectedService) {
       setDuration(selectedService.base_duration_minutes.toString());
     }
@@ -126,6 +133,7 @@ export default function AddEditServiceScreen() {
     const fee0to10 = parseFloat(travelFee0to10) || 0;
     const fee11to15 = parseFloat(travelFee11to15) || 0;
     const fee16to25 = parseFloat(travelFee16to25) || 0;
+    const feeOver25 = parseFloat(travelFeeOver25km) || 0;
 
     setSaving(true);
 
@@ -151,6 +159,8 @@ export default function AddEditServiceScreen() {
             travel_fee_0_10km: Math.round(fee0to10 * 100),
             travel_fee_11_15km: Math.round(fee11to15 * 100),
             travel_fee_16_25km: Math.round(fee16to25 * 100),
+            accepts_over_25km: acceptsOver25km,
+            travel_fee_over_25km: acceptsOver25km ? Math.round(feeOver25 * 100) : null,
             updated_at: new Date().toISOString(),
           })
           .eq('id', editingService.id);
@@ -176,6 +186,8 @@ export default function AddEditServiceScreen() {
             travel_fee_0_10km: Math.round(fee0to10 * 100),
             travel_fee_11_15km: Math.round(fee11to15 * 100),
             travel_fee_16_25km: Math.round(fee16to25 * 100),
+            accepts_over_25km: acceptsOver25km,
+            travel_fee_over_25km: acceptsOver25km ? Math.round(feeOver25 * 100) : null,
           });
 
         if (error) throw error;
@@ -207,6 +219,7 @@ export default function AddEditServiceScreen() {
   const fee0to10 = parseFloat(travelFee0to10) || 0;
   const fee11to15 = parseFloat(travelFee11to15) || 0;
   const fee16to25 = parseFloat(travelFee16to25) || 0;
+  const feeOver25km = parseFloat(travelFeeOver25km) || 0;
   const baseServicePrice = calculateFinalPrice(priceNum);
 
   return (
@@ -308,6 +321,38 @@ export default function AddEditServiceScreen() {
                 />
               </View>
             </View>
+
+            {/* 25+ km (opt-in toggle) */}
+            <View style={styles.zoneToggleRow}>
+              <View style={styles.zoneToggleInfo}>
+                <Text style={styles.zoneLabel}>25+ km requests</Text>
+                <Text style={styles.hint}>Accept bookings beyond 25 km (15+ mi)</Text>
+              </View>
+              <Switch
+                value={acceptsOver25km}
+                onValueChange={setAcceptsOver25km}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                thumbColor={colors.white}
+              />
+            </View>
+
+            {acceptsOver25km && (
+              <View style={styles.zoneInputGroup}>
+                <Text style={styles.zoneLabel}>25+ km travel fee</Text>
+                <View style={styles.zoneInputWrapper}>
+                  <Text style={styles.dollarSign}>$</Text>
+                  <TextInput
+                    style={styles.zoneInput}
+                    placeholder="0.00"
+                    keyboardType="decimal-pad"
+                    value={travelFeeOver25km}
+                    onChangeText={setTravelFeeOver25km}
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                </View>
+                <Text style={styles.hint}>Your fee for customers beyond 25 km</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -372,6 +417,15 @@ export default function AddEditServiceScreen() {
                     ${(baseServicePrice + fee16to25).toFixed(2)}
                   </Text>
                 </View>
+
+                {acceptsOver25km && (
+                  <View style={styles.distancePricingRow}>
+                    <Text style={styles.distanceLabel}>25+ km:</Text>
+                    <Text style={styles.distancePrice}>
+                      ${(baseServicePrice + feeOver25km).toFixed(2)}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               <Text style={styles.travelFeeNote}>
@@ -590,6 +644,17 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: fontWeight.medium,
     flex: 1,
+  },
+  zoneToggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  zoneToggleInfo: {
+    flex: 1,
+    marginRight: spacing.md,
   },
   zoneInputWrapper: {
     flexDirection: 'row',

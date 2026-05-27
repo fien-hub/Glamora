@@ -43,6 +43,7 @@ interface ProviderService {
   custom_service_name?: string | null;
   base_price: number;  // Provider's base price in cents
   accepts_over_25km: boolean;
+  travel_fee_over_25km?: number;
   service: Service;
 }
 
@@ -434,6 +435,7 @@ export default function ServicesScreen() {
           platform_commission_rate,
           custom_service_name,
           accepts_over_25km,
+          travel_fee_over_25km,
           services (
             id,
             name,
@@ -456,6 +458,7 @@ export default function ServicesScreen() {
         custom_service_name: ps.custom_service_name,
         base_price: ps.base_price || 0,
         accepts_over_25km: ps.accepts_over_25km,
+        travel_fee_over_25km: ps.travel_fee_over_25km ?? undefined,
         service: {
           id: ps.services.id,
           name: ps.services.name,
@@ -528,6 +531,7 @@ export default function ServicesScreen() {
     isActive: boolean;
     basePrice: number;
     acceptsOver25km: boolean;
+    travelFeeOver25km?: number;
   }) => {
     if (!user || !editingService) return;
 
@@ -541,6 +545,7 @@ export default function ServicesScreen() {
           is_active: data.isActive,
           base_price: data.basePrice,
           accepts_over_25km: data.acceptsOver25km,
+          travel_fee_over_25km: data.travelFeeOver25km ?? null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', editingService.id);
@@ -678,7 +683,9 @@ export default function ServicesScreen() {
                         </Text>
                         {ps.accepts_over_25km && (
                           <Text style={styles.finalPrice}>
-                            ✓ Accepts 25+ km requests
+                            ✓ Accepts 25+ km — {ps.travel_fee_over_25km != null
+                              ? `$${(ps.travel_fee_over_25km / 100).toFixed(2)} fee`
+                              : 'platform default fee'}
                           </Text>
                         )}
                       </View>
@@ -761,6 +768,9 @@ export default function ServicesScreen() {
             isActive: editingService.is_active,
             basePrice: ((editingService.base_price || 0) / 100).toFixed(2),
             acceptsOver25km: editingService.accepts_over_25km || false,
+            travelFeeOver25km: editingService.travel_fee_over_25km != null
+              ? (editingService.travel_fee_over_25km / 100).toFixed(2)
+              : undefined,
           }}
           onClose={() => {
             setModalVisible(false);
