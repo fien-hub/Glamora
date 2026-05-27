@@ -168,14 +168,13 @@ export default function HomeScreen() {
         const shouldShowWelcome = await AsyncStorage.getItem(storageKey);
 
         if (shouldShowWelcome !== 'true') {
-          setShouldAutoStartTour(false);
           return;
         }
 
         await AsyncStorage.removeItem(storageKey);
 
-        setShouldAutoStartTour(true);
-        setWelcomeMessage('Your account is ready — let’s find your next beauty experience.');
+        // Welcome modal removed — go straight to the tour guide.
+        startTourIfNeeded();
       } catch (error) {
         console.warn('[HomeScreen] Failed to load welcome message:', error);
       }
