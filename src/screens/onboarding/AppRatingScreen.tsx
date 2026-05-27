@@ -8,7 +8,6 @@ import {
   Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from '../../utils/linearGradient';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
@@ -21,18 +20,17 @@ try { StoreReview = require('expo-store-review'); } catch (e) { console.warn('[A
 type Step = 'prompt' | 'confirm';
 
 export default function AppRatingScreen() {
-  const { markOnboardingComplete, userRole } = useAuth();
-  const navigation = useNavigation<any>();
+  const { markOnboardingComplete } = useAuth();
   const [step, setStep] = useState<Step>('prompt');
   const [fadeAnim] = useState(new Animated.Value(1));
   const [selectedRating, setSelectedRating] = useState(0);
 
-  // Explicit navigation to main app — more reliable than relying solely on
-  // the navigator branch switching after markOnboardingComplete().
   const finishOnboarding = () => {
+    // Just flip the flag — the navigator's conditional branch will re-render
+    // into CustomerMain / ProviderMain automatically once needsOnboarding = false.
+    // Calling navigation.reset() here causes a payload error because CustomerMain /
+    // ProviderMain are not registered in the onboarding branch of the navigator.
     markOnboardingComplete();
-    const dest = userRole === 'provider' ? 'ProviderMain' : 'CustomerMain';
-    navigation.reset({ index: 0, routes: [{ name: dest }] });
   };
 
   const transition = (nextStep: Step) => {
