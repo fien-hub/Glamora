@@ -15,6 +15,7 @@ import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '..
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { trackServiceAdded, trackServiceEdited } from '../../utils/analytics';
+import { notifyAdmin } from '../../utils/notifications';
 
 interface Service {
   id: string;
@@ -194,6 +195,13 @@ export default function AddEditServiceScreen() {
 
         const serviceName = isCustomService ? customServiceName : selectedService.name;
         trackServiceAdded(serviceName, Math.round(priceNum * 100));
+        // Notify admin that a provider added a new service
+        void notifyAdmin(
+          '🔧 Provider Added a Service',
+          `A provider added: ${serviceName} ($${priceNum.toFixed(2)})`,
+          'service_added',
+          { serviceName, basePrice: Math.round(priceNum * 100), providerId: profile.id }
+        );
         Alert.alert('Success', 'Service added successfully', [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);

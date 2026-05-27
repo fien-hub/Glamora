@@ -447,3 +447,30 @@ export const notifyBookingStatusChange = async (
   }
 };
 
+/**
+ * Send a push notification to every user with role='admin'.
+ * Best-effort: never throws, silently logs errors so callers don't need try/catch.
+ */
+export const notifyAdmin = async (
+  title: string,
+  body: string,
+  eventType: 'provider_signup' | 'service_added',
+  data?: Record<string, any>
+): Promise<void> => {
+  try {
+    const { error } = await supabase.functions.invoke('notify-admin', {
+      body: {
+        title,
+        body,
+        event_type: eventType,
+        data: data || {},
+      },
+    });
+    if (error) {
+      console.warn('[notifyAdmin] Edge function returned an error:', error);
+    }
+  } catch (err) {
+    console.warn('[notifyAdmin] Failed to reach notify-admin function:', err);
+  }
+};
+

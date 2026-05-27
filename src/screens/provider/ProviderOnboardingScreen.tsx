@@ -17,6 +17,7 @@ let WebBrowser: typeof import('expo-web-browser') = {} as any;
 try { WebBrowser = require('expo-web-browser'); } catch (e) { console.warn('[ProviderOnboardingScreen] expo-web-browser unavailable:', e); }
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
+import { notifyAdmin } from '../../utils/notifications';
 import { getPayoutAccountStatus, getPayoutOnboardingUrl } from '../../services/payouts';
 import { getCurrentLocation, reverseGeocode } from '../../services/location';
 import { colors, spacing, fontSize, borderRadius, fontWeight } from '../../constants/theme';
@@ -63,6 +64,7 @@ export default function ProviderOnboardingScreen() {
     isCustom: boolean;
     basePrice: number;  // Provider's base price in cents
     acceptsOver25km: boolean;
+    travelFeeOver25km?: number;
   }>>([]);
   const [availableServices, setAvailableServices] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -526,6 +528,15 @@ export default function ProviderOnboardingScreen() {
 
       console.log('[Onboarding] Availability added');
       console.log('[Onboarding] All steps completed successfully!');
+
+      // Notify admin that a provider has completed onboarding and added services
+      const serviceNames = selectedServices.map(s => s.serviceName).join(', ');
+      void notifyAdmin(
+        '🔧 Provider Completed Onboarding',
+        `${businessName} completed onboarding with ${selectedServices.length} service(s): ${serviceNames}`,
+        'service_added',
+        { providerId: profileData.id, businessName, serviceCount: selectedServices.length }
+      );
 
       // Navigate to rating screen — AppRatingScreen calls markOnboardingComplete()
       // after the user responds, so we do NOT call it here.

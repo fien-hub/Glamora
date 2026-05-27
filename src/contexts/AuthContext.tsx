@@ -6,6 +6,7 @@ import { supabase, authService, dbService } from '../services/supabase';
 import type { UserRole } from '../types';
 
 import { trackSignUp, trackSignIn, trackSignOut, trackLoginAttempt, trackSessionTimeout } from '../utils/analytics';
+import { notifyAdmin } from '../utils/notifications';
 import sessionManager from '../utils/sessionManager';
 import { setSentryUser, clearSentryUser, setSentryTag } from '../services/sentry';
 import { locationTrackingService } from '../services/locationTracking';
@@ -692,6 +693,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Track sign up event
       trackSignUp('email', role);
 
+      // Notify admin immediately when a provider signs up
+      if (role === 'provider') {
+        void notifyAdmin(
+          '🆕 New Provider Signup',
+          `${firstName} ${lastName} just signed up as a provider (${data.user.email})`,
+          'provider_signup',
+          { userId: data.user.id, email: data.user.email, firstName, lastName }
+        );
+      }
+
       await queueWelcomeMessage(data.user.id);
 
       return data;
@@ -771,6 +782,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Track sign up event for new user
       trackSignUp('google', role);
+
+      // Notify admin immediately when a provider signs up via Google
+      if (role === 'provider') {
+        void notifyAdmin(
+          '🆕 New Provider Signup (Google)',
+          `${googleFirstName} ${googleLastName} signed up as a provider via Google (${result.user.email})`,
+          'provider_signup',
+          { userId: result.user.id, email: result.user.email }
+        );
+      }
+
       await queueWelcomeMessage(result.user.id);
     } else {
       // Track sign in event for existing user
@@ -837,6 +859,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Track sign up event for new user
       trackSignUp('apple', role);
+
+      // Notify admin immediately when a provider signs up via Apple
+      if (role === 'provider') {
+        void notifyAdmin(
+          '🆕 New Provider Signup (Apple)',
+          `${appleFirstName} ${appleLastName} signed up as a provider via Apple (${result.user.email})`,
+          'provider_signup',
+          { userId: result.user.id, email: result.user.email }
+        );
+      }
+
       await queueWelcomeMessage(result.user.id);
     } else {
       // Track sign in event for existing user
