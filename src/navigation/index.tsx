@@ -76,7 +76,6 @@ const Stack = createStackNavigator();
 export default function Navigation() {
   const { user, userRole, needsOnboarding, needsVerification, loading } = useAuth();
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
-  const [roleResolutionExpired, setRoleResolutionExpired] = useState(false);
 
   useEffect(() => {
     // Hard timeout: if AsyncStorage doesn't respond within 3 s, unblock the
@@ -104,19 +103,6 @@ export default function Navigation() {
     return () => clearTimeout(storageTimeout);
   }, []);
 
-  useEffect(() => {
-    if (!user || userRole) {
-      setRoleResolutionExpired(false);
-      return;
-    }
-
-    const timeout = setTimeout(() => {
-      setRoleResolutionExpired(true);
-    }, 2000);
-
-    return () => clearTimeout(timeout);
-  }, [user, userRole]);
-
   // Wait until we know whether onboarding has been seen (quick local read)
   const initialUnauthRoute = hasSeenOnboarding === null ? null : hasSeenOnboarding ? 'RoleSelection' : 'Onboarding';
 
@@ -126,9 +112,8 @@ export default function Navigation() {
       hasUser: !!user,
       userRole: userRole ?? 'none',
       initialUnauthRoute: initialUnauthRoute ?? 'pending',
-      roleResolutionExpired,
     });
-  }, [loading, user, userRole, initialUnauthRoute, roleResolutionExpired]);
+  }, [loading, user, userRole, initialUnauthRoute]);
 
   const linking = {
     prefixes: ['glamora://', 'https://glamora.app'],
@@ -224,11 +209,11 @@ export default function Navigation() {
               options={{ headerShown: false, gestureEnabled: false }}
             />
           </>
-        ) : user && !userRole && !roleResolutionExpired ? (
+        ) : user && !userRole && loading ? (
           // A session exists but role hydration is still in progress.
           // Show Splash (which does nothing when user is set and just waits for
-          // the navigator to switch) instead of RoleSelection to avoid a flash
-          // of the wrong screen while the role DB query is in flight.
+          // the navigator to switch) so the user never sees RoleSelection while
+          // the DB query or offline cache-load is in flight.
           <>
             <Stack.Screen name="Splash" component={SplashScreen} />
             <Stack.Screen name="CustomerMain" component={CustomerTabNavigator} />

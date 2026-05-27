@@ -304,9 +304,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return fetchUserRole(userId, retryCount + 1);
         }
 
-        // After all retries, user might be in onboarding - this is expected for new signups
-        console.log('[AuthContext] No user record found after retries - user may be completing onboarding');
+        // After all retries, try the locally cached role so the user can reach
+        // their home screen when offline or when the network is too slow.
+        console.log('[AuthContext] No user record found after retries — checking local cache');
         recordStartupCheckpoint('AuthProvider.fetchUserRole.noRecordAfterRetries', 'warn');
+        const cachedRoleA = await AsyncStorage.getItem(`glamora_role_cache_${userId}`).catch(() => null);
+        if (cachedRoleA) {
+          console.log('[AuthContext] Network unavailable — using cached role:', cachedRoleA);
+          setUserRole(cachedRoleA as UserRole);
+          setNeedsOnboarding(false);
+          setNeedsVerification(false);
+        }
         setLoading(false);
         return;
       }
@@ -318,6 +326,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         console.log('[AuthContext] User role fetched from users table:', data.role);
         setUserRole(data.role as UserRole);
+        // Cache role locally so the user can reach their home screen while offline.
+        AsyncStorage.setItem(`glamora_role_cache_${userId}`, data.role).catch(() => undefined);
         setSentryTag('user_role', data.role);
 
         // Start location tracking (best-effort — do not block loading on this)
@@ -340,15 +350,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return fetchUserRole(userId, retryCount + 1);
       }
 
-      // After all retries, user might be in onboarding - this is expected for new signups
-      console.log('[AuthContext] No role found after retries - user may be completing onboarding');
+      // After all retries, try the locally cached role as an offline fallback.
+      console.log('[AuthContext] No role found after retries — checking local cache');
       recordStartupCheckpoint('AuthProvider.fetchUserRole.noRoleAfterRetries', 'warn');
+      const cachedRoleB = await AsyncStorage.getItem(`glamora_role_cache_${userId}`).catch(() => null);
+      if (cachedRoleB) {
+        console.log('[AuthContext] No role in DB — using cached role:', cachedRoleB);
+        setUserRole(cachedRoleB as UserRole);
+        setNeedsOnboarding(false);
+        setNeedsVerification(false);
+      }
       setLoading(false);
     } catch (error) {
       recordStartupCheckpoint('AuthProvider.fetchUserRole.exception', 'error', {
         reason: error instanceof Error ? error.message : 'unknown error',
       });
       console.error('[AuthContext] Exception fetching user role:', error);
+      // Try cache before giving up — covers offline / network-timeout scenarios.
+      const cachedRoleC = await AsyncStorage.getItem(`glamora_role_cache_${userId}`).catch(() => null);
+      if (cachedRoleC) {
+        console.log('[AuthContext] Exception path — using cached role:', cachedRoleC);
+        setUserRole(cachedRoleC as UserRole);
+        setNeedsOnboarding(false);
+        setNeedsVerification(false);
+      }
       setLoading(false);
     }
   };
