@@ -249,7 +249,7 @@ export default function LocationScreen() {
           {locating ? (
             <ActivityIndicator size="small" color={colors.primary} />
           ) : (
-            <Ionicons name="locate" size={18} color={colors.primary} />
+            <Ionicons name="locate" size={18} color={colors.white} />
           )}
           <Text style={styles.currentLocationBtnText}>
             {locating ? 'Getting location…' : 'Use Current Location'}
@@ -426,20 +426,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
     borderRadius: borderRadius.md,
     paddingVertical: spacing.md,
     marginBottom: spacing.lg,
-    backgroundColor: '#FBF4F0',
+    backgroundColor: colors.primary,
   },
   currentLocationBtnDisabled: {
     opacity: 0.5,
   },
   currentLocationBtnText: {
     fontSize: fontSize.md,
-    fontWeight: fontWeight.semibold,
-    color: colors.primary,
+    fontWeight: fontWeight.bold,
+    color: colors.white,
   },
   inputGroup: {
     marginBottom: spacing.md,
