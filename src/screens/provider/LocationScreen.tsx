@@ -40,12 +40,13 @@ export default function LocationScreen() {
       setLoading(true);
 
       // Get profile ID
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('id')
         .eq('user_id', user?.id)
         .single();
 
+      if (profileError && profileError.code !== 'PGRST116') throw profileError;
       if (!profile) return;
       setProfileId(profile.id);
 
@@ -56,7 +57,8 @@ export default function LocationScreen() {
         .eq('id', profile.id)
         .single();
 
-      if (error) throw error;
+      // PGRST116 = no row yet — that's fine, just show empty fields
+      if (error && error.code !== 'PGRST116') throw error;
 
       if (providerProfile) {
         setAddress(providerProfile.address || '');
