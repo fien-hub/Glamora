@@ -59,7 +59,8 @@ export default function EditProfileScreen() {
         .eq('user_id', user.id)
         .single();
 
-      if (profileError) throw profileError;
+      if (profileError && profileError.code !== 'PGRST116') throw profileError;
+      if (!profileData) { setLoading(false); return; }
 
       // Fetch provider profile using profile ID
       const { data: providerData, error: providerError } = await supabase
@@ -68,7 +69,8 @@ export default function EditProfileScreen() {
         .eq('id', profileData.id)
         .single();
 
-      if (providerError) throw providerError;
+      // PGRST116 = no provider_profiles row yet — proceed with empty fields
+      if (providerError && providerError.code !== 'PGRST116') throw providerError;
 
       setProfileData({
         firstName: profileData?.first_name || '',
@@ -111,7 +113,8 @@ export default function EditProfileScreen() {
         .eq('user_id', user.id)
         .single();
 
-      if (profileIdError) throw profileIdError;
+      if (profileIdError && profileIdError.code !== 'PGRST116') throw profileIdError;
+      if (!profile) throw new Error('Profile not found');
 
       // Update base profile
       const { error: profileError } = await supabase
