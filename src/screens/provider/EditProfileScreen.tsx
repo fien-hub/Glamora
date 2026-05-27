@@ -16,6 +16,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { trackProfileEdited } from '../../utils/analytics';
+import { Ionicons } from '../../utils/icons';
 
 interface ProfileData {
   firstName: string;
@@ -284,6 +285,24 @@ export default function EditProfileScreen() {
           </View>
         </View>
 
+        {/* Location Section */}
+        <TouchableOpacity
+          style={styles.navRow}
+          onPress={() => (navigation as any).navigate('Location')}
+          activeOpacity={0.75}
+        >
+          <View style={styles.navRowLeft}>
+            <View style={styles.navRowIcon}>
+              <Ionicons name="location" size={20} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={styles.navRowTitle}>Location & Service Area</Text>
+              <Text style={styles.navRowSub}>Edit your address and travel distance</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+
         {/* Save Button */}
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}
@@ -373,6 +392,39 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold,
+  },
+  navRow: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shadows.sm,
+  },
+  navRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  navRowIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#F4E8E0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navRowTitle: {
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+    color: colors.text,
+  },
+  navRowSub: {
+    fontSize: fontSize.sm,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });
 
