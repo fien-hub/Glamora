@@ -445,9 +445,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (customerError) {
           console.error('[AuthContext] Error fetching customer profile:', customerError);
-          // Cannot determine onboarding status — preserve the current value rather
-          // than incorrectly resetting needsOnboarding to true and bouncing the user
-          // back to PersonalizationScreen right after they complete it.
+          // PGRST116 = no rows found → customer_profiles hasn't been created yet
+          // (user left before completing onboarding). Force them back to onboarding.
+          if (customerError.code === 'PGRST116') {
+            console.log('[AuthContext] No customer_profiles row → needs onboarding');
+            setNeedsOnboarding(true);
+            return;
+          }
+          // For genuine read / network errors — preserve the current needsOnboarding
+          // value so we don't incorrectly bounce the user back to onboarding right
+          // after they've completed it.
           return;
         }
 
@@ -464,7 +471,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (providerError) {
           console.error('[AuthContext] Error fetching provider profile:', providerError);
-          // Same guard as customer — don't revert navigation on a read error.
+          // PGRST116 = no rows found → provider_profiles hasn't been created yet
+          // (user left before completing onboarding). Force them back to onboarding.
+          if (providerError.code === 'PGRST116') {
+            console.log('[AuthContext] No provider_profiles row → needs onboarding');
+            setNeedsOnboarding(true);
+            return;
+          }
+          // Same guard as customer — don't revert navigation on a real read error.
           return;
         }
 
