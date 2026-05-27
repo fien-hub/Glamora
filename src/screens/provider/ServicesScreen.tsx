@@ -419,7 +419,8 @@ export default function ServicesScreen() {
         .eq('user_id', user.id)
         .single();
 
-      if (profileError) throw profileError;
+      if (profileError && profileError.code !== 'PGRST116') throw profileError;
+      if (!profile) { setLoading(false); return; }
       setProviderProfileId(profile.id);
 
       // Fetch provider's services
@@ -459,13 +460,20 @@ export default function ServicesScreen() {
         base_price: ps.base_price || 0,
         accepts_over_25km: ps.accepts_over_25km,
         travel_fee_over_25km: ps.travel_fee_over_25km ?? undefined,
-        service: {
+        service: ps.services ? {
           id: ps.services.id,
           name: ps.services.name,
           description: ps.services.description,
           base_duration_minutes: ps.services.base_duration_minutes,
           category_name: ps.services.service_categories?.name,
-        }
+        } : {
+          // Fallback for custom services or missing FK join
+          id: ps.service_id,
+          name: ps.custom_service_name || 'Custom Service',
+          description: ps.description || '',
+          base_duration_minutes: ps.duration_minutes || 60,
+          category_name: undefined,
+        },
       })) || [];
 
       setMyServices(formattedServices);
