@@ -25,6 +25,7 @@ export default function AppRatingScreen() {
   const navigation = useNavigation<any>();
   const [step, setStep] = useState<Step>('prompt');
   const [fadeAnim] = useState(new Animated.Value(1));
+  const [selectedRating, setSelectedRating] = useState(0);
 
   // Explicit navigation to main app — more reliable than relying solely on
   // the navigator branch switching after markOnboardingComplete().
@@ -99,9 +100,25 @@ export default function AppRatingScreen() {
 
             <View style={styles.starsRow}>
               {[1, 2, 3, 4, 5].map((i) => (
-                <View key={i} style={styles.starChip}>
-                  <Ionicons name="star" size={22} color="#000000" style={styles.star} />
-                </View>
+                <TouchableOpacity
+                  key={i}
+                  style={[
+                    styles.starChip,
+                    selectedRating >= i && styles.starChipSelected,
+                  ]}
+                  onPress={() => {
+                    setSelectedRating(i);
+                    handleRateNow();
+                  }}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons
+                    name={selectedRating >= i ? 'star' : 'star-outline'}
+                    size={22}
+                    color={selectedRating >= i ? colors.primary : '#000000'}
+                    style={styles.star}
+                  />
+                </TouchableOpacity>
               ))}
             </View>
 
@@ -284,6 +301,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF4ED',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  starChipSelected: {
+    backgroundColor: '#FDEEE4',
+    shadowColor: colors.primary,
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   star: {
     marginTop: 1,
