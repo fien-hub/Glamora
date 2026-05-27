@@ -731,21 +731,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role,
       });
 
-      // Create profile
-      await supabase.from('profiles').insert({
-        user_id: result.user.id,
-        full_name: result.user.user_metadata?.full_name || result.user.email?.split('@')[0] || 'User',
-      });
+      // Parse display name into first/last (profiles table uses first_name/last_name, not full_name)
+      const googleFullName = result.user.user_metadata?.full_name || result.user.email?.split('@')[0] || 'User';
+      const googleNameParts = googleFullName.split(' ');
+      const googleFirstName = googleNameParts[0] || 'User';
+      const googleLastName = googleNameParts.slice(1).join(' ') || 'User';
 
-      // Create role-specific profile
+      // Create profile and retrieve the auto-generated id
+      const { data: googleProfile, error: googleProfileError } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: result.user.id,
+          first_name: googleFirstName,
+          last_name: googleLastName,
+        })
+        .select('id')
+        .single();
+
+      if (googleProfileError || !googleProfile) {
+        console.error('[AuthContext] Failed to create Google user profile:', googleProfileError);
+        throw new Error('Failed to create your profile. Please try again.');
+      }
+
+      // Create role-specific profile using profiles.id (NOT the auth user id)
       if (role === 'customer') {
-        await supabase.from('customer_profiles').insert({
-          id: result.user.id,
+        const { error: gcpError } = await supabase.from('customer_profiles').insert({
+          id: googleProfile.id,
+          onboarding_completed: false,
         });
+        if (gcpError) console.error('[AuthContext] Failed to create Google customer profile:', gcpError);
       } else {
-        await supabase.from('provider_profiles').insert({
-          id: result.user.id,
+        const { error: gppError } = await supabase.from('provider_profiles').insert({
+          id: googleProfile.id,
+          onboarding_completed: false,
+          is_verified: false,
         });
+        if (gppError) console.error('[AuthContext] Failed to create Google provider profile:', gppError);
       }
 
       // Track sign up event for new user
@@ -778,25 +799,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role,
       });
 
-      // Create profile with name from Apple if available
-      const fullName = result.user.fullName
-        ? `${result.user.fullName.firstName} ${result.user.fullName.lastName}`.trim()
-        : result.user.email?.split('@')[0] || 'User';
+      // Parse name from Apple (profiles table uses first_name/last_name, not full_name)
+      const appleFirstName = result.user.fullName?.firstName || result.user.email?.split('@')[0] || 'User';
+      const appleLastName = result.user.fullName?.lastName || 'User';
 
-      await supabase.from('profiles').insert({
-        user_id: result.user.id,
-        full_name: fullName,
-      });
+      // Create profile and retrieve the auto-generated id
+      const { data: appleProfile, error: appleProfileError } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: result.user.id,
+          first_name: appleFirstName,
+          last_name: appleLastName,
+        })
+        .select('id')
+        .single();
 
-      // Create role-specific profile
+      if (appleProfileError || !appleProfile) {
+        console.error('[AuthContext] Failed to create Apple user profile:', appleProfileError);
+        throw new Error('Failed to create your profile. Please try again.');
+      }
+
+      // Create role-specific profile using profiles.id (NOT the auth user id)
       if (role === 'customer') {
-        await supabase.from('customer_profiles').insert({
-          id: result.user.id,
+        const { error: acpError } = await supabase.from('customer_profiles').insert({
+          id: appleProfile.id,
+          onboarding_completed: false,
         });
+        if (acpError) console.error('[AuthContext] Failed to create Apple customer profile:', acpError);
       } else {
-        await supabase.from('provider_profiles').insert({
-          id: result.user.id,
+        const { error: appError } = await supabase.from('provider_profiles').insert({
+          id: appleProfile.id,
+          onboarding_completed: false,
+          is_verified: false,
         });
+        if (appError) console.error('[AuthContext] Failed to create Apple provider profile:', appError);
       }
 
       // Track sign up event for new user

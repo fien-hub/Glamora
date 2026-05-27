@@ -172,6 +172,7 @@ export default function ProviderOnboardingScreen() {
     isActive: boolean;
     basePrice: number;
     acceptsOver25km: boolean;
+    travelFeeOver25km?: number;
   }) => {
     if (!selectedServiceForModal) return;
 
@@ -185,6 +186,7 @@ export default function ProviderOnboardingScreen() {
       isCustom,
       basePrice: data.basePrice,
       acceptsOver25km: data.acceptsOver25km,
+      travelFeeOver25km: data.travelFeeOver25km,
     };
 
     setSelectedServices([...selectedServices, newServiceEntry]);
@@ -298,19 +300,30 @@ export default function ProviderOnboardingScreen() {
     submitInProgressRef.current = true;
     setLoading(true);
     try {
-      const { data: profileData, error: profileError } = await supabase
+      let { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('id')
         .eq('user_id', user?.id)
         .single();
 
-      if (profileError) {
-        throw profileError;
+      if (profileError?.code === 'PGRST116') {
+        // Profile row missing — create it as a safety net
+        console.warn('[Onboarding] No profile row found in handleSkipForNow — creating one');
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .upsert({ user_id: user!.id }, { onConflict: 'user_id' })
+          .select('id')
+          .single();
+        if (createError || !newProfile) {
+          Alert.alert('Profile Error', 'Unable to set up your profile. Please sign out and sign back in.');
+          return;
+        }
+        profileData = newProfile;
+        profileError = null;
       }
 
-      if (!profileData) {
-        throw new Error('Profile not found');
-      }
+      if (profileError) throw profileError;
+      if (!profileData) throw new Error('Profile not found');
 
       const { error: providerError } = await supabase
         .from('provider_profiles')
@@ -327,9 +340,7 @@ export default function ProviderOnboardingScreen() {
           onboarding_completed: true,
         }, { onConflict: 'id' });
 
-      if (providerError) {
-        throw providerError;
-      }
+      if (providerError) throw providerError;
 
       await supabase
         .from('profiles')
@@ -339,7 +350,7 @@ export default function ProviderOnboardingScreen() {
       navigation.navigate('AppRating' as never);
     } catch (error: any) {
       console.error('[Onboarding] Error skipping verification step:', error);
-      Alert.alert('Error', error.message || 'Failed to skip verification step');
+      Alert.alert('Error', 'Failed to save profile. Please try again.');
     } finally {
       setLoading(false);
       submitInProgressRef.current = false;
@@ -379,11 +390,29 @@ export default function ProviderOnboardingScreen() {
       console.log('[Onboarding] Starting profile save...');
 
       // Get profile id
-      const { data: profileData, error: profileError } = await supabase
+      let { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('id')
         .eq('user_id', user?.id)
         .single();
+
+      if (profileError?.code === 'PGRST116') {
+        // Profile row missing — create it as a safety net for social sign-in edge cases
+        console.warn('[Onboarding] No profile row found in saveProfile — creating one');
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .upsert({ user_id: user!.id }, { onConflict: 'user_id' })
+          .select('id')
+          .single();
+        if (createError || !newProfile) {
+          Alert.alert('Profile Error', 'Unable to set up your profile. Please sign out and sign back in.');
+          setLoading(false);
+          submitInProgressRef.current = false;
+          return;
+        }
+        profileData = newProfile;
+        profileError = null;
+      }
 
       if (profileError) {
         console.error('[Onboarding] Profile fetch error:', profileError);
@@ -453,6 +482,7 @@ export default function ProviderOnboardingScreen() {
           // Base price model - travel fees are handled by platform
           base_price: service.basePrice,
           accepts_over_25km: service.acceptsOver25km,
+          travel_fee_over_25km: service.travelFeeOver25km ?? null,
         };
 
         const { error: serviceError } = await supabase.from('provider_services').insert(insertData);
@@ -503,7 +533,7 @@ export default function ProviderOnboardingScreen() {
       navigation.navigate('AppRating' as never);
     } catch (error: any) {
       console.error('[Onboarding] Error saving profile:', error);
-      Alert.alert('Error', error.message || 'Failed to save profile');
+      Alert.alert('Error', 'Failed to save profile. Please try again.');
       setLoading(false);
     } finally {
       submitInProgressRef.current = false;
