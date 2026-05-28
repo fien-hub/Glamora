@@ -76,29 +76,20 @@ export const verifyRevenueCatBookingPayment = async (req: Request, res: Response
       return res.status(400).json({ error: 'RevenueCat subscriber not found' });
     }
 
-    const subscriptionMatch =
-      subscriber.subscriptions?.[productId] &&
-      isActiveRevenueCatSubscription(subscriber.subscriptions[productId]);
-
     const allNonSubscriptions = Object.values(subscriber.non_subscriptions || {}).flat() as any[];
     const nonSubscriptionMatch = allNonSubscriptions.some((entry: any) => {
-      return (
+      const transactionMatches =
         entry?.id === transactionId ||
         entry?.store_transaction_id === transactionId ||
-        entry?.transaction_id === transactionId ||
-        entry?.product_id === productId
-      );
+        entry?.transaction_id === transactionId;
+
+      // Require BOTH transaction and product match for one-time purchases.
+      return transactionMatches && entry?.product_id === productId;
     });
 
-    const entitlementId = process.env.REVENUECAT_REQUIRED_ENTITLEMENT;
-    const entitlement = entitlementId ? subscriber.entitlements?.[entitlementId] : null;
-    const entitlementMatch = entitlement
-      ? entitlement?.expires_date
-        ? new Date(entitlement.expires_date).getTime() > Date.now()
-        : true
-      : false;
-
-    const hasValidPurchase = Boolean(subscriptionMatch || nonSubscriptionMatch || entitlementMatch);
+    // Booking checkout uses a one-time consumable purchase, so verification must
+    // be tied to the exact transaction + product combination.
+    const hasValidPurchase = Boolean(nonSubscriptionMatch);
 
     if (!hasValidPurchase) {
       return res.status(402).json({
@@ -107,11 +98,37 @@ export const verifyRevenueCatBookingPayment = async (req: Request, res: Response
       });
     }
 
+    // Idempotency guard: block reuse of a transaction already attached to a paid booking.
+    // (Recurring series are handled by DB trigger rules, which allow same reference only
+    // within one recurring_booking_id group.)
+    const paymentReference = `rc_${transactionId}`;
+    const { data: existingPaidBooking, error: existingPaidBookingError } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('payment_intent_id', paymentReference)
+      .eq('payment_status', 'paid')
+      .limit(1)
+      .maybeSingle();
+
+    if (existingPaidBookingError) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to validate payment reference reuse',
+      });
+    }
+
+    if (existingPaidBooking) {
+      return res.status(409).json({
+        success: false,
+        error: 'This RevenueCat transaction has already been used for a booking.',
+      });
+    }
+
     return res.json({
       success: true,
       provider: 'revenuecat',
       platform,
-      paymentReference: `rc_${transactionId}`,
+      paymentReference,
       verifiedAt: new Date().toISOString(),
     });
   } catch (error: any) {
