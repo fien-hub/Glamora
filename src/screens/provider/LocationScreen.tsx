@@ -15,8 +15,20 @@ import {
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
-import * as Location from 'expo-location';
 import { Ionicons } from '../../utils/icons';
+
+// Lazy-load expo-location so a missing native module never crashes the navigation stack
+let _Location: typeof import('expo-location') | null = null;
+function getLocation(): typeof import('expo-location') | null {
+  if (_Location !== null) return _Location;
+  try {
+    _Location = require('expo-location') as typeof import('expo-location');
+    return _Location;
+  } catch (e) {
+    console.warn('[LocationScreen] expo-location unavailable:', e);
+    return null;
+  }
+}
 
 export default function LocationScreen() {
   const { user } = useAuth();
@@ -177,6 +189,11 @@ export default function LocationScreen() {
   const handleUseCurrentLocation = async () => {
     try {
       setLocating(true);
+      const Location = getLocation();
+      if (!Location) {
+        Alert.alert('Unavailable', 'Location services are not available on this device.');
+        return;
+      }
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
