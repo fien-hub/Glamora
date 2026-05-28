@@ -16,19 +16,7 @@ import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '..
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { Ionicons } from '../../utils/icons';
-
-// Lazy-load expo-location so a missing native module never crashes the navigation stack
-let _Location: typeof import('expo-location') | null = null;
-function getLocation(): typeof import('expo-location') | null {
-  if (_Location !== null) return _Location;
-  try {
-    _Location = require('expo-location') as typeof import('expo-location');
-    return _Location;
-  } catch (e) {
-    console.warn('[LocationScreen] expo-location unavailable:', e);
-    return null;
-  }
-}
+import { getCurrentLocation, reverseGeocode } from '../../services/location';
 
 export default function LocationScreen() {
   const { user } = useAuth();
@@ -189,41 +177,27 @@ export default function LocationScreen() {
   const handleUseCurrentLocation = async () => {
     try {
       setLocating(true);
-      const Location = getLocation();
-      if (!Location) {
-        Alert.alert('Unavailable', 'Location services are not available on this device.');
-        return;
-      }
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      const coords = await getCurrentLocation();
+      if (!coords) {
+        // getCurrentLocation already shows permission alerts (denied / open settings).
+        // Show additional guidance only if it returns null without a system dialog.
         Alert.alert(
-          'Permission Denied',
-          'Location permission is required to use this feature. Please enable it in Settings.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => Linking.openSettings() },
-          ]
+          'Location Unavailable',
+          'Could not access your location. Please check your device location settings or enter your address manually.'
         );
         return;
       }
 
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const { latitude: lat, longitude: lng } = loc.coords;
-
-      setLatitude(lat.toFixed(6));
-      setLongitude(lng.toFixed(6));
+      setLatitude(coords.latitude.toFixed(6));
+      setLongitude(coords.longitude.toFixed(6));
 
       // Reverse geocode to fill address fields
-      const [place] = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-      if (place) {
-        if (place.street && place.streetNumber) {
-          setAddress(`${place.streetNumber} ${place.street}`);
-        } else if (place.street) {
-          setAddress(place.street);
-        }
-        if (place.city) setCity(place.city);
-        if (place.region) setState(place.region);
-        if (place.postalCode) setZipCode(place.postalCode);
+      const addressData = await reverseGeocode(coords);
+      if (addressData) {
+        if (addressData.street) setAddress(addressData.street);
+        if (addressData.city) setCity(addressData.city);
+        if (addressData.state) setState(addressData.state);
+        if (addressData.zipCode) setZipCode(addressData.zipCode);
       }
     } catch (err) {
       console.error('[LocationScreen] useCurrentLocation error:', err);
