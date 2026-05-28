@@ -71,7 +71,7 @@ export default function EditProfileScreen() {
       // Get customer profile
       const { data: customerProfile, error: customerError } = await supabase
         .from('customer_profiles')
-        .select('location_address, location_city, location_state, location_zip_code')
+        .select('address, city, state, zip_code')
         .eq('id', profile.id)
         .single();
 
@@ -82,10 +82,10 @@ export default function EditProfileScreen() {
         lastName: profile.last_name || '',
         phone: profile.phone || '',
         bio: profile.bio || '',
-        locationAddress: customerProfile.location_address || '',
-        locationCity: customerProfile.location_city || '',
-        locationState: customerProfile.location_state || '',
-        locationZipCode: customerProfile.location_zip_code || '',
+        locationAddress: (customerProfile as any).address || '',
+        locationCity: (customerProfile as any).city || '',
+        locationState: (customerProfile as any).state || '',
+        locationZipCode: (customerProfile as any).zip_code || '',
       });
     } catch (error: any) {
       console.error('Error fetching profile:', error);
@@ -100,8 +100,9 @@ export default function EditProfileScreen() {
     try {
       const location = await getCurrentLocation();
       if (!location) {
-        // getCurrentLocation already shows an appropriate alert (permission denied,
-        // open settings, etc). Just return quietly so the user can enter manually.
+        // getCurrentLocation already shows an alert for permission denial.
+        // Show a fallback only if the module itself is unavailable (no alert was shown).
+        Alert.alert('Location Unavailable', 'Could not access your location. Please enter your address manually.');
         return;
       }
       const { reverseGeocode } = await import('../../services/location');
@@ -159,10 +160,10 @@ export default function EditProfileScreen() {
       const { error: customerError } = await supabase
         .from('customer_profiles')
         .update({
-          location_address: profileData.locationAddress.trim() || null,
-          location_city: profileData.locationCity.trim() || null,
-          location_state: profileData.locationState.trim() || null,
-          location_zip_code: profileData.locationZipCode.trim() || null,
+          address: profileData.locationAddress.trim() || null,
+          city: profileData.locationCity.trim() || null,
+          state: profileData.locationState.trim() || null,
+          zip_code: profileData.locationZipCode.trim() || null,
         })
         .eq('id', profile.id);
 
