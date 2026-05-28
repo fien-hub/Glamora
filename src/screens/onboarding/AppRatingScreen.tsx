@@ -91,7 +91,7 @@ export default function AppRatingScreen() {
               <Text style={styles.appIcon}>✨</Text>
             </View>
 
-            <Text style={styles.heading}>Enjoying Eve Beauty?</Text>
+            <Text style={styles.heading}>Enjoying Glamora?</Text>
             <Text style={styles.sub}>
               A quick 5-star rating helps more clients discover trusted beauty professionals near them.
             </Text>
@@ -128,7 +128,7 @@ export default function AppRatingScreen() {
                 style={styles.primaryBtnGradient}
               >
                 <Ionicons name="star" size={18} color={colors.white} />
-                <Text style={styles.primaryBtnText}>Rate Eve Beauty on the App Store</Text>
+                <Text style={styles.primaryBtnText}>Rate Glamora on the App Store</Text>
               </LinearGradient>
             </TouchableOpacity>
 
@@ -158,7 +158,7 @@ export default function AppRatingScreen() {
             <Text style={styles.appIcon}>🙏</Text>
           </View>
 
-          <Text style={styles.heading}>Did you rate Eve Beauty?</Text>
+          <Text style={styles.heading}>Did you rate Glamora?</Text>
           <Text style={styles.sub}>
             Please confirm before continuing. If not yet, we will take you back to the rating step.
           </Text>

@@ -90,6 +90,8 @@ export default function EarningsScreen() {
         .select(`
           id,
           total_price,
+          platform_fee,
+          provider_payout,
           created_at,
           status,
           customer:customer_profiles!customer_id (
@@ -107,7 +109,7 @@ export default function EarningsScreen() {
           )
         `)
         .eq('provider_id', profile.id)
-        .in('status', ['confirmed', 'completed'])
+        .in('status', ['confirmed', 'completed', 'in_progress'])
         .order('created_at', { ascending: false });
 
       if (bookingsError) throw bookingsError;
@@ -129,11 +131,19 @@ export default function EarningsScreen() {
 
       bookingsData?.forEach((booking: any) => {
         const payment = booking.payment?.[0];
-        if (!payment) return;
 
-        const amount = payment.amount;
-        const platformFee = payment.platform_fee || amount * 0.1;
-        const netAmount = amount - platformFee;
+        // Use payment record when available, otherwise fall back to booking-level fields
+        const grossAmount = payment?.amount ?? booking.total_price ?? 0;
+        // platform_fee: booking column (stored at creation) → payment column → 20% of base approximation
+        // (grossAmount * 20/120 = correct estimate when total = base × 1.20, no travel fee)
+        const platformFee =
+          booking.platform_fee ??
+          payment?.platform_fee ??
+          grossAmount * (20 / 120);
+        // provider_payout: booking column → derive from gross - platformFee
+        const netAmount =
+          booking.provider_payout ??
+          (grossAmount - platformFee);
 
         const bookingDate = new Date(booking.created_at);
         const bookingMonth = bookingDate.getMonth();
@@ -141,9 +151,10 @@ export default function EarningsScreen() {
 
         totalEarnings += netAmount;
 
-        if (payment.status === 'succeeded') {
+        const paymentStatus = payment?.status ?? (booking.status === 'completed' ? 'succeeded' : 'pending');
+        if (paymentStatus === 'succeeded') {
           paidOut += netAmount;
-        } else if (payment.status === 'pending') {
+        } else {
           pendingEarnings += netAmount;
         }
 
@@ -156,13 +167,13 @@ export default function EarningsScreen() {
         }
 
         transactionsList.push({
-          id: payment.id,
+          id: payment?.id ?? booking.id,
           booking_id: booking.id,
-          amount: amount,
+          amount: grossAmount,
           platform_fee: platformFee,
           net_amount: netAmount,
-          status: payment.status,
-          created_at: payment.created_at,
+          status: paymentStatus,
+          created_at: payment?.created_at ?? booking.created_at,
           service_name: booking.provider_service?.service?.name || 'Service',
           customer_name: `${booking.customer?.profiles?.first_name || ''} ${booking.customer?.profiles?.last_name || ''}`.trim() || 'Customer',
         });

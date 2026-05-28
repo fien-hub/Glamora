@@ -30,7 +30,7 @@ const faqs: FAQItem[] = [
   },
   {
     question: 'How do I add a payment method?',
-    answer: 'You do not need to add a saved card. Eve Beauty uses secure in-app purchases at checkout through RevenueCat on iOS and Android.',
+    answer: 'You do not need to add a saved card. Glamora uses secure in-app purchases at checkout through RevenueCat on iOS and Android.',
   },
   {
     question: 'What if I have an issue with my booking?',
@@ -64,7 +64,7 @@ export default function HelpSupportScreen({ navigation }: any) {
   };
 
   const handleEmail = () => {
-    Linking.openURL('mailto:fientum@icloud.com?subject=Eve Beauty Support Request').catch(() =>
+    Linking.openURL('mailto:fientum@icloud.com?subject=Glamora Support Request').catch(() =>
       Alert.alert('Error', 'Could not open email app')
     );
   };
@@ -103,7 +103,7 @@ export default function HelpSupportScreen({ navigation }: any) {
       navigation.navigate('Chat', {
         bookingId: null,
         otherUserId: supportUserId,
-        otherUserName: 'Eve Beauty Support',
+        otherUserName: 'Glamora Support',
         isSupportChat: true,
       });
     } catch (error) {
@@ -225,8 +225,8 @@ export default function HelpSupportScreen({ navigation }: any) {
 
         {/* App Info */}
         <View style={styles.appInfo}>
-          <Text style={styles.appInfoText}>Eve Beauty v1.0.0</Text>
-          <Text style={styles.appInfoText}>© 2025 Eve Beauty. All rights reserved.</Text>
+          <Text style={styles.appInfoText}>Glamora v1.0.0</Text>
+          <Text style={styles.appInfoText}>© 2025 Glamora. All rights reserved.</Text>
         </View>
       </ScrollView>
     </View>

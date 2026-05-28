@@ -152,11 +152,11 @@ export default function MessagesScreen() {
           if (msg.booking_id) {
             const { data: booking } = await supabase
               .from('bookings')
-              .select('service:services(name)')
+              .select('provider_services(services(name))')
               .eq('id', msg.booking_id)
               .single();
 
-            serviceName = (booking?.service as any)?.name || null;
+            serviceName = (booking?.provider_services as any)?.services?.name || null;
           }
 
           // Count unread messages
@@ -176,7 +176,7 @@ export default function MessagesScreen() {
             booking_id: msg.booking_id,
             other_user_id: isSupportConversation ? otherAuthUserId : (otherProfile?.id || otherAuthUserId),
             other_user_name: isSupportConversation
-              ? 'Eve Beauty Support'
+              ? 'Glamora Support'
               : (otherProfile
                   ? `${otherProfile.first_name} ${otherProfile.last_name}`
                   : 'Unknown User'),

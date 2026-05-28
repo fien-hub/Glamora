@@ -1,7 +1,7 @@
 import type { ExpoConfig } from 'expo/config';
 
 const baseConfig: ExpoConfig = {
-  name: 'Eve Beauty',
+  name: 'Glamora',
   slug: 'glamora-app',
   version: '1.0.0',
   sdkVersion: '54.0.0',
@@ -35,13 +35,13 @@ const baseConfig: ExpoConfig = {
         },
       ],
       NSLocationWhenInUseUsageDescription:
-        'Eve Beauty needs your location to find beauty professionals near you and calculate travel distances.',
+        'Glamora needs your location to find beauty professionals near you and calculate travel distances.',
       NSCameraUsageDescription:
-        'Eve Beauty needs camera access to take photos for your profile and portfolio.',
+        'Glamora needs camera access to take photos for your profile and portfolio.',
       NSPhotoLibraryUsageDescription:
-        'Eve Beauty needs photo library access to upload images to your profile and portfolio.',
-      NSCalendarsUsageDescription: 'Eve Beauty needs calendar access to add booking reminders.',
-      NSFaceIDUsageDescription: 'Eve Beauty uses Face ID for secure and quick authentication.',
+        'Glamora needs photo library access to upload images to your profile and portfolio.',
+      NSCalendarsUsageDescription: 'Glamora needs calendar access to add booking reminders.',
+      NSFaceIDUsageDescription: 'Glamora uses Face ID for secure and quick authentication.',
       NSUserTrackingUsageDescription:
         'We use tracking to measure ad performance and improve customer acquisition.',
       ITSAppUsesNonExemptEncryption: false,
@@ -110,19 +110,19 @@ const baseConfig: ExpoConfig = {
       'expo-location',
       {
         locationAlwaysAndWhenInUsePermission:
-          'Allow Eve Beauty to use your location to find beauty professionals near you.',
+          'Allow Glamora to use your location to find beauty professionals near you.',
       },
     ],
     [
       'expo-image-picker',
       {
-        photosPermission: 'Allow Eve Beauty to access your photos to upload images.',
+        photosPermission: 'Allow Glamora to access your photos to upload images.',
       },
     ],
     [
       'expo-calendar',
       {
-        calendarPermission: 'Allow Eve Beauty to access your calendar to add booking reminders.',
+        calendarPermission: 'Allow Glamora to access your calendar to add booking reminders.',
       },
     ],
     ['expo-apple-authentication'],
@@ -135,7 +135,7 @@ const baseConfig: ExpoConfig = {
     [
       'expo-local-authentication',
       {
-        faceIDPermission: 'Allow Eve Beauty to use Face ID for secure authentication.',
+        faceIDPermission: 'Allow Glamora to use Face ID for secure authentication.',
       },
     ],
     [
@@ -233,7 +233,7 @@ export default (): ExpoConfig => {
     plugins = replacePlugin(plugins, 'react-native-fbsdk-next', {
       appID: metaAppIdFromEnv!.trim(),
       clientToken: metaClientTokenFromEnv!.trim(),
-      displayName: 'Eve Beauty',
+      displayName: 'Glamora',
       scheme: `fb${metaAppIdFromEnv!.trim()}`,
       advertiserIDCollectionEnabled: true,
       autoLogAppEventsEnabled: true,

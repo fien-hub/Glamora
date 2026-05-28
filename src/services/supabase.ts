@@ -210,9 +210,18 @@ export const dbService = {
         .eq('user_id', userId)
         .single();
 
-      if (profileError || !profileData) {
+      if (!profileData) {
+        // No profile row yet (e.g. seeding incomplete) — return empty list, not an error.
+        console.warn('[getBookings] No profile row for userId:', userId);
+        return { data: [], error: null };
+      }
+      if (profileError && profileError.code !== 'PGRST116') {
         console.error('[getBookings] Error fetching profile:', profileError);
         return { data: null, error: profileError };
+      }
+      if (profileError) {
+        console.warn('[getBookings] No profile row for userId:', userId);
+        return { data: [], error: null };
       }
 
       const profileId = profileData.id;
@@ -228,8 +237,8 @@ export const dbService = {
         .from('bookings')
         .select(`
           *,
-          customer_profiles(id),
-          provider_profiles(id, business_name),
+          customer_profiles(id, profiles!customer_profiles_id_fkey(first_name, last_name, phone, user_id)),
+          provider_profiles(id, business_name, profiles!provider_profiles_id_fkey(user_id)),
           provider_services(id, base_price, duration_minutes, services(id, name, description))
         `)
         .eq(field, profileId)

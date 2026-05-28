@@ -1,7 +1,22 @@
 import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
+import twilio from 'twilio';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
+
+// Twilio client — initialised lazily so missing env vars don't crash startup
+let twilioClient: ReturnType<typeof twilio> | null = null;
+function getTwilioClient(): ReturnType<typeof twilio> {
+  if (!twilioClient) {
+    const sid = process.env.TWILIO_ACCOUNT_SID;
+    const token = process.env.TWILIO_AUTH_TOKEN;
+    if (!sid || !token) {
+      throw new Error('Twilio credentials are not configured (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN)');
+    }
+    twilioClient = twilio(sid, token);
+  }
+  return twilioClient;
+}
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -337,21 +352,37 @@ export const sendPhoneVerificationCode = async (req: Request, res: Response) => 
       return res.status(500).json({ error: 'Failed to generate verification code' });
     }
 
-    // TODO: Integrate with SMS provider (Twilio, etc.)
-    // For now, log the code for testing
-    console.log(`[PHONE VERIFICATION] Code for ${phoneNumber}: ${code}`);
-
-    // In production, send SMS here
-    // await twilioClient.messages.create({
-    //   body: `Your Glamora verification code is: ${code}`,
-    //   to: phoneNumber,
-    //   from: process.env.TWILIO_PHONE_NUMBER,
-    // });
+    // Send OTP via Twilio SMS
+    try {
+      const client = getTwilioClient();
+      const from = process.env.TWILIO_MESSAGING_SERVICE_SID || process.env.TWILIO_PHONE_NUMBER;
+      if (!from) {
+        throw new Error('TWILIO_PHONE_NUMBER or TWILIO_MESSAGING_SERVICE_SID is not configured');
+      }
+      const msgParams: Record<string, string> = {
+        body: `Your Glamora verification code is: ${code}. It expires in 10 minutes.`,
+        to: phoneNumber,
+      };
+      if (process.env.TWILIO_MESSAGING_SERVICE_SID) {
+        msgParams.messagingServiceSid = from;
+      } else {
+        msgParams.from = from;
+      }
+      await client.messages.create(msgParams as any);
+    } catch (smsError: any) {
+      console.error('[SMS] Failed to send verification code:', smsError.message);
+      // Clean up the stored code so the user can retry
+      await supabase
+        .from('phone_verification_codes')
+        .delete()
+        .eq('user_id', userId)
+        .eq('phone_number', phoneNumber)
+        .eq('code', code);
+      return res.status(500).json({ error: 'Failed to send verification SMS. Please try again.' });
+    }
 
     res.json({
       message: 'Verification code sent',
-      // Remove this in production - only for testing
-      testCode: process.env.NODE_ENV === 'development' ? code : undefined,
     });
   } catch (error: any) {
     console.error('Send phone verification error:', error);

@@ -349,6 +349,32 @@ export default function ProviderOnboardingScreen() {
         .update({ bio })
         .eq('id', profileData.id);
 
+      // Delete existing services to avoid duplicates, then insert selected services
+      await supabase
+        .from('provider_services')
+        .delete()
+        .eq('provider_id', profileData.id);
+
+      for (const service of selectedServices) {
+        const isCustom = service.isCustom;
+        const { error: serviceError } = await supabase.from('provider_services').insert({
+          provider_id: profileData.id,
+          service_id: service.serviceId,
+          duration_minutes: service.duration,
+          custom_service_name: isCustom ? (service.customServiceName || null) : null,
+          is_active: isCustom ? false : true,
+          custom_service_status: isCustom ? 'pending' : 'approved',
+          platform_commission_rate: 0.20,
+          base_price: service.basePrice,
+          accepts_over_25km: service.acceptsOver25km,
+          travel_fee_over_25km: service.travelFeeOver25km ?? null,
+        });
+        if (serviceError) {
+          console.error('[Onboarding] Service insert error (skip path):', serviceError);
+          throw serviceError;
+        }
+      }
+
       navigation.navigate('AppRating' as never);
     } catch (error: any) {
       console.error('[Onboarding] Error skipping verification step:', error);
@@ -474,20 +500,19 @@ export default function ProviderOnboardingScreen() {
 
       // Insert all selected services with their configured pricing by distance
       for (const service of selectedServices) {
-        const insertData: any = {
+        const isCustom = service.isCustom;
+        const { error: serviceError } = await supabase.from('provider_services').insert({
           provider_id: profileData.id,
           service_id: service.serviceId,
           duration_minutes: service.duration,
-          custom_service_name: service.customServiceName || null,
-          is_active: true,
-          platform_commission_rate: 0.20, // 20% commission
-          // Base price model - travel fees are handled by platform
+          custom_service_name: isCustom ? (service.customServiceName || null) : null,
+          is_active: isCustom ? false : true,
+          custom_service_status: isCustom ? 'pending' : 'approved',
+          platform_commission_rate: 0.20,
           base_price: service.basePrice,
           accepts_over_25km: service.acceptsOver25km,
           travel_fee_over_25km: service.travelFeeOver25km ?? null,
-        };
-
-        const { error: serviceError } = await supabase.from('provider_services').insert(insertData);
+        });
 
         if (serviceError) {
           console.error('[Onboarding] Service insert error:', serviceError);

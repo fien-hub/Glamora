@@ -36,6 +36,9 @@ import { getCurrentLocation, reverseGeocode } from '../../services/location';
 import { purchaseBookingProduct, verifyRevenueCatBookingPayment } from '../../services/revenuecat';
 import { trackMetaInitiatedCheckout, trackMetaPurchase } from '../../services/metaAds';
 import { sendRemotePushToProfile } from '../../utils/notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const PENDING_BOOKING_KEY = 'glamora:pendingBooking';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 import { useVerificationGuard } from '../../hooks/useVerificationGuard';
@@ -97,6 +100,8 @@ export default function BookingFlowScreen() {
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [zipCode, setZipCode] = useState('');
+  const [customerLat, setCustomerLat] = useState<number | null>(null);
+  const [customerLon, setCustomerLon] = useState<number | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
 
   // Step 4: Payment & Summary
@@ -259,10 +264,10 @@ export default function BookingFlowScreen() {
 
   const calculatePricing = async () => {
     if (!selectedService || !address || !city) return;
+    if (customerLat === null || customerLon === null) return; // coords required for travel-fee calc
 
     setLoadingPrice(true);
     try {
-      const fullAddress = `${address}, ${city}, ${state} ${zipCode}`;
       const response = await fetch(
         `${process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000'}/api/pricing/calculate`,
         {
@@ -271,14 +276,15 @@ export default function BookingFlowScreen() {
           body: JSON.stringify({
             provider_id: providerId,
             service_id: selectedService.id,
-            customer_address: fullAddress,
+            customer_latitude: customerLat,
+            customer_longitude: customerLon,
           }),
         }
       );
 
-      const data = await response.json();
+      const data = await response.json() as any;
       if (data.success) {
-        setPricingData(data.data);
+        setPricingData(data);
       }
     } catch (error) {
       console.error('[BookingFlow] Pricing error:', error);
@@ -317,7 +323,7 @@ export default function BookingFlowScreen() {
 
       const { data: customerProfile, error: customerError } = await supabase
         .from('customer_profiles')
-        .select('location_address, location_city, location_state, location_zip_code')
+        .select('address, city, state, zip_code, latitude, longitude')
         .eq('id', profileData.id)
         .single();
 
@@ -325,15 +331,18 @@ export default function BookingFlowScreen() {
         return false;
       }
 
-      const nextAddress = customerProfile.location_address || '';
-      const nextCity = customerProfile.location_city || '';
-      const nextState = customerProfile.location_state || '';
-      const nextZip = customerProfile.location_zip_code || '';
+      const nextAddress = customerProfile.address || '';
+      const nextCity = customerProfile.city || '';
+      const nextState = customerProfile.state || '';
+      const nextZip = customerProfile.zip_code || '';
 
       if (!nextAddress && !nextCity && !nextState && !nextZip) {
         return false;
       }
 
+      // Use stored coordinates if available so pricing API can calculate travel fee
+      setCustomerLat(customerProfile.latitude ?? null);
+      setCustomerLon(customerProfile.longitude ?? null);
       setAddress(nextAddress);
       setCity(nextCity);
       setState(nextState);
@@ -344,7 +353,9 @@ export default function BookingFlowScreen() {
     try {
       const location = await getCurrentLocation();
       if (location) {
-        // Pass location as object with latitude and longitude properties
+        // Store GPS coordinates for pricing API
+        setCustomerLat(location.latitude);
+        setCustomerLon(location.longitude);
         const addressInfo = await reverseGeocode(location);
         if (addressInfo) {
           setAddress(addressInfo.street || '');
@@ -440,25 +451,58 @@ export default function BookingFlowScreen() {
         throw new Error('Profile not loaded. Please try again.');
       }
 
+      // Fetch provider location for distance tracking
+      const { data: providerLoc } = await supabase
+        .from('provider_profiles')
+        .select('latitude, longitude')
+        .eq('id', providerId)
+        .single();
+
+      const paymentReference = verification?.paymentReference || `rc_${purchaseData.transactionId}`;
+
+      const bookingPayload = {
+        customer_id: profileId,
+        provider_id: providerId,
+        provider_service_id: selectedService.provider_service_id,
+        scheduled_date: bookingDate,
+        scheduled_time: selectedTime,
+        address: fullAddress,
+        city,
+        state,
+        zip_code: zipCode,
+        latitude: customerLat,
+        longitude: customerLon,
+        distance_km: pricingData?.distance_miles
+          ? Math.round(pricingData.distance_miles * 1.60934 * 100) / 100
+          : null,
+        provider_latitude: providerLoc?.latitude || null,
+        provider_longitude: providerLoc?.longitude || null,
+        notes: notes || null,
+        status: 'pending',
+        total_price: amountCents / 100,
+        platform_fee: pricingData?.pricing?.platform_fee_cents
+          ? pricingData.pricing.platform_fee_cents / 100
+          : null,
+        provider_payout: pricingData?.pricing?.provider_earnings_cents
+          ? pricingData.pricing.provider_earnings_cents / 100
+          : null,
+        payment_intent_id: paymentReference,
+        payment_status: 'paid',
+      };
+
+      // Persist before DB insert — if insert fails, recovery can retry with the same reference
+      await AsyncStorage.setItem(PENDING_BOOKING_KEY, JSON.stringify({ paymentReference, bookingPayload }));
+
       const { data: booking, error: bookingError } = await supabase
         .from('bookings')
-        .insert({
-          customer_id: profileId,
-          provider_id: providerId,
-          provider_service_id: selectedService.provider_service_id,
-          booking_date: bookingDate,
-          booking_time: selectedTime,
-          service_address: fullAddress,
-          notes: notes || null,
-          status: 'pending',
-          total_amount: amountCents / 100,
-          payment_intent_id: verification?.paymentReference || `rc_${purchaseData.transactionId}`,
-          payment_status: 'paid',
-        })
+        .insert(bookingPayload)
         .select()
         .single();
 
       if (bookingError) throw bookingError;
+
+      // Insert succeeded — clear the recovery record
+      await AsyncStorage.removeItem(PENDING_BOOKING_KEY);
 
       sendRemotePushToProfile(
         providerId,
@@ -490,7 +534,18 @@ export default function BookingFlowScreen() {
         payment_provider: 'revenuecat',
       });
     } catch (error: any) {
-      Alert.alert('Booking Failed', error.message || 'Please try again');
+      // Check if payment succeeded but DB insert failed — show recovery reference
+      const pendingRaw = await AsyncStorage.getItem(PENDING_BOOKING_KEY).catch(() => null);
+      if (pendingRaw) {
+        const pending = JSON.parse(pendingRaw);
+        Alert.alert(
+          'Booking Not Saved',
+          `Your payment went through but we couldn't save your booking. Please open the app again — it will retry automatically.\n\nSupport reference: ${pending.paymentReference}`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Booking Failed', error.message || 'Please try again');
+      }
     } finally {
       setSubmitting(false);
       setPaymentProcessing(false);
@@ -561,11 +616,10 @@ export default function BookingFlowScreen() {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setSelectedService(service);
                   // Trigger price calculation immediately if address is available
-                  if (address && city && state && zipCode) {
+                  if (address && city && state && zipCode && customerLat !== null && customerLon !== null) {
                     setLoadingPrice(true);
                     (async () => {
                       try {
-                        const fullAddress = `${address}, ${city}, ${state} ${zipCode}`;
                         const response = await fetch(
                           `${process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000'}/api/pricing/calculate`,
                           {
@@ -574,13 +628,14 @@ export default function BookingFlowScreen() {
                             body: JSON.stringify({
                               provider_id: providerId,
                               service_id: service.id,
-                              customer_address: fullAddress,
+                              customer_latitude: customerLat,
+                              customer_longitude: customerLon,
                             }),
                           }
                         );
-                        const data = await response.json();
+                        const data = await response.json() as any;
                         if (data.success) {
-                          setPricingData(data.data);
+                          setPricingData(data);
                         }
                       } catch (error) {
                         console.error('[BookingFlow] Immediate pricing error:', error);

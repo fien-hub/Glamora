@@ -52,6 +52,22 @@ export default function ReviewModal({
     setSubmitting(true);
 
     try {
+      // Guard: check if a review for this booking already exists before inserting.
+      // The DB has UNIQUE(booking_id) so a duplicate insert would error, but we
+      // surface a friendly message here instead of a raw constraint violation.
+      const { data: existing } = await supabase
+        .from('reviews')
+        .select('id')
+        .eq('booking_id', booking.id)
+        .maybeSingle();
+
+      if (existing) {
+        Alert.alert('Already Reviewed', 'You have already submitted a review for this booking.', [
+          { text: 'OK', onPress: () => { onSuccess(); handleClose(); } },
+        ]);
+        return;
+      }
+
       // 1. Create review
       const { error: reviewError } = await supabase
         .from('reviews')
@@ -63,28 +79,18 @@ export default function ReviewModal({
           comment: comment || null,
         });
 
+      // Unique constraint violation — another request snuck in between the check and insert
+      if (reviewError?.code === '23505') {
+        Alert.alert('Already Reviewed', 'You have already submitted a review for this booking.', [
+          { text: 'OK', onPress: () => { onSuccess(); handleClose(); } },
+        ]);
+        return;
+      }
+
       if (reviewError) throw reviewError;
 
-      // 2. Update provider's average rating
-      const { data: reviews, error: fetchError } = await supabase
-        .from('reviews')
-        .select('rating')
-        .eq('provider_id', booking.provider_id);
-
-      if (fetchError) throw fetchError;
-
-      const avgRating = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
-      const totalReviews = reviews.length;
-
-      await supabase
-        .from('provider_profiles')
-        .update({
-          rating: avgRating,
-          total_reviews: totalReviews,
-        })
-        .eq('id', booking.provider_id);
-
-      // Track review submission
+      // Provider rating is kept up to date by the sync_provider_rating DB trigger —
+      // no client-side recalculation needed here.
       trackReviewSubmitted(rating, booking.id);
 
       Alert.alert('Success', 'Thank you for your review!', [

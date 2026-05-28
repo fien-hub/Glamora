@@ -188,7 +188,7 @@ export default function SignupScreen() {
         <FadeInView delay={0}>
           <View style={styles.header}>
             <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>Join Eve Beauty today</Text>
+            <Text style={styles.subtitle}>Join Glamora today</Text>
           </View>
         </FadeInView>
 

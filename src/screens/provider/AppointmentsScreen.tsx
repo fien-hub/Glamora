@@ -28,14 +28,22 @@ interface Booking {
   scheduled_date: string;
   scheduled_time: string;
   status: string;
+  payment_status: string;
   total_price: number;
-  location_address: string;
+  address: string;
   customer_profiles: {
-    first_name: string;
-    last_name: string;
+    id: string;
+    profiles: {
+      first_name: string;
+      last_name: string;
+      phone: string | null;
+      user_id: string;
+    };
   };
-  services: {
-    name: string;
+  provider_services: {
+    services: {
+      name: string;
+    };
   };
 }
 
@@ -56,6 +64,20 @@ export default function AppointmentsScreen() {
     fetchBookings();
   }, [user]);
 
+  // Realtime: refresh when any booking changes
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('provider-bookings-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'bookings' },
+        () => { fetchBookings(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
   useEffect(() => {
     const openBookingId = route.params?.openBookingId as string | undefined;
     if (!openBookingId || bookings.length === 0) return;
@@ -68,7 +90,7 @@ export default function AppointmentsScreen() {
 
     Alert.alert(
       'Booking Opened',
-      `${matchedBooking.customer_profiles?.first_name || 'Customer'} • ${matchedBooking.services?.name || 'Service'}`
+      `${matchedBooking.customer_profiles?.profiles?.first_name || 'Customer'} • ${matchedBooking.provider_services?.services?.name || 'Service'}`
     );
 
     setTimeout(() => setHighlightedBookingId(null), 6000);
@@ -135,16 +157,51 @@ export default function AppointmentsScreen() {
         trackBookingCompleted(bookingId, booking.total_price);
       } else if (newStatus === 'cancelled') {
         trackBookingCancelled(bookingId, 'provider_cancelled');
+
+        // If the booking was paid, log a refund request so the admin team
+        // can action it. The customer push below is also updated to inform them.
+        if (booking?.payment_status === 'paid') {
+          supabase.functions
+            .invoke('request-refund', {
+              body: { bookingId, cancelledBy: 'provider' },
+            })
+            .catch((fnErr: any) =>
+              console.error('[Appointments] request-refund invoke failed:', fnErr)
+            );
+        }
+
+        // Email the customer to inform them of the cancellation (best-effort)
+        supabase.functions
+          .invoke('send-booking-email', {
+            body: { bookingId, type: 'provider_cancelled' },
+          })
+          .catch((e: any) =>
+            console.warn('[Appointments] provider_cancelled email failed:', e)
+          );
       }
 
       if (booking?.customer_id) {
-        const serviceName = booking.services?.name || 'your service';
-        const statusLabel = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
+        const serviceName = booking.provider_services?.services?.name || 'your service';
+        const statusLabel = newStatus === 'in_progress' ? 'In Progress' : (newStatus.charAt(0).toUpperCase() + newStatus.slice(1));
+
+        let pushTitle = `Booking ${statusLabel}`;
+        let pushBody: string;
+        if (newStatus === 'in_progress') {
+          pushTitle = 'Service Started';
+          pushBody = `Your ${serviceName} service has started. Your provider is with you!`;
+        } else if (newStatus === 'completed') {
+          pushTitle = 'Service Completed';
+          pushBody = `Your ${serviceName} service is complete. We hope you loved it!`;
+        } else if (newStatus === 'cancelled' && booking.payment_status === 'paid') {
+          pushBody = `Your booking for ${serviceName} was cancelled by the provider. A refund request has been logged — our team will be in touch.`;
+        } else {
+          pushBody = `Your booking for ${serviceName} is now ${newStatus}.`;
+        }
 
         sendRemotePushToProfile(
           booking.customer_id,
-          `Booking ${statusLabel}`,
-          `Your booking for ${serviceName} is now ${newStatus}.`,
+          pushTitle,
+          pushBody,
           {
             type: 'booking',
             bookingId,
@@ -175,6 +232,17 @@ export default function AppointmentsScreen() {
     );
   };
 
+  const startBooking = (bookingId: string) => {
+    Alert.alert(
+      'Start Service',
+      'Mark this service as started? The customer will be notified.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Start', onPress: () => handleUpdateStatus(bookingId, 'in_progress') },
+      ]
+    );
+  };
+
   const completeBooking = (bookingId: string) => {
     Alert.alert(
       'Complete Booking',
@@ -186,16 +254,39 @@ export default function AppointmentsScreen() {
     );
   };
 
+  const handleChatCustomer = async (booking: Booking) => {
+    const customerUserId = booking.customer_profiles?.profiles?.user_id;
+    const customerName = booking.customer_profiles?.profiles
+      ? `${booking.customer_profiles.profiles.first_name} ${booking.customer_profiles.profiles.last_name}`.trim()
+      : 'Customer';
+    if (!customerUserId) {
+      Alert.alert('Error', 'Could not find customer contact details.');
+      return;
+    }
+    navigation.navigate('Chat' as never, {
+      bookingId: booking.id,
+      otherUserId: customerUserId,
+      otherUserName: customerName,
+    } as never);
+  };
+
   const cancelBooking = (bookingId: string) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    const isPaid = booking?.payment_status === 'paid';
+
+    const message = isPaid
+      ? 'This booking was paid by the customer. Cancelling will automatically log a refund request with our team for review.'
+      : 'Are you sure you want to cancel this booking?';
+
     Alert.alert(
       'Cancel Booking',
-      'Are you sure you want to cancel this booking?',
+      message,
       [
-        { text: 'No', style: 'cancel' },
+        { text: 'Go Back', style: 'cancel' },
         {
-          text: 'Yes, Cancel',
+          text: isPaid ? 'Cancel & Log Refund' : 'Yes, Cancel',
           style: 'destructive',
-          onPress: () => handleUpdateStatus(bookingId, 'cancelled')
+          onPress: () => handleUpdateStatus(bookingId, 'cancelled'),
         },
       ]
     );
@@ -205,6 +296,7 @@ export default function AppointmentsScreen() {
     switch (status) {
       case 'pending': return colors.warning;
       case 'confirmed': return colors.success;
+      case 'in_progress': return '#8B5CF6';
       case 'completed': return colors.secondary;
       case 'cancelled': return colors.error;
       default: return colors.textSecondary;
@@ -212,6 +304,7 @@ export default function AppointmentsScreen() {
   };
 
   const getStatusLabel = (status: string) => {
+    if (status === 'in_progress') return 'In Progress';
     return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
@@ -284,9 +377,9 @@ export default function AppointmentsScreen() {
                 <View style={styles.bookingHeader}>
                   <View style={styles.bookingHeaderLeft}>
                     <Text style={styles.customerName}>
-                      {booking.customer_profiles?.first_name} {booking.customer_profiles?.last_name}
+                      {booking.customer_profiles?.profiles?.first_name} {booking.customer_profiles?.profiles?.last_name}
                     </Text>
-                    <Text style={styles.serviceName}>{booking.services?.name}</Text>
+                    <Text style={styles.serviceName}>{booking.provider_services?.services?.name}</Text>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.status) + '20' }]}>
                     <Text style={[styles.statusText, { color: getStatusColor(booking.status) }]}>
@@ -306,16 +399,32 @@ export default function AppointmentsScreen() {
                   </View>
                   <View style={styles.detailRow}>
                     <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
-                    <Text style={styles.detailText}>{booking.location_address}</Text>
+                    <Text style={styles.detailText}>{booking.address}</Text>
                   </View>
                   <View style={styles.detailRow}>
                     <Ionicons name="cash-outline" size={16} color={colors.success} />
                     <Text style={styles.priceText}>${(booking.total_price / 100).toFixed(2)}</Text>
                   </View>
+                  {booking.customer_profiles?.profiles?.phone && (
+                    <View style={styles.detailRow}>
+                      <Ionicons name="call-outline" size={16} color={colors.textSecondary} />
+                      <Text style={styles.detailText}>{booking.customer_profiles.profiles.phone}</Text>
+                    </View>
+                  )}
                 </View>
 
                 {/* Action Buttons */}
                 <View style={styles.actionButtonsContainer}>
+                  {/* Chat button - always visible for active bookings */}
+                  {(booking.status === 'pending' || booking.status === 'confirmed' || booking.status === 'in_progress') && (
+                    <AnimatedButton
+                      variant="secondary"
+                      onPress={() => handleChatCustomer(booking)}
+                    >
+                      <Text style={styles.completeButtonText}>💬 Chat</Text>
+                    </AnimatedButton>
+                  )}
+
                   {booking.status === 'pending' && (
                     <>
                       <AnimatedButton
@@ -336,10 +445,10 @@ export default function AppointmentsScreen() {
                   {booking.status === 'confirmed' && (
                     <>
                       <AnimatedButton
-                        variant="secondary"
-                        onPress={() => completeBooking(booking.id)}
+                        variant="primary"
+                        onPress={() => startBooking(booking.id)}
                       >
-                        <Text style={styles.completeButtonText}>✓ Complete</Text>
+                        <Text style={styles.confirmButtonText}>▶ Start Service</Text>
                       </AnimatedButton>
                       <AnimatedButton
                         variant="outline"
@@ -348,6 +457,15 @@ export default function AppointmentsScreen() {
                         <Text style={styles.cancelButtonText}>Cancel</Text>
                       </AnimatedButton>
                     </>
+                  )}
+
+                  {booking.status === 'in_progress' && (
+                    <AnimatedButton
+                      variant="secondary"
+                      onPress={() => completeBooking(booking.id)}
+                    >
+                      <Text style={styles.completeButtonText}>✓ Complete</Text>
+                    </AnimatedButton>
                   )}
                 </View>
               </View>

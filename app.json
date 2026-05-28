@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Eve Beauty",
+    "name": "Glamora",
     "slug": "glamora-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -66,19 +66,19 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow Eve Beauty to use your location to find beauty professionals near you."
+          "locationAlwaysAndWhenInUsePermission": "Allow Glamora to use your location to find beauty professionals near you."
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Eve Beauty to access your photos to upload images."
+          "photosPermission": "Allow Glamora to access your photos to upload images."
         }
       ],
       [
         "expo-calendar",
         {
-          "calendarPermission": "Allow Eve Beauty to access your calendar to add booking reminders."
+          "calendarPermission": "Allow Glamora to access your calendar to add booking reminders."
         }
       ],
       [
@@ -90,7 +90,7 @@
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Allow Eve Beauty to use Face ID for secure authentication."
+          "faceIDPermission": "Allow Glamora to use Face ID for secure authentication."
         }
       ],
       [

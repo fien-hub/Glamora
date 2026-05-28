@@ -235,22 +235,72 @@ export default function AvailabilityScreen() {
       return;
     }
 
+    const startStr = timeOffStartDate.toISOString().split('T')[0];
+    const endStr = timeOffEndDate.toISOString().split('T')[0];
+
     try {
-      const { error } = await supabase
-        .from('provider_time_off')
-        .insert({
-          provider_id: profileId,
-          start_date: timeOffStartDate.toISOString().split('T')[0],
-          end_date: timeOffEndDate.toISOString().split('T')[0],
-          reason: timeOffReason.trim(),
-        });
+      // Check for confirmed/pending/in-progress bookings that fall within the time-off range
+      const { data: conflictingBookings, error: conflictError } = await supabase
+        .from('bookings')
+        .select('id, scheduled_date, scheduled_time')
+        .eq('provider_id', profileId)
+        .gte('scheduled_date', startStr)
+        .lte('scheduled_date', endStr)
+        .in('status', ['confirmed', 'pending', 'in_progress']);
 
-      if (error) throw error;
+      if (conflictError) throw conflictError;
 
-      Alert.alert('Success', 'Time off added successfully!');
-      setTimeOffModalVisible(false);
-      setTimeOffReason('');
-      fetchTimeOff();
+      const doInsert = async () => {
+        const { error } = await supabase
+          .from('provider_time_off')
+          .insert({
+            provider_id: profileId,
+            start_date: startStr,
+            end_date: endStr,
+            reason: timeOffReason.trim(),
+          });
+
+        if (error) throw error;
+
+        Alert.alert('Success', 'Time off added successfully!');
+        setTimeOffModalVisible(false);
+        setTimeOffReason('');
+        fetchTimeOff();
+      };
+
+      if (conflictingBookings && conflictingBookings.length > 0) {
+        const count = conflictingBookings.length;
+        const dates = [...new Set(conflictingBookings.map((b) => b.scheduled_date))]
+          .sort()
+          .map((d) => {
+            const [y, m, day] = d.split('-');
+            return `${m}/${day}/${y}`;
+          })
+          .join(', ');
+
+        Alert.alert(
+          'Existing Bookings in This Period',
+          `You have ${count} confirmed booking${count > 1 ? 's' : ''} on: ${dates}.\n\nBlocking this time will NOT automatically cancel or notify those customers — you must contact them directly to reschedule.\n\nDo you still want to block this period?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Block Anyway',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await doInsert();
+                } catch (error: any) {
+                  console.error('Error adding time off:', error);
+                  Alert.alert('Error', error.message || 'Failed to add time off');
+                }
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      await doInsert();
     } catch (error: any) {
       console.error('Error adding time off:', error);
       Alert.alert('Error', error.message || 'Failed to add time off');

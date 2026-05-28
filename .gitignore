@@ -1,5 +1,10 @@
 node_modules
 
+# Environment variables — never commit secrets
+.env
+.env.local
+.env.production
+
 # Apple API keys — never commit
 *.p8
 AuthKey_*.p8

@@ -117,14 +117,32 @@ export default function ProfileScreen() {
         .from('profiles')
         .select('id, first_name, last_name, phone, bio, avatar_url')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (profileIdError) throw profileIdError;
 
-      const profileId = profileIdData?.id;
-      if (!profileId) {
-        throw new Error('Profile not found');
+      if (!profileIdData) {
+        // Profile row not yet created (e.g. reviewer account not seeded) — show empty state.
+        console.warn('[ProfileScreen] No profile row for user:', user.id);
+        setProfile({
+          firstName: '',
+          lastName: '',
+          email: user.email || '',
+          phone: null,
+          bio: null,
+          locationAddress: null,
+          locationCity: null,
+          locationState: null,
+          locationZipCode: null,
+          preferredCategories: [],
+          bookingTimePreference: null,
+          budgetPreference: null,
+          avatarUrl: null,
+        });
+        return;
       }
+
+      const profileId = profileIdData.id;
 
       // Fetch customer profile data using profile ID
       const { data: customerData } = await supabase
@@ -280,7 +298,7 @@ export default function ProfileScreen() {
   const handleSwitchToProvider = () => {
     Alert.alert(
       'Switch to Provider Mode',
-      'You will switch to provider mode. If your provider profile is incomplete, Eve Beauty will take you to provider onboarding.',
+      'You will switch to provider mode. If your provider profile is incomplete, Glamora will take you to provider onboarding.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

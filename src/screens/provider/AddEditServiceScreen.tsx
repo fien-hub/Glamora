@@ -181,7 +181,8 @@ export default function AddEditServiceScreen() {
             duration_minutes: durationNum,
             description: customDescription.trim() || null,
             custom_service_name: isCustomService ? customServiceName.trim() : null,
-            is_active: isActive,
+            is_active: isCustomService ? false : isActive,
+            custom_service_status: isCustomService ? 'pending' : 'approved',
             platform_commission_rate: PLATFORM_COMMISSION_RATE,
             max_travel_distance_km: maxTravelDistanceNum,
             travel_fee_0_10km: Math.round(fee0to10 * 100),
@@ -202,9 +203,13 @@ export default function AddEditServiceScreen() {
           'service_added',
           { serviceName, basePrice: Math.round(priceNum * 100), providerId: profile.id }
         );
-        Alert.alert('Success', 'Service added successfully', [
-          { text: 'OK', onPress: () => navigation.goBack() }
-        ]);
+        Alert.alert(
+          'Success',
+          isCustomService
+            ? 'Custom service submitted for review! It will appear on your profile once approved by our team.'
+            : 'Service added successfully',
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
       }
     } catch (error: any) {
       console.error('Error saving service:', error);

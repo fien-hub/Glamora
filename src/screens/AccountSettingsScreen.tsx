@@ -91,7 +91,7 @@ export default function AccountSettingsScreen() {
         if (result.success) {
           Alert.alert(
             'Account Deleted',
-            'Your account has been permanently deleted. Thank you for using Eve Beauty.',
+            'Your account has been permanently deleted. Thank you for using Glamora.',
             [
               {
                 text: 'OK',
@@ -141,7 +141,7 @@ export default function AccountSettingsScreen() {
               if (result.success) {
                 Alert.alert(
                   'Account Deactivated',
-                  'Your account has been deactivated. Log in again anytime to reactivate and continue using Eve Beauty.',
+                  'Your account has been deactivated. Log in again anytime to reactivate and continue using Glamora.',
                   [
                     {
                       text: 'OK',

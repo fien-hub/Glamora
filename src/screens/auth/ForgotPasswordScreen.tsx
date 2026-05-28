@@ -125,20 +125,6 @@ export default function ForgotPasswordScreen() {
             </TouchableOpacity>
           </SlideUpView>
 
-          {/* Development Testing Button - Only visible in dev mode */}
-          {__DEV__ && (
-            <SlideUpView delay={300}>
-              <TouchableOpacity
-                style={styles.devTestButton}
-                onPress={() => navigation.navigate('ResetPassword')}
-              >
-                <Text style={styles.devTestButtonText}>
-                  🧪 Test Reset Screen (Dev Only)
-                </Text>
-              </TouchableOpacity>
-            </SlideUpView>
-          )}
-
           <FadeInView delay={350}>
             <TouchableOpacity
               style={styles.backToLoginButton}
@@ -252,21 +238,6 @@ const styles = StyleSheet.create({
   buttonText: {
     color: colors.black,
     fontSize: fontSize.lg,
-    fontWeight: fontWeight.bold,
-  },
-  devTestButton: {
-    backgroundColor: '#FFA500',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-    borderWidth: 2,
-    borderColor: '#FF8C00',
-  },
-  devTestButtonText: {
-    color: colors.white,
-    fontSize: fontSize.sm,
     fontWeight: fontWeight.bold,
   },
   backToLoginButton: {

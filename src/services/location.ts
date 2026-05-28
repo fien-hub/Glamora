@@ -56,7 +56,7 @@ export async function requestLocationPermission(silentDenial = false): Promise<b
       if (!silentDenial) {
         Alert.alert(
           'Location Access Disabled',
-          'Please enable location permission for Eve Beauty in your device Settings to find professionals near you.',
+          'Please enable location permission for Glamora in your device Settings to find professionals near you.',
           [
             { text: 'Not Now', style: 'cancel' },
             { text: 'Open Settings', onPress: () => Linking.openSettings() },

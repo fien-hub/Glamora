@@ -112,7 +112,7 @@ export default function KYCVerificationScreen() {
         <Text style={styles.headerIcon}>🛡️</Text>
         <Text style={styles.headerTitle}>KYC Verification</Text>
         <Text style={styles.headerDescription}>
-          Submit your KYC documents for human review to become a trusted provider on Eve Beauty
+          Submit your KYC documents for human review to become a trusted provider on Glamora
         </Text>
       </View>
 
@@ -213,7 +213,7 @@ export default function KYCVerificationScreen() {
 
         <Text style={styles.resultDescription}>
           {isApproved
-            ? "Congratulations! Your KYC has been approved. You're now a trusted provider on Eve Beauty."
+            ? "Congratulations! Your KYC has been approved. You're now a trusted provider on Glamora."
             : isManualReview
             ? "Your KYC submission is being reviewed by our team. We'll notify you within 24 hours."
             : rejectionReason || 'Please try again with clearer photos of your documents.'}

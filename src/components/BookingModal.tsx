@@ -27,6 +27,8 @@ import {
 import { createBookingCalendarEvent, promptAddToCalendar } from '../utils/calendar';
 import { trackBookingCreated, trackPaymentSuccess, trackPaymentFailed, trackRecurringBookingCreated } from '../utils/analytics';
 import { trackBookingError, trackPaymentError, trackUserAction } from '../utils/errorTracking';
+import { scheduleLocalNotification, sendRemotePushToProfile } from '../utils/notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   RecurringFrequency,
   RecurringEndType,
@@ -145,7 +147,7 @@ export default function BookingModal({
           }),
         }
       );
-      const data = await response.json();
+      const data: any = await response.json();
       if (data.success) {
         setPricingData(data.data);
       } else {
@@ -291,6 +293,12 @@ export default function BookingModal({
   const handlePayment = async () => {
     setStep('processing');
     let bookingData: any = null;
+    // Track reserved booking IDs so we can roll back if payment fails
+    let pendingBookingIds: string[] = [];
+    let recurringBookingId: string | null = null;
+    // Becomes true the moment we call purchaseBookingProduct so we know
+    // whether the user may have been charged when deciding whether to clean up.
+    let paymentAttempted = false;
 
     try {
       // Get customer profile ID
@@ -314,7 +322,7 @@ export default function BookingModal({
 
       const { data: providerServiceData, error: providerServiceError } = await supabase
         .from('provider_services')
-        .select('id')
+        .select('id, base_price')
         .eq('provider_id', provider.id)
         .eq('service_id', service.id)
         .eq('is_active', true)
@@ -332,34 +340,42 @@ export default function BookingModal({
 
       const providerServiceId = providerServiceData.id;
       console.log('[Booking] Using provider_service_id:', providerServiceId);
-      let recurringBookingId: string | null = null;
 
-      // Process payment before creating booking records
-      console.log('[Booking] Refreshing session...');
-      void trackMetaInitiatedCheckout(provider.price / 100, {
-        providerId: provider.id,
-        serviceId: providerServiceId,
-        source: 'booking_modal',
+      // Resolve the authoritative price from the DB. If it changed since the customer
+      // opened this screen, show a confirmation before proceeding — no slot reserved yet.
+      const livePrice: number = await new Promise((resolve, reject) => {
+        if (providerServiceData.base_price === provider.price) {
+          resolve(provider.price);
+          return;
+        }
+        const oldDisplay = (provider.price / 100).toFixed(2);
+        const newDisplay = (providerServiceData.base_price / 100).toFixed(2);
+        Alert.alert(
+          'Price Has Changed',
+          `The price for this service changed from $${oldDisplay} to $${newDisplay} while you were booking. Would you like to continue at the updated price?`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => reject(new Error('PRICE_CHANGED_CANCELLED')) },
+            { text: `Continue at $${newDisplay}`, onPress: () => resolve(providerServiceData.base_price) },
+          ]
+        );
       });
-      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
 
-      if (sessionError || !session) {
-        console.error('[Booking] Session refresh error:', sessionError);
-        throw new Error('Session expired. Please log in again.');
+      // Re-check availability immediately before reserving the slot
+      const availabilityCheck = await checkProviderAvailability(
+        provider.id,
+        date,
+        time,
+        service.base_duration_minutes
+      );
+      if (!availabilityCheck.isAvailable) {
+        throw new Error(`SLOT_TAKEN: ${availabilityCheck.reason ?? 'This time slot is no longer available'}`);
       }
 
-      console.log('[Booking] Session refreshed, creating RevenueCat purchase...');
-      console.log('[Booking] User ID:', session.user.id);
-      const purchasePayload = await purchaseBookingProduct(session.user.id);
-      const verification = await verifyRevenueCatBookingPayment(session.access_token, purchasePayload);
-
-      if (!verification?.success) {
-        throw new Error('Payment verification failed');
-      }
-
-      // Handle recurring booking
+      // STEP 1: Reserve the slot BEFORE charging by inserting pending booking(s).
+      // The DB exclusion constraint prevents any other booking from taking the same slot
+      // from this point on, regardless of concurrent requests.
       if (isRecurring) {
-        // 1. Create recurring booking record
+        // Create recurring booking record
         const { data: recurringData, error: recurringError } = await supabase
           .from('recurring_bookings')
           .insert({
@@ -373,7 +389,7 @@ export default function BookingModal({
             end_type: recurringEndType,
             end_date: recurringEndDate || null,
             max_occurrences: recurringOccurrences ? parseInt(recurringOccurrences) : null,
-            total_price: provider.price,
+            total_price: livePrice,
             address: address,
             city: city,
             state: state,
@@ -387,7 +403,6 @@ export default function BookingModal({
         if (recurringError) throw recurringError;
         recurringBookingId = recurringData.id;
 
-        // 2. Generate booking instances
         const pattern: RecurringPattern = {
           frequency: recurringFrequency,
           interval: 1,
@@ -399,23 +414,20 @@ export default function BookingModal({
         };
 
         const instances = generateBookingInstances(pattern);
-
-        // 3. Create all booking instances
         const bookingInstances = instances.map((instance: RecurringBookingInstance) => ({
           customer_id: customerProfileId,
           provider_id: provider.id,
           provider_service_id: providerServiceId,
           scheduled_date: instance.date,
           scheduled_time: instance.time,
-          status: instance.instanceNumber === 1 ? 'confirmed' : 'pending',
-          total_price: provider.price,
+          status: 'pending',
+          total_price: livePrice,
           address: address,
           city: city,
           state: state,
           zip_code: zipCode,
           notes: notes || null,
-          payment_intent_id: verification?.paymentReference || `rc_${purchasePayload.transactionId}`,
-          payment_status: 'paid',
+          payment_status: 'pending',
           recurring_booking_id: recurringBookingId,
           instance_number: instance.instanceNumber,
           is_recurring_instance: true,
@@ -427,11 +439,9 @@ export default function BookingModal({
           .select();
 
         if (instancesError) throw instancesError;
-
-        // Use the first instance for payment
+        pendingBookingIds = instancesData.map((b: any) => b.id);
         bookingData = instancesData[0];
       } else {
-        // 1. Create single booking in database
         const { data: singleBookingData, error: bookingError } = await supabase
           .from('bookings')
           .insert({
@@ -440,15 +450,14 @@ export default function BookingModal({
             provider_service_id: providerServiceId,
             scheduled_date: date,
             scheduled_time: time,
-            status: 'confirmed',
-            total_price: provider.price,
+            status: 'pending',
+            total_price: livePrice,
             address: address,
             city: city,
             state: state,
             zip_code: zipCode,
             notes: notes || null,
-            payment_intent_id: verification?.paymentReference || `rc_${purchasePayload.transactionId}`,
-            payment_status: 'paid',
+            payment_status: 'pending',
             is_recurring_instance: false,
           })
           .select()
@@ -456,9 +465,120 @@ export default function BookingModal({
 
         if (bookingError) throw bookingError;
         bookingData = singleBookingData;
+        pendingBookingIds = [singleBookingData.id];
       }
 
-      console.log('[Booking] RevenueCat payment completed successfully!');
+      // STEP 2: Slot is reserved — now process payment
+      console.log('[Booking] Slot reserved, processing payment...');
+      void trackMetaInitiatedCheckout(livePrice / 100, {
+        providerId: provider.id,
+        serviceId: providerServiceId,
+        source: 'booking_modal',
+      });
+
+      const { data: { session }, error: sessionError } = await supabase.auth.refreshSession();
+      if (sessionError || !session) {
+        console.error('[Booking] Session refresh error:', sessionError);
+        throw new Error('Session expired. Please log in again.');
+      }
+
+      console.log('[Booking] Session refreshed, creating RevenueCat purchase...');
+      paymentAttempted = true;
+      const purchasePayload = await purchaseBookingProduct(session.user.id);
+      const verification = (await verifyRevenueCatBookingPayment(
+        session.access_token,
+        purchasePayload
+      )) as { success?: boolean; paymentReference?: string };
+
+      if (!verification?.success) {
+        throw new Error('Payment verification failed');
+      }
+
+      // STEP 3: Payment confirmed — mark booking(s) as paid and confirmed.
+      //
+      // IMPORTANT: payment_status is updated FIRST (with retries) so that even if
+      // the subsequent status='confirmed' write fails, the stale-pending cron job
+      // will not delete a paid booking (it only deletes rows where BOTH
+      // payment_status AND status are still 'pending').
+      const paymentRef = verification?.paymentReference || `rc_${purchasePayload.transactionId}`;
+
+      // Retry helper for the critical payment_status write
+      const retryPaidUpdate = async (updateFn: () => Promise<{ error: any }>) => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const { error } = await updateFn();
+          if (!error) return;
+          if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          else throw new Error(`PAID_BUT_DB_FAILED:${paymentRef}`);
+        }
+      };
+
+      if (isRecurring && recurringBookingId) {
+        // Mark all instances paid first
+        await retryPaidUpdate(async () =>
+          supabase
+            .from('bookings')
+            .update({ payment_status: 'paid', payment_intent_id: paymentRef })
+            .in('id', pendingBookingIds)
+        );
+        // Confirm the first instance; subsequent instances stay 'pending' until scheduled
+        await supabase
+          .from('bookings')
+          .update({ status: 'confirmed' })
+          .eq('id', pendingBookingIds[0]);
+      } else {
+        // Mark paid first
+        await retryPaidUpdate(async () =>
+          supabase
+            .from('bookings')
+            .update({ payment_status: 'paid', payment_intent_id: paymentRef })
+            .eq('id', bookingData.id)
+        );
+        // Then confirm
+        await supabase
+          .from('bookings')
+          .update({ status: 'confirmed' })
+          .eq('id', bookingData.id);
+      }
+
+      console.log('[Booking] Payment confirmed and booking updated successfully!');
+
+      // Send confirmation emails (best-effort — non-fatal)
+      const emailBookingId = isRecurring ? pendingBookingIds[0] : bookingData.id;
+      supabase.functions
+        .invoke('send-booking-email', { body: { bookingId: emailBookingId, type: 'booking_confirmed' } })
+        .catch((e: any) => console.warn('[Booking] booking_confirmed email failed:', e));
+      supabase.functions
+        .invoke('send-booking-email', { body: { bookingId: emailBookingId, type: 'booking_received' } })
+        .catch((e: any) => console.warn('[Booking] booking_received email failed:', e));
+
+      // Push notification to provider (best-effort)
+      sendRemotePushToProfile(
+        provider.id,
+        'New Booking Confirmed',
+        `${service.name} booked for ${date} at ${time}`,
+        { type: 'booking', bookingId: emailBookingId },
+        'booking'
+      ).catch((e: any) => console.warn('[Booking] provider push failed:', e));
+
+      // Schedule a 24h reminder local notification for the customer
+      try {
+        const appointmentDate = new Date(`${date}T${time}:00`);
+        const reminderDate = new Date(appointmentDate.getTime() - 24 * 60 * 60 * 1000);
+        if (reminderDate > new Date()) {
+          const notifId = await scheduleLocalNotification(
+            'Appointment Tomorrow',
+            `Your booking with ${provider.business_name} is tomorrow at ${time}. Don't forget!`,
+            { bookingId: bookingData.id, type: 'booking' },
+            { date: reminderDate } as any
+          );
+          if (notifId) {
+            await AsyncStorage.setItem(`booking_reminder_${bookingData.id}`, notifId);
+          }
+        }
+      } catch (reminderError) {
+        // Non-fatal — booking is confirmed regardless
+        console.warn('[Booking] Could not schedule reminder:', reminderError);
+      }
 
       // Track successful booking and payment
       if (isRecurring && recurringBookingId) {
@@ -547,6 +667,24 @@ export default function BookingModal({
     } catch (error: any) {
       console.error('Booking error:', error);
 
+      // Roll back the pending reservation if the user was definitely not charged.
+      // We consider them safe to clean up when payment was never attempted, OR when
+      // the error clearly indicates the purchase was cancelled or declined (RevenueCat
+      // never finalised a charge in those cases).
+      const safeToCleanUp =
+        !paymentAttempted ||
+        error.message?.includes('canceled') ||
+        error.message?.includes('Canceled') ||
+        error.message?.includes('cancelled') ||
+        error.message?.includes('declined');
+
+      if (safeToCleanUp && pendingBookingIds.length > 0) {
+        await supabase.from('bookings').delete().in('id', pendingBookingIds);
+        if (recurringBookingId) {
+          await supabase.from('recurring_bookings').delete().eq('id', recurringBookingId);
+        }
+      }
+
       // Track booking error to Sentry
       trackBookingError(error, {
         bookingId: bookingData?.id,
@@ -558,7 +696,16 @@ export default function BookingModal({
       let errorMessage = 'Failed to complete booking. Please try again.';
       let errorTitle = 'Booking Failed';
 
-      if (error.message?.includes('Service not available')) {
+      if (error.message?.includes('PRICE_CHANGED_CANCELLED')) {
+        // User saw the price-change prompt and chose not to proceed — no alert needed,
+        // no slot was reserved, no payment was attempted.
+        setStep('details');
+        return;
+      } else if (error.message?.includes('SLOT_TAKEN') || error.code === '23P01' || error.message?.includes('bookings_no_overlap') || error.message?.includes('already has a booking')) {
+        errorTitle = 'Time Slot Unavailable';
+        errorMessage = 'This time slot was just taken by another booking. Please go back and choose a different time. You have not been charged.';
+        setStep('details');
+      } else if (error.message?.includes('Service not available')) {
         errorMessage = 'This service is not currently available from this provider. Please try a different service.';
       } else if (error.message?.includes('Network request failed')) {
         errorMessage = 'Network error. Please check your internet connection and try again.';
@@ -568,6 +715,10 @@ export default function BookingModal({
       } else if (error.message?.includes('declined')) {
         errorTitle = 'Payment Declined';
         errorMessage = 'Your in-app purchase could not be completed. Please try again.';
+      } else if (error.message?.startsWith('PAID_BUT_DB_FAILED:')) {
+        const ref = error.message.split(':')[1];
+        errorTitle = 'Payment Received — Sync Issue';
+        errorMessage = `Your payment was accepted but we had trouble confirming your booking. Your appointment is reserved. Please contact support with reference: ${ref}`;
       } else if (error.message) {
         errorMessage = error.message;
       }

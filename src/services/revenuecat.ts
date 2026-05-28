@@ -68,6 +68,15 @@ export interface RevenueCatBookingPurchase {
   platform: 'ios' | 'android';
 }
 
+export interface RevenueCatBookingVerification {
+  success: boolean;
+  provider?: string;
+  platform?: 'ios' | 'android';
+  paymentReference?: string;
+  verifiedAt?: string;
+  error?: string;
+}
+
 export const purchaseBookingProduct = async (appUserId: string): Promise<RevenueCatBookingPurchase> => {
   await ensureConfigured(appUserId);
 
@@ -110,7 +119,7 @@ export const purchaseBookingProduct = async (appUserId: string): Promise<Revenue
 export const verifyRevenueCatBookingPayment = async (
   accessToken: string,
   payload: RevenueCatBookingPurchase
-) => {
+): Promise<RevenueCatBookingVerification> => {
   if (!accessToken) {
     throw new Error('Missing auth token for RevenueCat payment verification');
   }
@@ -124,7 +133,7 @@ export const verifyRevenueCatBookingPayment = async (
     body: JSON.stringify(payload),
   });
 
-  const data = await response.json();
+  const data = (await response.json()) as RevenueCatBookingVerification;
 
   if (!response.ok || !data?.success) {
     throw new Error(data?.error || 'RevenueCat payment verification failed');

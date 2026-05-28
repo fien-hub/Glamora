@@ -1,7 +1,78 @@
 import { Request, Response } from 'express';
 import { createClient } from '@supabase/supabase-js';
+import Stripe from 'stripe';
 import { awardLoyaltyPoints } from '../utils/loyaltyPoints';
 import { notifyNewBooking, notifyBookingStatusChange } from '../utils/pushNotifications';
+
+const getStripe = () => {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) throw new Error('STRIPE_SECRET_KEY is not configured');
+  return new Stripe(key, { apiVersion: '2024-12-18.acacia' as any });
+};
+
+/**
+ * Disburse the provider_payout amount to the provider's Stripe Express account
+ * when a booking is marked completed. No-op if provider hasn't connected Stripe.
+ */
+const disbursePayout = async (bookingId: string): Promise<void> => {
+  try {
+    // Fetch booking with provider payout amount and provider's stripe account
+    const { data: booking, error } = await supabase
+      .from('bookings')
+      .select(`
+        id,
+        provider_payout,
+        stripe_transfer_id,
+        provider:provider_profiles!provider_id (
+          id,
+          stripe_account_id,
+          stripe_payouts_enabled
+        )
+      `)
+      .eq('id', bookingId)
+      .single();
+
+    if (error || !booking) {
+      console.error('[Payout] Failed to fetch booking for disbursement:', error?.message);
+      return;
+    }
+
+    // Already disbursed
+    if ((booking as any).stripe_transfer_id) return;
+
+    const provider = (booking as any).provider;
+    if (!provider?.stripe_account_id || !provider?.stripe_payouts_enabled) {
+      console.warn(`[Payout] Provider for booking ${bookingId} has no connected Stripe account — skipping transfer`);
+      return;
+    }
+
+    const payoutAmountCents = Math.round(((booking as any).provider_payout || 0) * 100);
+    if (payoutAmountCents <= 0) {
+      console.warn(`[Payout] Booking ${bookingId} has zero provider_payout — skipping transfer`);
+      return;
+    }
+
+    const stripe = getStripe();
+    const transfer = await stripe.transfers.create({
+      amount: payoutAmountCents,
+      currency: 'usd',
+      destination: provider.stripe_account_id,
+      description: `Glamora booking #${bookingId} provider payout`,
+      metadata: { booking_id: bookingId, provider_profile_id: provider.id },
+    });
+
+    // Store transfer ID so we never double-pay
+    await supabase
+      .from('bookings')
+      .update({ stripe_transfer_id: transfer.id })
+      .eq('id', bookingId);
+
+    console.log(`[Payout] Transfer ${transfer.id} created for booking ${bookingId} — $${((booking as any).provider_payout || 0).toFixed(2)}`);
+  } catch (err: any) {
+    // Log but don't bubble — we never want a failed transfer to roll back the booking status
+    console.error('[Payout] Stripe transfer failed for booking', bookingId, ':', err.message);
+  }
+};
 
 const supabase = createClient(
   process.env.SUPABASE_URL || '',
@@ -206,9 +277,12 @@ export const updateBookingStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ error: error.message });
     }
 
-    // Award loyalty points if booking is completed
+    // Award loyalty points and disburse provider payout if booking is completed
     if (status === 'completed') {
-      await awardLoyaltyPoints(id);
+      await Promise.all([
+        awardLoyaltyPoints(id),
+        disbursePayout(id),
+      ]);
     }
 
     // Send notification to customer about status change

@@ -309,7 +309,7 @@ export default function BookingScreen() {
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       if (data.success) {
         // Map new API response to expected format
@@ -479,8 +479,13 @@ export default function BookingScreen() {
           scheduled_date: scheduledDate,
           scheduled_time: scheduledTime,
           total_price: totalPrice,
+          platform_fee: pricingData?.pricing?.platform_fee_cents
+            ? pricingData.pricing.platform_fee_cents / 100
+            : null,
+          provider_payout: pricingData?.pricing?.provider_earnings_cents
+            ? pricingData.pricing.provider_earnings_cents / 100
+            : null,
           distance_km: distanceKm,
-          distance_tier: distanceTier,
           provider_latitude: providerData?.latitude || null,
           provider_longitude: providerData?.longitude || null,
           address: address,

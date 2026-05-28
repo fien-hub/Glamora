@@ -93,7 +93,7 @@ export default function ShareProviderModal({
   };
 
   const getShareMessage = () => {
-    return `Check out ${provider.businessName} on Eve Beauty! ⭐ ${provider.rating}/5 (${provider.totalReviews} reviews)\n\nBook beauty services at home with verified professionals.\n\n${referralCode ? `Use my referral code: ${referralCode} for $10 off your first booking!` : 'Download Eve Beauty now!'}\n\nhttps://glamora.app/provider/${provider.id}`;
+    return `Check out ${provider.businessName} on Glamora! ⭐ ${provider.rating}/5 (${provider.totalReviews} reviews)\n\nBook beauty services at home with verified professionals.\n\n${referralCode ? `Use my referral code: ${referralCode} for $10 off your first booking!` : 'Download Glamora now!'}\n\nhttps://glamora.app/provider/${provider.id}`;
   };
 
   const getShareUrl = () => {
@@ -116,7 +116,7 @@ export default function ShareProviderModal({
           break;
         case 'twitter':
           success = await shareToTwitter(
-            `Check out ${provider.businessName} on Eve Beauty! ⭐ ${provider.rating}/5`,
+            `Check out ${provider.businessName} on Glamora! ⭐ ${provider.rating}/5`,
             url
           );
           break;
@@ -129,7 +129,7 @@ export default function ShareProviderModal({
         case 'general':
         default:
           success = await shareContent({
-            title: `Check out ${provider.businessName} on Eve Beauty`,
+            title: `Check out ${provider.businessName} on Glamora`,
             message,
             url,
           });

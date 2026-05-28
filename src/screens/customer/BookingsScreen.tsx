@@ -19,6 +19,8 @@ import BookingDetailsModal from '../../components/BookingDetailsModal';
 import ReportIssueModal from '../../components/ReportIssueModal';
 import RescheduleModal from '../../components/RescheduleModal';
 import { deleteCalendarEvent } from '../../utils/calendar';
+import { cancelNotification, sendRemotePushToProfile } from '../../utils/notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useScreenTracking } from '../../hooks/useScreenTracking';
 import { trackBookingCancelled, trackBookingShared } from '../../utils/analytics';
 import { shareContent, shareToWhatsApp, shareViaSMS } from '../../utils/socialSharing';
@@ -39,7 +41,7 @@ interface Booking {
   scheduled_time: string;
   status: string;
   total_price: number;
-  location_address: string;
+  address: string;
   is_recurring_instance: boolean;
   recurring_booking_id: string | null;
   instance_number: number | null;
@@ -71,6 +73,54 @@ export default function BookingsScreen() {
 
   useEffect(() => {
     fetchBookings();
+    recoverPendingBooking();
+  }, [user]);
+
+  // Recover a booking that was paid but failed to save (payment race condition)
+  const recoverPendingBooking = async () => {
+    try {
+      const raw = await AsyncStorage.getItem('glamora:pendingBooking');
+      if (!raw) return;
+      const { paymentReference, bookingPayload } = JSON.parse(raw);
+
+      // Check if it was already saved (e.g. retry succeeded on a different device/session)
+      const { data: existing } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('payment_intent_id', paymentReference)
+        .maybeSingle();
+
+      if (existing) {
+        // Already exists — clear the stale record
+        await AsyncStorage.removeItem('glamora:pendingBooking');
+        return;
+      }
+
+      // Attempt to re-insert with the same payment reference (idempotent)
+      const { error } = await supabase.from('bookings').insert(bookingPayload);
+      if (!error) {
+        await AsyncStorage.removeItem('glamora:pendingBooking');
+        fetchBookings();
+        Alert.alert('Booking Recovered', 'Your previous booking has been successfully saved.');
+      }
+      // If still failing, leave the record so next launch retries again
+    } catch {
+      // Silently ignore — don't crash the bookings screen over a recovery attempt
+    }
+  };
+
+  // Realtime: refresh when any of the customer's bookings change status
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('customer-bookings-realtime')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'bookings' },
+        () => { fetchBookings(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [user]);
 
   useEffect(() => {
@@ -94,6 +144,34 @@ export default function BookingsScreen() {
       if (error) throw error;
 
       setBookings(data || []);
+
+      // Clean up stale calendar events and reminder notifications for any bookings
+      // that were cancelled by the provider while the app was closed.
+      const cancelledWithCalendar = (data || []).filter(
+        (b: any) => b.status === 'cancelled' && b.customer_calendar_event_id
+      );
+      for (const booking of cancelledWithCalendar) {
+        try {
+          await deleteCalendarEvent(booking.customer_calendar_event_id);
+          // Clear the stored event ID so we don't attempt deletion again
+          await supabase
+            .from('bookings')
+            .update({ customer_calendar_event_id: null })
+            .eq('id', booking.id);
+        } catch (calErr) {
+          console.warn('[BookingsScreen] Calendar cleanup failed for', booking.id, calErr);
+        }
+        // Also cancel any pending reminder notification
+        try {
+          const notifId = await AsyncStorage.getItem(`booking_reminder_${booking.id}`);
+          if (notifId) {
+            await cancelNotification(notifId);
+            await AsyncStorage.removeItem(`booking_reminder_${booking.id}`);
+          }
+        } catch (notifErr) {
+          console.warn('[BookingsScreen] Reminder cleanup failed for', booking.id, notifErr);
+        }
+      }
     } catch (error) {
       console.error('Error fetching bookings:', error);
       Alert.alert('Error', 'Failed to load bookings');
@@ -159,7 +237,7 @@ export default function BookingsScreen() {
 
   // Handle get directions
   const handleGetDirections = (booking: any) => {
-    const address = booking.address || booking.location_address;
+    const address = booking.address;
     if (!address) {
       Alert.alert('No Address', 'No address available for this booking.');
       return;
@@ -217,24 +295,43 @@ export default function BookingsScreen() {
   };
 
   const handleCancelBooking = useCallback(async (bookingId: string) => {
+    // Fetch payment status first so we can warn the customer before they confirm
+    let wasPaid = false;
+    try {
+      const { data: preCheck } = await supabase
+        .from('bookings')
+        .select('payment_status')
+        .eq('id', bookingId)
+        .single();
+      wasPaid = preCheck?.payment_status === 'paid';
+    } catch {
+      // Non-fatal — proceed without payment info
+    }
+
+    const confirmMessage = wasPaid
+      ? 'This booking was paid. Cancelling will log a refund request with our team — we will review it and reach out about next steps.'
+      : 'Are you sure you want to cancel this booking?';
+
     Alert.alert(
       'Cancel Booking',
-      'Are you sure you want to cancel this booking?',
+      confirmMessage,
       [
-        { text: 'No', style: 'cancel' },
+        { text: 'Go Back', style: 'cancel' },
         {
-          text: 'Yes, Cancel',
+          text: wasPaid ? 'Cancel & Request Refund' : 'Yes, Cancel',
           style: 'destructive',
           onPress: async () => {
             try {
               // Get booking to check for calendar event ID
               const { data: bookingData, error: fetchError } = await supabase
                 .from('bookings')
-                .select('customer_calendar_event_id')
+                .select('customer_calendar_event_id, payment_status')
                 .eq('id', bookingId)
                 .single();
 
               if (fetchError) throw fetchError;
+
+              const isPaid = bookingData?.payment_status === 'paid';
 
               // Update booking status
               const { error } = await supabase
@@ -249,10 +346,70 @@ export default function BookingsScreen() {
                 await deleteCalendarEvent(bookingData.customer_calendar_event_id);
               }
 
+              // Cancel scheduled reminder notification if one was set
+              try {
+                const notifId = await AsyncStorage.getItem(`booking_reminder_${bookingId}`);
+                if (notifId) {
+                  await cancelNotification(notifId);
+                  await AsyncStorage.removeItem(`booking_reminder_${bookingId}`);
+                }
+              } catch (notifErr) {
+                console.warn('[BookingsScreen] Could not cancel reminder notification:', notifErr);
+              }
+
               // Track booking cancellation
               trackBookingCancelled(bookingId, 'user_cancelled');
 
-              Alert.alert('Success', 'Booking cancelled');
+              if (isPaid) {
+                // Log the refund request in our system (best-effort)
+                supabase.functions
+                  .invoke('request-refund', {
+                    body: { bookingId, cancelledBy: 'customer' },
+                  })
+                  .catch((err: any) =>
+                    console.error('[BookingsScreen] request-refund invoke failed:', err)
+                  );
+
+                // Inform the customer and give them direct access to Apple's refund portal
+                Alert.alert(
+                  'Booking Cancelled',
+                  "We've logged your refund request. Our team will review it shortly.\n\nYou can also request a refund directly through Apple by tapping below.",
+                  [
+                    {
+                      text: 'Request Refund via Apple',
+                      onPress: () =>
+                        Linking.openURL('https://reportaproblem.apple.com/'),
+                    },
+                    { text: 'Done', style: 'cancel' },
+                  ]
+                );
+              } else {
+                Alert.alert('Success', 'Booking cancelled');
+              }
+
+              // Notify the provider of the cancellation (best-effort)
+              supabase.functions
+                .invoke('send-booking-email', {
+                  body: { bookingId, type: 'customer_cancelled' },
+                })
+                .catch((e: any) =>
+                  console.warn('[BookingsScreen] customer_cancelled email failed:', e)
+                );
+
+              // Push notification to provider (best-effort)
+              const cancelledBooking = bookings.find((b: any) => b.id === bookingId);
+              if (cancelledBooking?.provider_id) {
+                sendRemotePushToProfile(
+                  cancelledBooking.provider_id,
+                  'Booking Cancelled',
+                  'A customer has cancelled their booking.',
+                  { type: 'booking', bookingId },
+                  'booking'
+                ).catch((e: any) =>
+                  console.warn('[BookingsScreen] provider cancel push failed:', e)
+                );
+              }
+
               fetchBookings();
             } catch (error) {
               console.error('Error cancelling booking:', error);
@@ -269,7 +426,7 @@ export default function BookingsScreen() {
 
     if (filter === 'upcoming') {
       return bookings.filter(b =>
-        (b.status === 'pending' || b.status === 'confirmed') &&
+        (b.status === 'pending' || b.status === 'confirmed' || b.status === 'in_progress') &&
         new Date(b.scheduled_date) >= now
       );
     } else if (filter === 'past') {
@@ -285,6 +442,7 @@ export default function BookingsScreen() {
     switch (status) {
       case 'pending': return colors.warning;
       case 'confirmed': return colors.success;
+      case 'in_progress': return '#8B5CF6'; // purple
       case 'completed': return colors.secondary;
       case 'cancelled': return colors.error;
       default: return colors.textSecondary;
@@ -292,6 +450,7 @@ export default function BookingsScreen() {
   };
 
   const getStatusLabel = (status: string) => {
+    if (status === 'in_progress') return 'In Progress';
     return status.charAt(0).toUpperCase() + status.slice(1);
   };
 
@@ -307,7 +466,7 @@ export default function BookingsScreen() {
     const serviceName = (booking as any).provider_services?.services?.name || 'Service';
     const price = booking.total_price ? (booking.total_price / 100).toFixed(2) : '0.00';
 
-    const message = `My Eve Beauty Booking\n\nService: ${serviceName}\nProvider: ${providerName}\nDate: ${date}\nTime: ${time}\nPrice: $${price}\nLocation: ${booking.location_address}\n\nBooked via Eve Beauty - Beauty services at home!\nhttps://glamora.app`;
+    const message = `My Glamora Booking\n\nService: ${serviceName}\nProvider: ${providerName}\nDate: ${date}\nTime: ${time}\nPrice: $${price}\nLocation: ${booking.address}\n\nBooked via Glamora - Beauty services at home!\nhttps://glamora.app`;
 
     Alert.alert(
       'Share Booking',
@@ -335,7 +494,7 @@ export default function BookingsScreen() {
           text: 'More Options',
           onPress: async () => {
             const success = await shareContent({
-              title: 'My Eve Beauty Booking',
+              title: 'My Glamora Booking',
               message,
             });
             if (success) {
@@ -443,6 +602,15 @@ export default function BookingsScreen() {
                     </View>
                   </View>
 
+                  {/* In Progress Banner */}
+                  {booking.status === 'in_progress' && (
+                    <View style={[styles.countdownContainer, { backgroundColor: '#8B5CF620' }]}>
+                      <Text style={[styles.countdownText, { color: '#8B5CF6' }]}>
+                        🔧 Service in progress
+                      </Text>
+                    </View>
+                  )}
+
                   {/* Countdown Timer for upcoming bookings */}
                   {(booking.status === 'pending' || booking.status === 'confirmed') &&
                    getRelativeTime(booking.scheduled_date, booking.scheduled_time) && (
@@ -464,7 +632,7 @@ export default function BookingsScreen() {
                     </View>
                     <View style={styles.detailRow}>
                       <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
-                      <Text style={styles.detailText}>{booking.location_address}</Text>
+                      <Text style={styles.detailText}>{booking.address}</Text>
                     </View>
                     <View style={styles.detailRow}>
                       <Ionicons name="cash-outline" size={16} color={colors.success} />
@@ -486,8 +654,8 @@ export default function BookingsScreen() {
                   <Text style={styles.actionButtonText}>Message</Text>
                 </AnimatedButton>
 
-                {/* Get Directions - Available for pending/confirmed */}
-                {(booking.status === 'pending' || booking.status === 'confirmed') && (
+                {/* Get Directions - Available for pending/confirmed/in_progress */}
+                {(booking.status === 'pending' || booking.status === 'confirmed' || booking.status === 'in_progress') && (
                   <AnimatedButton
                     variant="secondary"
                     onPress={() => handleGetDirections(booking)}
@@ -498,7 +666,7 @@ export default function BookingsScreen() {
                   </AnimatedButton>
                 )}
 
-                {/* Reschedule - Available for pending/confirmed */}
+                {/* Reschedule - Available for pending/confirmed only (not in_progress) */}
                 {(booking.status === 'pending' || booking.status === 'confirmed') && (
                   <AnimatedButton
                     variant="secondary"
@@ -513,7 +681,7 @@ export default function BookingsScreen() {
                   </AnimatedButton>
                 )}
 
-                {/* Cancel - Available for pending/confirmed */}
+                {/* Cancel - Available for pending/confirmed only (not in_progress) */}
                 {(booking.status === 'pending' || booking.status === 'confirmed') && (
                   <AnimatedButton
                     variant="outline"

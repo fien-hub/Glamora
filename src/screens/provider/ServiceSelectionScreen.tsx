@@ -44,12 +44,16 @@ export default function ServiceSelectionScreen() {
     checkPricingGuide();
   }, [user]);
 
-  const checkPricingGuide = () => {
-    setShowPricingGuide(true);
+  const checkPricingGuide = async () => {
+    const seen = await AsyncStorage.getItem('glamora_pricing_guide_seen');
+    if (!seen) {
+      setShowPricingGuide(true);
+    }
   };
 
-  const dismissPricingGuide = () => {
+  const dismissPricingGuide = async () => {
     setShowPricingGuide(false);
+    await AsyncStorage.setItem('glamora_pricing_guide_seen', 'true');
   };
 
   const fetchServices = async () => {
@@ -134,6 +138,8 @@ export default function ServiceSelectionScreen() {
 
       if (!profile) throw new Error('Profile not found');
 
+      const isCustomService = selectedService.id === CUSTOM_SERVICE_ID;
+
       const { error } = await supabase
         .from('provider_services')
         .insert({
@@ -142,8 +148,9 @@ export default function ServiceSelectionScreen() {
           base_price: data.price ?? data.basePrice,
           duration_minutes: data.duration,
           description: data.customDescription || null,
-          custom_service_name: data.customServiceName || null,
-          is_active: data.isActive,
+          custom_service_name: isCustomService ? (data.customServiceName || null) : null,
+          is_active: isCustomService ? false : data.isActive,
+          custom_service_status: isCustomService ? 'pending' : 'approved',
           platform_commission_rate: 0.20,
           max_travel_distance_km: data.maxTravelDistance,
           travel_fee_0_10km: data.travelFee0to10,
@@ -155,7 +162,13 @@ export default function ServiceSelectionScreen() {
 
       if (error) throw error;
 
-      Alert.alert('Success', 'Service added successfully');
+      const isCustom = selectedService.id === CUSTOM_SERVICE_ID;
+      Alert.alert(
+        'Success',
+        isCustom
+          ? 'Custom service submitted for review! It will appear on your profile once approved by our team.'
+          : 'Service added successfully!'
+      );
       setModalVisible(false);
       setSelectedService(null);
 
@@ -353,13 +366,13 @@ export default function ServiceSelectionScreen() {
                 </Text>
                 <View style={styles.guideNote}>
                   <Text style={styles.guideNoteText}>
-                    📌  Eve Beauty retains a{' '}
+                    📌  Glamora retains a{' '}
                     <Text style={styles.guideNoteHighlight}>20% platform commission</Text>{' '}
                     from every booking. You keep the remaining 80%.
                   </Text>
                 </View>
                 <Text style={styles.guideExample}>
-                  Example: Base price $100 → You earn $80, Eve Beauty earns $20.
+                  Example: Base price $100 → You earn $80, Glamora earns $20.
                 </Text>
               </View>
 
@@ -373,7 +386,7 @@ export default function ServiceSelectionScreen() {
                   <Text style={styles.guideSectionTitle}>Travel Fee</Text>
                 </View>
                 <Text style={styles.guideSectionBody}>
-                  Since Eve Beauty is a mobile beauty platform, you travel to your clients.
+                  Since Glamora is a mobile beauty platform, you travel to your clients.
                   You can set different travel fees based on distance:
                 </Text>
 
@@ -415,7 +428,7 @@ export default function ServiceSelectionScreen() {
                   <Text style={styles.guideNoteText}>
                     📌  Travel fees are charged{' '}
                     <Text style={styles.guideNoteHighlight}>on top of the base price</Text>{' '}
-                    and go entirely to you — Eve Beauty does not take commission on travel fees.
+                    and go entirely to you — Glamora does not take commission on travel fees.
                   </Text>
                 </View>
               </View>

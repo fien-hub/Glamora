@@ -41,6 +41,7 @@ interface ProviderService {
   is_active: boolean;
   platform_commission_rate: number;
   custom_service_name?: string | null;
+  custom_service_status?: string | null;
   base_price: number;  // Provider's base price in cents
   accepts_over_25km: boolean;
   travel_fee_over_25km?: number;
@@ -435,6 +436,7 @@ export default function ServicesScreen() {
           is_active,
           platform_commission_rate,
           custom_service_name,
+          custom_service_status,
           accepts_over_25km,
           travel_fee_over_25km,
           services (
@@ -457,6 +459,7 @@ export default function ServicesScreen() {
         is_active: ps.is_active,
         platform_commission_rate: ps.platform_commission_rate || PLATFORM_COMMISSION_RATE,
         custom_service_name: ps.custom_service_name,
+        custom_service_status: ps.custom_service_status,
         base_price: ps.base_price || 0,
         accepts_over_25km: ps.accepts_over_25km,
         travel_fee_over_25km: ps.travel_fee_over_25km ?? undefined,
@@ -491,7 +494,7 @@ export default function ServicesScreen() {
     try {
       const { data, error } = await supabase
         .from('portfolio_items')
-        .select('id, provider_service_id, image_url, thumbnail_url, media_type, created_at')
+        .select('id, provider_service_id, image_url, created_at')
         .eq('provider_id', profileId)
         .not('provider_service_id', 'is', null)
         .order('created_at', { ascending: false });
@@ -672,7 +675,13 @@ export default function ServicesScreen() {
                     <Text style={styles.serviceName}>
                       {ps.custom_service_name || ps.service.name}
                     </Text>
-                    {ps.custom_service_name && (
+                    {ps.custom_service_name && ps.custom_service_status === 'pending' && (
+                      <Text style={styles.pendingBadge}>⏳ Pending Review</Text>
+                    )}
+                    {ps.custom_service_name && ps.custom_service_status === 'rejected' && (
+                      <Text style={styles.rejectedBadge}>❌ Rejected</Text>
+                    )}
+                    {ps.custom_service_name && ps.custom_service_status === 'approved' && (
                       <Text style={styles.customServiceBadge}>Custom Service</Text>
                     )}
                     <Text style={styles.serviceDescription}>
@@ -705,6 +714,7 @@ export default function ServicesScreen() {
                       onValueChange={() => handleToggleAvailability(ps.id, ps.is_active)}
                       trackColor={{ false: colors.border, true: colors.success }}
                       thumbColor={colors.white}
+                      disabled={ps.custom_service_status === 'pending' || ps.custom_service_status === 'rejected'}
                     />
                   </View>
                 </View>
@@ -875,6 +885,28 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     color: colors.primary,
     backgroundColor: colors.primary + '15',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginBottom: spacing.xs,
+    fontWeight: '600',
+  },
+  pendingBadge: {
+    fontSize: fontSize.xs,
+    color: '#B45309',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginBottom: spacing.xs,
+    fontWeight: '600',
+  },
+  rejectedBadge: {
+    fontSize: fontSize.xs,
+    color: '#DC2626',
+    backgroundColor: '#FEE2E2',
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: 4,
