@@ -94,6 +94,12 @@ export async function getCurrentLocation(silent = false): Promise<LocationCoords
   const Location = getExpoLocation();
   if (!Location) {
     console.warn('[location.ts] expo-location module unavailable during getCurrentLocation.');
+    if (!silent) {
+      Alert.alert(
+        'Location Unavailable',
+        'Location services are currently unavailable in this build. Please enter your address manually.'
+      );
+    }
     return null;
   }
 
@@ -101,18 +107,47 @@ export async function getCurrentLocation(silent = false): Promise<LocationCoords
     const hasPermission = await requestLocationPermission(silent);
     if (!hasPermission) return null;
 
-    // Try last-known position first for speed (no GPS cold-start delay).
-    // Fall back to a fresh fix with a timeout to avoid hanging indefinitely
-    // in production (Hermes/New Architecture) when GPS is slow to acquire.
-    let position = await Location.getLastKnownPositionAsync({ maxAge: 5 * 60 * 1000 });
+    const servicesEnabled = await Location.hasServicesEnabledAsync();
+    if (!servicesEnabled) {
+      if (!silent) {
+        Alert.alert(
+          'Location Services Off',
+          'Please turn on Location Services in your device settings, then try again.',
+          [
+            { text: 'Not Now', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+          ]
+        );
+      }
+      return null;
+    }
+
+    // Try last-known position first. A stale-but-valid fix is better than failing.
+    let position = await Location.getLastKnownPositionAsync({
+      maxAge: 24 * 60 * 60 * 1000,
+      requiredAccuracy: 1000,
+    });
 
     if (!position) {
-      position = await Promise.race([
-        Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Location timeout after 10s')), 10_000)
-        ),
-      ]);
+      try {
+        // First attempt: balanced accuracy with longer timeout for cold GPS starts.
+        position = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Location timeout after 20s (balanced)')), 20_000)
+          ),
+        ]);
+      } catch (firstError) {
+        console.warn('[location.ts] Balanced accuracy location attempt failed:', firstError);
+
+        // Second attempt: lower accuracy fallback often succeeds indoors.
+        position = await Promise.race([
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Location timeout after 20s (low)')), 20_000)
+          ),
+        ]);
+      }
     }
 
     return {
@@ -122,7 +157,10 @@ export async function getCurrentLocation(silent = false): Promise<LocationCoords
   } catch (error) {
     console.error('Error getting current location:', error);
     if (!silent) {
-      Alert.alert('Error', 'Failed to get your location. Please enter it manually.');
+      Alert.alert(
+        'Could Not Get Location',
+        'We could not get a GPS fix. Please move to an open area, ensure Location Services are on, and try again.'
+      );
     }
     return null;
   }

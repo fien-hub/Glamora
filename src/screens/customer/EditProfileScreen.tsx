@@ -100,9 +100,7 @@ export default function EditProfileScreen() {
     try {
       const location = await getCurrentLocation();
       if (!location) {
-        // getCurrentLocation already shows an alert for permission denial.
-        // Show a fallback only if the module itself is unavailable (no alert was shown).
-        Alert.alert('Location Unavailable', 'Could not access your location. Please enter your address manually.');
+        // getCurrentLocation handles permission / settings alerts.
         return;
       }
       const { reverseGeocode } = await import('../../services/location');

@@ -179,12 +179,7 @@ export default function LocationScreen() {
       setLocating(true);
       const coords = await getCurrentLocation();
       if (!coords) {
-        // getCurrentLocation already shows permission alerts (denied / open settings).
-        // Show additional guidance only if it returns null without a system dialog.
-        Alert.alert(
-          'Location Unavailable',
-          'Could not access your location. Please check your device location settings or enter your address manually.'
-        );
+        // getCurrentLocation handles permission / settings alerts.
         return;
       }
 
