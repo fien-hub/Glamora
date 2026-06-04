@@ -7,11 +7,9 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from '../../utils/linearGradient';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../services/supabase';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { Ionicons } from '../../utils/icons';
 import Haptics from '../../utils/haptics';
@@ -22,89 +20,18 @@ try { StoreReview = require('expo-store-review'); } catch (e) { console.warn('[A
 type Step = 'prompt' | 'confirm';
 
 export default function AppRatingScreen() {
+  const { markOnboardingComplete, userRole } = useAuth();
   const navigation = useNavigation<any>();
-  const { user, userRole, markOnboardingComplete } = useAuth();
   const [step, setStep] = useState<Step>('prompt');
   const [fadeAnim] = useState(new Animated.Value(1));
   const [selectedRating, setSelectedRating] = useState(0);
 
-  const finishOnboarding = async () => {
-    try {
-      // Persist onboarding completion so auth refreshes don't bounce users
-      // back into onboarding screens after this rating flow.
-      if (user?.id && userRole) {
-        let { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('user_id', user.id)
-          .single();
-
-        if (profileError?.code === 'PGRST116') {
-          const { data: createdProfile, error: createProfileError } = await supabase
-            .from('profiles')
-            .upsert({ user_id: user.id }, { onConflict: 'user_id' })
-            .select('id')
-            .single();
-
-          if (createProfileError) {
-            throw createProfileError;
-          }
-
-          profileData = createdProfile;
-          profileError = null;
-        }
-
-        if (profileError) {
-          throw profileError;
-        }
-
-        if (profileData?.id) {
-          if (userRole === 'customer') {
-            const { error: customerProfileError } = await supabase
-              .from('customer_profiles')
-              .upsert({ id: profileData.id, onboarding_completed: true }, { onConflict: 'id' });
-
-            if (customerProfileError) {
-              throw customerProfileError;
-            }
-          } else if (userRole === 'provider') {
-            const { error: providerProfileError } = await supabase
-              .from('provider_profiles')
-              .upsert({ id: profileData.id, onboarding_completed: true }, { onConflict: 'id' });
-
-            if (providerProfileError) {
-              throw providerProfileError;
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.warn('[AppRatingScreen] Failed to persist onboarding_completed before exit:', error);
-    }
-
-    // Just flip the flag — the navigator's conditional branch will re-render
-    // into CustomerMain / ProviderMain automatically once needsOnboarding = false.
-    // Calling navigation.reset() here causes a payload error because CustomerMain /
-    // ProviderMain are not registered in the onboarding branch of the navigator.
+  // Explicit navigation to main app — more reliable than relying solely on
+  // the navigator branch switching after markOnboardingComplete().
+  const finishOnboarding = () => {
     markOnboardingComplete();
-
-    // Explicitly reset to role home to avoid getting bounced back to onboarding
-    // by transient auth refresh/state timing.
-    if (userRole === 'provider') {
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'ProviderMain' }],
-      });
-      return;
-    }
-
-    if (userRole === 'customer') {
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'CustomerMain' }],
-      });
-    }
-
+    const dest = userRole === 'provider' ? 'ProviderMain' : 'CustomerMain';
+    navigation.reset({ index: 0, routes: [{ name: dest }] });
   };
 
   const transition = (nextStep: Step) => {
@@ -146,77 +73,57 @@ export default function AppRatingScreen() {
   const handleSkip = () => {
     // Skip entirely — don't force users through the confirm step.
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    void finishOnboarding();
+    finishOnboarding();
   };
 
   const handleDone = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    void finishOnboarding();
+    finishOnboarding();
   };
 
   if (step === 'prompt') {
     return (
       <SafeAreaView style={styles.safe}>
-        <View style={styles.bgLayer}>
-          <View style={[styles.bgOrb, styles.bgOrbTop]} />
-          <View style={[styles.bgOrb, styles.bgOrbBottom]} />
-        </View>
-
         <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-          <View style={styles.card}>
-            <View style={styles.kickerWrap}>
-              <Text style={styles.kicker}>WE'D LOVE YOUR REVIEW</Text>
-            </View>
-
-            <View style={styles.iconWrap}>
-              <Text style={styles.appIcon}>✨</Text>
-            </View>
-
-            <Text style={styles.heading}>Enjoying Glamora?</Text>
-            <Text style={styles.sub}>
-              A quick 5-star rating helps more clients discover trusted beauty professionals near them.
-            </Text>
-
-            <View style={styles.starsRow}>
-              {[1, 2, 3, 4, 5].map((i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={[
-                    styles.starChip,
-                    selectedRating >= i && styles.starChipSelected,
-                  ]}
-                  onPress={() => {
-                    triggerRateFlow(i);
-                  }}
-                  activeOpacity={0.75}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons
-                    name={selectedRating >= i ? 'star' : 'star-outline'}
-                    size={22}
-                    color={selectedRating >= i ? colors.primary : '#000000'}
-                    style={styles.star}
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity style={styles.primaryBtn} onPress={() => triggerRateFlow()} activeOpacity={0.9}>
-              <LinearGradient
-                colors={[colors.primaryDarker, colors.primary]}
-                start={{ x: 0, y: 0.5 }}
-                end={{ x: 1, y: 0.5 }}
-                style={styles.primaryBtnGradient}
-              >
-                <Ionicons name="star" size={18} color={colors.white} />
-                <Text style={styles.primaryBtnText}>Rate Glamora on the App Store</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.secondaryBtn, styles.skipNowBtn]} onPress={handleSkip} activeOpacity={0.75}>
-              <Text style={[styles.secondaryBtnText, styles.skipNowBtnText]}>Skip for now</Text>
-            </TouchableOpacity>
+          <View style={styles.iconWrap}>
+            <Text style={styles.appIcon}>✨</Text>
           </View>
+
+          <Text style={styles.heading}>Enjoying Eve Beauty?</Text>
+          <Text style={styles.sub}>
+            Your review helps us reach more people who need beautiful, convenient beauty services.
+          </Text>
+
+          <View style={styles.starsRow}>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <TouchableOpacity
+                key={i}
+                style={[
+                  styles.starChip,
+                  selectedRating >= i && styles.starChipSelected,
+                ]}
+                onPress={() => triggerRateFlow(i)}
+                activeOpacity={0.75}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons
+                  name={selectedRating >= i ? 'star' : 'star-outline'}
+                  size={24}
+                  color={selectedRating >= i ? colors.primary : '#000000'}
+                  style={styles.star}
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => triggerRateFlow()} activeOpacity={0.85}>
+            <Ionicons name="star" size={18} color={colors.white} />
+            <Text style={styles.primaryBtnText}>Rate Eve Beauty on the App Store</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.secondaryBtn} onPress={handleSkip} activeOpacity={0.7}>
+            <Text style={styles.secondaryBtnText}>Skip for now</Text>
+          </TouchableOpacity>
         </Animated.View>
       </SafeAreaView>
     );
@@ -224,54 +131,36 @@ export default function AppRatingScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.bgLayer}>
-        <View style={[styles.bgOrb, styles.bgOrbTop]} />
-        <View style={[styles.bgOrb, styles.bgOrbBottom]} />
-      </View>
-
       <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-        <View style={styles.card}>
-          <View style={styles.kickerWrap}>
-            <Text style={styles.kicker}>FINAL STEP</Text>
-          </View>
-
-          <View style={styles.iconWrap}>
-            <Text style={styles.appIcon}>🙏</Text>
-          </View>
-
-          <Text style={styles.heading}>Did you rate Glamora?</Text>
-          <Text style={styles.sub}>
-            Please confirm before continuing. If not yet, we will take you back to the rating step.
-          </Text>
-
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleDone} activeOpacity={0.9}>
-            <LinearGradient
-              colors={[colors.primaryDarker, colors.primary]}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={styles.primaryBtnGradient}
-            >
-              <Ionicons name="checkmark-circle" size={18} color={colors.white} />
-              <Text style={styles.primaryBtnText}>Yes, I rated it</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.secondaryBtn}
-            onPress={() => transition('prompt')}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.secondaryBtnText}>Not yet, take me back</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.secondaryBtn, { marginTop: 4 }]}
-            onPress={handleDone}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>Continue without rating</Text>
-          </TouchableOpacity>
+        <View style={styles.iconWrap}>
+          <Text style={styles.appIcon}>🙏</Text>
         </View>
+
+        <Text style={styles.heading}>Did you rate Eve Beauty?</Text>
+        <Text style={styles.sub}>
+          Please confirm before continuing. If you have not rated yet, we will take you back to the rating step.
+        </Text>
+
+        <TouchableOpacity style={styles.primaryBtn} onPress={handleDone} activeOpacity={0.85}>
+          <Ionicons name="checkmark-circle" size={18} color={colors.white} />
+          <Text style={styles.primaryBtnText}>Yes, I rated it! 🌟</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          onPress={() => transition('prompt')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.secondaryBtnText}>Not yet, take me back</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.secondaryBtn, { marginTop: 4 }]}
+          onPress={handleDone}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.secondaryBtnText, { opacity: 0.6 }]}>Continue without rating</Text>
+        </TouchableOpacity>
       </Animated.View>
     </SafeAreaView>
   );
@@ -280,91 +169,40 @@ export default function AppRatingScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#FBF6F2',
-  },
-  bgLayer: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
-  },
-  bgOrb: {
-    position: 'absolute',
-    borderRadius: 999,
-    opacity: 0.36,
-  },
-  bgOrbTop: {
-    width: 260,
-    height: 260,
-    backgroundColor: '#EFD0C4',
-    top: -70,
-    right: -80,
-  },
-  bgOrbBottom: {
-    width: 300,
-    height: 300,
-    backgroundColor: '#E1C1AD',
-    bottom: -140,
-    left: -120,
+    backgroundColor: colors.white,
   },
   container: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xl,
-  },
-  card: {
-    width: '100%',
-    backgroundColor: colors.white,
-    borderRadius: 28,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xl,
-    shadowColor: '#000000',
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 8,
-  },
-  kickerWrap: {
-    alignSelf: 'center',
-    backgroundColor: '#F4E8E0',
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    marginBottom: spacing.md,
-  },
-  kicker: {
-    color: colors.primaryDarker,
-    fontSize: fontSize.xs,
-    fontWeight: fontWeight.bold,
-    letterSpacing: 0.7,
+    paddingBottom: spacing.xxxl,
   },
   iconWrap: {
     width: 100,
     height: 100,
     borderRadius: 28,
-    backgroundColor: '#F8EDE6',
+    backgroundColor: colors.primaryLighter,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.lg,
-    alignSelf: 'center',
+    marginBottom: spacing.xl,
   },
   appIcon: {
-    fontSize: 50,
+    fontSize: 52,
   },
   heading: {
-    fontSize: 34,
+    fontSize: fontSize.xxl,
     fontWeight: fontWeight.bold,
     color: colors.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
-    lineHeight: 40,
   },
   sub: {
     fontSize: fontSize.body,
     color: colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 23,
-    marginBottom: spacing.xl,
+    lineHeight: 24,
+    marginBottom: spacing.xxxl,
     paddingHorizontal: spacing.sm,
   },
   starsRow: {
@@ -372,12 +210,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
     zIndex: 2,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxxl,
   },
   starChip: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#FFF4ED',
     alignItems: 'center',
     justifyContent: 'center',
@@ -386,7 +224,7 @@ const styles = StyleSheet.create({
   starChipSelected: {
     backgroundColor: '#FDEEE4',
     shadowColor: colors.primary,
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
@@ -395,40 +233,30 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   primaryBtn: {
-    width: '100%',
-    borderRadius: borderRadius.full,
-    overflow: 'hidden',
-    marginBottom: spacing.sm,
-  },
-  primaryBtnGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    backgroundColor: colors.primary,
     paddingVertical: spacing.large,
     paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.full,
+    width: '100%',
+    gap: 8,
+    marginBottom: spacing.sm,
   },
   primaryBtnText: {
     color: colors.white,
     fontSize: fontSize.body,
-    fontWeight: fontWeight.bold,
+    fontWeight: fontWeight.semibold,
   },
   secondaryBtn: {
     paddingVertical: spacing.medium,
     alignItems: 'center',
     width: '100%',
-    borderRadius: borderRadius.full,
-    backgroundColor: '#F6F1EC',
   },
   secondaryBtnText: {
-    color: colors.primaryDarker,
-    fontSize: fontSize.body,
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.medium,
-  },
-  skipNowBtn: {
-    backgroundColor: colors.primaryDarker,
-  },
-  skipNowBtnText: {
-    color: colors.white,
   },
 });

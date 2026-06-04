@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--access-token",
+        "biofw5c4aebHIvmd9NcSHZ_E6Ozx7OTIH8HFVHAo"
+      ],
+      "type": "stdio"
+    }
+  }
+}

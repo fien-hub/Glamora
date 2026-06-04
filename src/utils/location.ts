@@ -1,55 +1,11 @@
-// expo-location MUST be required lazily (inside function bodies) to avoid native
-// module registration crashes in New Architecture builds. At bundle-evaluation time,
-// JSI native modules may not yet be registered.
-let _Location: typeof import('expo-location') | null = null;
-let _LocationLoadPromise: Promise<typeof import('expo-location') | null> | null = null;
-
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-function getExpoLocationSync(): typeof import('expo-location') | null {
-  if (_Location !== null) return _Location;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    _Location = require('expo-location') as typeof import('expo-location');
-    return _Location;
-  } catch (e) {
-    console.warn('[utils/location.ts] expo-location failed to load:', e);
-    return null;
-  }
-}
-
-async function getExpoLocation(): Promise<typeof import('expo-location') | null> {
-  if (_Location) return _Location;
-  if (_LocationLoadPromise) return _LocationLoadPromise;
-
-  _LocationLoadPromise = (async () => {
-    const maxAttempts = 3;
-    let lastError: unknown = null;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      const syncLocation = getExpoLocationSync();
-      if (syncLocation) return syncLocation;
-
-      try {
-        const dynamicLocation = (await import('expo-location')) as typeof import('expo-location');
-        _Location = dynamicLocation;
-        return _Location;
-      } catch (error) {
-        lastError = error;
-      }
-
-      if (attempt < maxAttempts) {
-        await wait(250 * attempt);
-      }
-    }
-
-    console.warn('[utils/location.ts] expo-location unavailable after retries:', lastError);
-    return null;
-  })();
-
-  const loaded = await _LocationLoadPromise;
-  _LocationLoadPromise = null;
-  return loaded;
+// expo-location is required lazily to prevent module-level native module crashes
+// in New Architecture builds. All Location usage is inside async function bodies.
+let Location: typeof import('expo-location') | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  Location = require('expo-location') as typeof import('expo-location');
+} catch (e) {
+  console.warn('[utils/location.ts] expo-location failed to load:', e);
 }
 
 export interface Coordinates {
@@ -61,7 +17,6 @@ export interface Coordinates {
  * Request location permissions
  */
 export const requestLocationPermissions = async (): Promise<boolean> => {
-  const Location = await getExpoLocation();
   if (!Location) {
     console.warn('expo-location module is unavailable; skipping foreground permission request.');
     return false;
@@ -80,7 +35,6 @@ export const requestLocationPermissions = async (): Promise<boolean> => {
  * Get current user location
  */
 export const getCurrentLocation = async (): Promise<Coordinates | null> => {
-  const Location = await getExpoLocation();
   if (!Location) {
     console.warn('expo-location module is unavailable; cannot fetch current location.');
     return null;
@@ -168,12 +122,6 @@ export const isWithinRadius = (
 export const getAddressFromCoordinates = async (
   coordinates: Coordinates
 ): Promise<string | null> => {
-  const Location = await getExpoLocation();
-  if (!Location) {
-    console.warn('expo-location module is unavailable; cannot reverse geocode.');
-    return null;
-  }
-
   try {
     const addresses = await Location.reverseGeocodeAsync(coordinates);
     
@@ -202,12 +150,6 @@ export const getAddressFromCoordinates = async (
 export const getCoordinatesFromAddress = async (
   address: string
 ): Promise<Coordinates | null> => {
-  const Location = await getExpoLocation();
-  if (!Location) {
-    console.warn('expo-location module is unavailable; cannot geocode address.');
-    return null;
-  }
-
   try {
     const locations = await Location.geocodeAsync(address);
     

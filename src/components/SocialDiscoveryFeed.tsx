@@ -142,7 +142,7 @@ export default function SocialDiscoveryFeed({
 
   const fetchUserLocation = async () => {
     try {
-      const liveLocation = await getCurrentLocation(); // silent by default — utils/location never shows permission Alerts
+      const liveLocation = await getCurrentLocation();
 
       if (liveLocation) {
         setUserLocation(liveLocation);
@@ -194,15 +194,6 @@ export default function SocialDiscoveryFeed({
           const geocoded = await geocodeAddress(textParts.join(', '));
           if (geocoded) {
             setUserLocation({ latitude: geocoded.latitude, longitude: geocoded.longitude });
-            // Persist coords to DB so we don't have to geocode again next session.
-            supabase
-              .from('customer_profiles')
-              .update({ latitude: geocoded.latitude, longitude: geocoded.longitude })
-              .eq('id', profileData.id)
-              .then(({ error: saveErr }) => {
-                if (saveErr) console.warn('[Feed] Could not persist geocoded coords:', saveErr.message);
-                else console.log('[Feed] Persisted geocoded coords to customer_profiles');
-              });
             return;
           }
         } catch {
