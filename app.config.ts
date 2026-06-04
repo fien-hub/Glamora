@@ -3,7 +3,7 @@ import type { ExpoConfig } from 'expo/config';
 const baseConfig: ExpoConfig = {
   name: 'Glamora',
   slug: 'glamora-app',
-  version: '1.0.0',
+  version: '1.1.0',
   sdkVersion: '54.0.0',
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
@@ -21,7 +21,7 @@ const baseConfig: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.glamora.app',
-    buildNumber: '1',
+    buildNumber: '2',
     icon: './assets/icon.png',
     backgroundColor: '#FFFFFF',
     infoPlist: {
@@ -36,6 +36,10 @@ const baseConfig: ExpoConfig = {
       ],
       NSLocationWhenInUseUsageDescription:
         'Glamora needs your location to find beauty professionals near you and calculate travel distances.',
+      NSLocationAlwaysAndWhenInUseUsageDescription:
+        'Glamora uses your location to keep provider availability and travel estimates accurate while using the app.',
+      NSLocationAlwaysUsageDescription:
+        'Glamora uses your location to keep provider availability and travel estimates accurate while using the app.',
       NSCameraUsageDescription:
         'Glamora needs camera access to take photos for your profile and portfolio.',
       NSPhotoLibraryUsageDescription:
@@ -62,7 +66,6 @@ const baseConfig: ExpoConfig = {
   android: {
     package: 'com.fien.glamoraapp',
     permissions: [
-      'com.google.android.gms.permission.AD_ID',
       'android.permission.ACCESS_FINE_LOCATION',
       'android.permission.ACCESS_COARSE_LOCATION',
       'android.permission.CAMERA',
@@ -109,6 +112,8 @@ const baseConfig: ExpoConfig = {
     [
       'expo-location',
       {
+        locationWhenInUsePermission:
+          'Allow Glamora to use your location to find beauty professionals near you.',
         locationAlwaysAndWhenInUsePermission:
           'Allow Glamora to use your location to find beauty professionals near you.',
       },
@@ -204,6 +209,7 @@ export default (): ExpoConfig => {
   const metaClientTokenFromEnv = process.env.EXPO_PUBLIC_META_CLIENT_TOKEN;
   const easBuildProfile = process.env.EAS_BUILD_PROFILE || 'local';
   const enableIosNewArch = easBuildProfile === 'development';
+  const enableAndroidNewArch = easBuildProfile === 'development';
   const enableMetaSdk = process.env.EXPO_ENABLE_META_SDK === '1'
     || process.env.EXPO_PUBLIC_ENABLE_META_SDK === '1';
 
@@ -227,6 +233,9 @@ export default (): ExpoConfig => {
     ios: {
       newArchEnabled: enableIosNewArch,
     },
+    android: {
+      newArchEnabled: enableAndroidNewArch,
+    },
   });
 
   if (isMetaConfigured) {
@@ -246,9 +255,19 @@ export default (): ExpoConfig => {
     plugins = removePlugin(plugins, 'react-native-fbsdk-next');
   }
 
+  const baseAndroidPermissions = baseConfig.android?.permissions || [];
+  const androidPermissions = [...baseAndroidPermissions];
+  if (isMetaConfigured && !androidPermissions.includes('com.google.android.gms.permission.AD_ID')) {
+    androidPermissions.unshift('com.google.android.gms.permission.AD_ID');
+  }
+
   return {
     ...baseConfig,
     plugins,
+    android: {
+      ...baseConfig.android,
+      permissions: androidPermissions,
+    },
     updates: {
       enabled: false,
     },
