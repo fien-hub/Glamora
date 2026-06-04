@@ -1,5 +1,13 @@
 node_modules
 
+# Local backend runtime files
+glamora-backend/.env
+glamora-backend/backend.log
+glamora-backend/dist/
+
+# Supabase local temp files
+supabase/.temp/
+
 # Environment variables — never commit secrets
 .env
 .env.local
