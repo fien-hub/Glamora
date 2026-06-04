@@ -44,8 +44,15 @@ export interface VideoUploadResult {
  * Request camera roll permissions
  */
 export const requestImagePermissions = async (): Promise<boolean> => {
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  return status === 'granted';
+  if (typeof ImagePicker?.requestMediaLibraryPermissionsAsync !== 'function') {
+    console.warn('[imageUpload] Image picker module unavailable when requesting permissions');
+    return false;
+  }
+
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  // iOS may return accessPrivileges="limited" for selected-photo access.
+  const accessPrivileges = String((permission as any).accessPrivileges || '');
+  return permission.status === 'granted' || accessPrivileges === 'limited';
 };
 
 /**
@@ -57,6 +64,11 @@ export const pickImage = async (options?: {
   quality?: number;
 }): Promise<string | null> => {
   try {
+    if (typeof ImagePicker?.launchImageLibraryAsync !== 'function') {
+      console.warn('[imageUpload] Image picker module unavailable when launching library');
+      return null;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: options?.allowsEditing ?? true,

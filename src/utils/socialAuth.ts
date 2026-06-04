@@ -16,6 +16,9 @@ try {
   console.warn('Google Sign-In not available in Expo Go. Use a development build for Google Sign-In.');
 }
 
+const GOOGLE_IOS_CLIENT_ID_FALLBACK = '556025469880-2eall9hermo9c9p0c0b6p81h8gj1lbam.apps.googleusercontent.com';
+const GOOGLE_IOS_REVERSED_SCHEME_FALLBACK = 'com.googleusercontent.apps.556025469880-2eall9hermo9c9p0c0b6p81h8gj1lbam';
+
 /**
  * Configure Google Sign-In
  * Note: You need to add your Google OAuth client IDs in the configuration
@@ -28,14 +31,21 @@ export const configureGoogleSignIn = () => {
   }
 
   try {
+    const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || GOOGLE_IOS_CLIENT_ID_FALLBACK;
+
     GoogleSignin.configure({
       // iOS client ID from Google Cloud Console
-      iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '',
+      iosClientId,
       // Android client ID from Google Cloud Console
       androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '',
       // Web client ID from Google Cloud Console
       webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
       offlineAccess: true,
+    });
+
+    console.log('[socialAuth] Google Sign-In configured', {
+      hasIosClientId: !!iosClientId,
+      expectedReversedScheme: GOOGLE_IOS_REVERSED_SCHEME_FALLBACK,
     });
   } catch (error) {
     console.warn('Failed to configure Google Sign-In:', error);

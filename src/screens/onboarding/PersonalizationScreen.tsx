@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Keyboard,
+  TextInput,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '../../utils/icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { supabase } from '../../services/supabase';
@@ -88,6 +90,20 @@ export default function PersonalizationScreen() {
     'Booking Time',
     'Budget',
   ];
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'ios') return undefined;
+
+      const resetAutofillContext = setTimeout(() => {
+        Keyboard.dismiss();
+        const focusedInput = TextInput.State.currentlyFocusedInput?.();
+        focusedInput?.blur?.();
+      }, 0);
+
+      return () => clearTimeout(resetAutofillContext);
+    }, [])
+  );
 
   useEffect(() => {
     fetchCategories();
@@ -428,6 +444,10 @@ export default function PersonalizationScreen() {
                   value={address}
                   onChangeText={setAddress}
                   icon="home-outline"
+                  autoComplete="off"
+                  textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : 'none'}
+                  autoCorrect={false}
+                  importantForAutofill="no"
                   required
                 />
                 <View style={styles.row}>
@@ -437,6 +457,10 @@ export default function PersonalizationScreen() {
                       value={city}
                       onChangeText={setCity}
                       icon="location-outline"
+                      autoComplete="off"
+                      textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : 'none'}
+                      autoCorrect={false}
+                      importantForAutofill="no"
                       required
                     />
                   </View>
@@ -446,6 +470,11 @@ export default function PersonalizationScreen() {
                       value={state}
                       onChangeText={setState}
                       icon="map-outline"
+                      autoComplete="off"
+                      textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : 'none'}
+                      autoCorrect={false}
+                      autoCapitalize="characters"
+                      importantForAutofill="no"
                       required
                     />
                   </View>
@@ -456,6 +485,10 @@ export default function PersonalizationScreen() {
                   onChangeText={setZipCode}
                   icon="mail-outline"
                   keyboardType="numeric"
+                  autoComplete="off"
+                  textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : 'none'}
+                  autoCorrect={false}
+                  importantForAutofill="no"
                   required
                 />
               </FormCard>

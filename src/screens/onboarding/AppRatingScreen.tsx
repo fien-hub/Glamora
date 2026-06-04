@@ -7,9 +7,11 @@ import {
   Animated,
   Easing,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from '../../utils/linearGradient';
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../services/supabase';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { Ionicons } from '../../utils/icons';
 import Haptics from '../../utils/haptics';
@@ -20,17 +22,89 @@ try { StoreReview = require('expo-store-review'); } catch (e) { console.warn('[A
 type Step = 'prompt' | 'confirm';
 
 export default function AppRatingScreen() {
-  const { markOnboardingComplete } = useAuth();
+  const navigation = useNavigation<any>();
+  const { user, userRole, markOnboardingComplete } = useAuth();
   const [step, setStep] = useState<Step>('prompt');
   const [fadeAnim] = useState(new Animated.Value(1));
   const [selectedRating, setSelectedRating] = useState(0);
 
-  const finishOnboarding = () => {
+  const finishOnboarding = async () => {
+    try {
+      // Persist onboarding completion so auth refreshes don't bounce users
+      // back into onboarding screens after this rating flow.
+      if (user?.id && userRole) {
+        let { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('user_id', user.id)
+          .single();
+
+        if (profileError?.code === 'PGRST116') {
+          const { data: createdProfile, error: createProfileError } = await supabase
+            .from('profiles')
+            .upsert({ user_id: user.id }, { onConflict: 'user_id' })
+            .select('id')
+            .single();
+
+          if (createProfileError) {
+            throw createProfileError;
+          }
+
+          profileData = createdProfile;
+          profileError = null;
+        }
+
+        if (profileError) {
+          throw profileError;
+        }
+
+        if (profileData?.id) {
+          if (userRole === 'customer') {
+            const { error: customerProfileError } = await supabase
+              .from('customer_profiles')
+              .upsert({ id: profileData.id, onboarding_completed: true }, { onConflict: 'id' });
+
+            if (customerProfileError) {
+              throw customerProfileError;
+            }
+          } else if (userRole === 'provider') {
+            const { error: providerProfileError } = await supabase
+              .from('provider_profiles')
+              .upsert({ id: profileData.id, onboarding_completed: true }, { onConflict: 'id' });
+
+            if (providerProfileError) {
+              throw providerProfileError;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[AppRatingScreen] Failed to persist onboarding_completed before exit:', error);
+    }
+
     // Just flip the flag — the navigator's conditional branch will re-render
     // into CustomerMain / ProviderMain automatically once needsOnboarding = false.
     // Calling navigation.reset() here causes a payload error because CustomerMain /
     // ProviderMain are not registered in the onboarding branch of the navigator.
     markOnboardingComplete();
+
+    // Explicitly reset to role home to avoid getting bounced back to onboarding
+    // by transient auth refresh/state timing.
+    if (userRole === 'provider') {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'ProviderMain' }],
+      });
+      return;
+    }
+
+    if (userRole === 'customer') {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'CustomerMain' }],
+      });
+    }
+
   };
 
   const transition = (nextStep: Step) => {
@@ -62,15 +136,22 @@ export default function AppRatingScreen() {
     transition('confirm');
   };
 
+  const triggerRateFlow = async (rating?: number) => {
+    if (typeof rating === 'number') {
+      setSelectedRating(rating);
+    }
+    await handleRateNow();
+  };
+
   const handleSkip = () => {
     // Skip entirely — don't force users through the confirm step.
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    finishOnboarding();
+    void finishOnboarding();
   };
 
   const handleDone = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    finishOnboarding();
+    void finishOnboarding();
   };
 
   if (step === 'prompt') {
@@ -105,10 +186,10 @@ export default function AppRatingScreen() {
                     selectedRating >= i && styles.starChipSelected,
                   ]}
                   onPress={() => {
-                    setSelectedRating(i);
-                    handleRateNow();
+                    triggerRateFlow(i);
                   }}
                   activeOpacity={0.75}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <Ionicons
                     name={selectedRating >= i ? 'star' : 'star-outline'}
@@ -120,7 +201,7 @@ export default function AppRatingScreen() {
               ))}
             </View>
 
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleRateNow} activeOpacity={0.9}>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => triggerRateFlow()} activeOpacity={0.9}>
               <LinearGradient
                 colors={[colors.primaryDarker, colors.primary]}
                 start={{ x: 0, y: 0.5 }}
@@ -132,8 +213,8 @@ export default function AppRatingScreen() {
               </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.secondaryBtn} onPress={handleSkip} activeOpacity={0.75}>
-              <Text style={styles.secondaryBtnText}>Skip for now</Text>
+            <TouchableOpacity style={[styles.secondaryBtn, styles.skipNowBtn]} onPress={handleSkip} activeOpacity={0.75}>
+              <Text style={[styles.secondaryBtnText, styles.skipNowBtnText]}>Skip for now</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -289,8 +370,9 @@ const styles = StyleSheet.create({
   starsRow: {
     flexDirection: 'row',
     justifyContent: 'center',
+    position: 'relative',
+    zIndex: 2,
     marginBottom: spacing.xl,
-    gap: 8,
   },
   starChip: {
     width: 40,
@@ -299,6 +381,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF4ED',
     alignItems: 'center',
     justifyContent: 'center',
+    marginHorizontal: 4,
   },
   starChipSelected: {
     backgroundColor: '#FDEEE4',
@@ -341,5 +424,11 @@ const styles = StyleSheet.create({
     color: colors.primaryDarker,
     fontSize: fontSize.body,
     fontWeight: fontWeight.medium,
+  },
+  skipNowBtn: {
+    backgroundColor: colors.primaryDarker,
+  },
+  skipNowBtnText: {
+    color: colors.white,
   },
 });

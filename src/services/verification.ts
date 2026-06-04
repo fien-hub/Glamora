@@ -117,7 +117,12 @@ export const getVerificationStatus = async (): Promise<VerificationStatusRespons
     const { data: { session } } = await supabase.auth.getSession();
 
     if (!session) {
-      throw new Error('Not authenticated');
+      return {
+        status: 'pending',
+        verifiedAt: undefined,
+        notes: undefined,
+        isVerified: false,
+      };
     }
 
     // Query Supabase directly instead of backend API to avoid network errors
@@ -155,7 +160,9 @@ export const getVerificationStatus = async (): Promise<VerificationStatusRespons
       isVerified: providerData?.identity_verification_status === 'approved',
     };
   } catch (error: any) {
-    console.error('Get verification status error:', error);
+    if (error?.message !== 'Not authenticated') {
+      console.error('Get verification status error:', error);
+    }
     throw error;
   }
 };
@@ -371,7 +378,14 @@ export const getUserVerificationStatus = async (): Promise<UserVerificationStatu
     const { data: { session } } = await supabase.auth.getSession();
 
     if (!session) {
-      throw new Error('Not authenticated');
+      return {
+        phone: null,
+        phoneVerified: false,
+        emailVerified: false,
+        customerStatus: 'unverified',
+        paymentMethodVerified: false,
+        providerChecklist: null,
+      };
     }
 
     // Query Supabase directly instead of backend API to avoid network errors
@@ -419,7 +433,9 @@ export const getUserVerificationStatus = async (): Promise<UserVerificationStatu
       providerChecklist: providerChecklist || null,
     };
   } catch (error: any) {
-    console.error('Get user verification status error:', error);
+    if (error?.message !== 'Not authenticated') {
+      console.error('Get user verification status error:', error);
+    }
     throw error;
   }
 };

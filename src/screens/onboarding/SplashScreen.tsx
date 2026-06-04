@@ -13,6 +13,13 @@ export default function SplashScreen() {
   const { user, loading } = useAuth();
   const animationDoneRef = useRef(false);
   const hasNavigatedRef = useRef(false);
+  const userRef = useRef(user);
+  const loadingRef = useRef(loading);
+
+  useEffect(() => {
+    userRef.current = user;
+    loadingRef.current = loading;
+  }, [user, loading]);
 
   // Animation values
   const logoScale = useRef(new Animated.Value(0)).current;
@@ -76,6 +83,17 @@ export default function SplashScreen() {
   useEffect(() => {
     const deadline = setTimeout(() => {
       if (hasNavigatedRef.current) return;
+
+      // Never bounce authenticated users to RoleSelection from this deadline.
+      // Authenticated routing is handled by the navigator branches once role
+      // hydration completes.
+      if (userRef.current) {
+        recordStartupCheckpoint('SplashScreen.absoluteDeadline.authenticated', 'warn', {
+          loading: loadingRef.current,
+        });
+        return;
+      }
+
       recordStartupCheckpoint('SplashScreen.absoluteDeadline', 'warn', {
         animationDone: animationDoneRef.current,
       });

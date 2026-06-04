@@ -1103,7 +1103,7 @@ export default function ProviderOnboardingScreen() {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color={colors.primary} />
+                <ActivityIndicator color={colors.white} />
               ) : (
                 <Text style={styles.skipButtonText}>Skip for Now</Text>
               )}
@@ -1452,15 +1452,13 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     flex: 2,
-    backgroundColor: colors.white,
+    backgroundColor: colors.primary,
     padding: spacing.md,
     borderRadius: borderRadius.md,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.primary,
   },
   skipButtonText: {
-    color: colors.primary,
+    color: colors.black,
     fontSize: fontSize.md,
     fontWeight: '600',
   },

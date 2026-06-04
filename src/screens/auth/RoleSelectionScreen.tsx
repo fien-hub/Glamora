@@ -29,7 +29,7 @@ import ScaleInView from '../../components/animations/ScaleInView';
 
 interface RoleOption {
   role: UserRole;
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: string;
   title: string;
   description: string;
   features: string[];
@@ -102,6 +102,11 @@ export default function RoleSelectionScreen() {
     navigation.navigate('Login');
   };
 
+  const handleBrowseAsGuest = async () => {
+    await soundService.playClick();
+    navigation.navigate('GuestMain');
+  };
+
   const handleGoogleSignIn = async () => {
     if (!selectedRole) return;
     setLoading(true);
@@ -164,7 +169,7 @@ export default function RoleSelectionScreen() {
               >
                 <View style={styles.roleHeader}>
                   <View style={[styles.roleIconContainer, isSmallPhone && styles.roleIconContainerCompact]}>
-                    <Ionicons name={option.icon} size={isSmallPhone ? 24 : 28} color={colors.primary} />
+                    <Ionicons name={String(option.icon)} size={isSmallPhone ? 24 : 28} color={colors.primary} />
                   </View>
                   <View style={styles.radioButton}>
                     {selectedRole === option.role && <View style={styles.radioButtonInner} />}
@@ -243,6 +248,12 @@ export default function RoleSelectionScreen() {
           )}
 
           <SlideUpView delay={400}>
+            <TouchableOpacity style={styles.guestBrowseButton} onPress={handleBrowseAsGuest}>
+              <Text style={styles.guestBrowseButtonText}>Browse Services Without Account</Text>
+            </TouchableOpacity>
+          </SlideUpView>
+
+          <SlideUpView delay={450}>
             <TouchableOpacity style={styles.signInButton} onPress={handleSignIn}>
               <Text style={styles.signInText}>
                 Already have an account? <Text style={styles.signInTextBold}>Sign In</Text>
@@ -274,7 +285,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.lg,
   },
   header: {
     alignItems: 'center',
@@ -404,11 +415,12 @@ const styles = StyleSheet.create({
   },
   footer: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxl,
-    marginTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    marginTop: spacing.md,
   },
   footerCompact: {
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
   continueButton: {
     backgroundColor: colors.primary,
@@ -451,6 +463,20 @@ const styles = StyleSheet.create({
   socialButtonText: {
     fontSize: fontSize.md,
     color: colors.text,
+    fontWeight: fontWeight.semibold,
+  },
+  guestBrowseButton: {
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  guestBrowseButtonText: {
+    color: colors.white,
+    fontSize: fontSize.sm,
     fontWeight: fontWeight.semibold,
   },
   signInButton: {

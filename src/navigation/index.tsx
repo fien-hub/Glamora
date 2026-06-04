@@ -25,9 +25,14 @@ import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 
 // Main App Screens
 import CustomerTabNavigator from './CustomerTabNavigator';
+import GuestTabNavigator from './GuestTabNavigator';
 import ProviderTabNavigator from './ProviderTabNavigator';
 import AdminTabNavigator from './AdminTabNavigator';
 import ProviderApprovalScreen from '../screens/admin/ProviderApprovalScreen';
+import CustomServiceReviewScreen from '../screens/admin/CustomServiceReviewScreen';
+import AdminUsersScreen from '../screens/admin/UsersScreen';
+import AdminAnalyticsScreen from '../screens/admin/AnalyticsScreen';
+import AdminProfileScreen from '../screens/admin/ProfileScreen';
 
 // Additional Screens
 import ChatScreen from '../screens/shared/ChatScreen';
@@ -49,6 +54,7 @@ import BookingFlowScreen from '../screens/customer/BookingFlowScreen';
 import ServiceProvidersScreen from '../screens/customer/ServiceProvidersScreen';
 import PortfolioScreen from '../screens/provider/PortfolioScreen';
 import SearchScreen from '../screens/customer/SearchScreen';
+import GuestPromptScreen from '../screens/auth/GuestPromptScreen';
 import ProviderOnboardingScreen from '../screens/provider/ProviderOnboardingScreen';
 import EditProfileScreen from '../screens/provider/EditProfileScreen';
 import CustomerEditProfileScreen from '../screens/customer/EditProfileScreen';
@@ -183,6 +189,40 @@ export default function Navigation() {
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Signup" component={SignupScreen} />
+            <Stack.Screen name="GuestMain" component={GuestTabNavigator} />
+            <Stack.Screen
+              name="Search"
+              component={SearchScreen}
+              initialParams={{ disableHeaderOffset: true, guestBrowse: true }}
+              options={{
+                headerShown: true,
+                title: 'Browse Services',
+                ...TransitionPresets.SlideFromRightIOS,
+              }}
+            />
+            <Stack.Screen
+              name="ProviderPortfolio"
+              component={ProviderPortfolioScreen}
+              options={{
+                headerShown: true,
+                title: 'Portfolio',
+                ...TransitionPresets.ModalSlideFromBottomIOS,
+              }}
+            />
+            <Stack.Screen
+              name="ProviderReviews"
+              component={ProviderReviewsScreen}
+              options={{ headerShown: true, title: 'Reviews' }}
+            />
+            <Stack.Screen
+              name="Booking"
+              component={GuestPromptScreen}
+              initialParams={{
+                title: 'Create an account to book services',
+                description: 'You can browse services and providers as a guest. Sign in to complete bookings.',
+              }}
+              options={{ headerShown: true, title: 'Sign In Required' }}
+            />
           </>
         ) : !user ? (
           // Not logged in - always start on Splash so the animation plays, then
@@ -196,6 +236,40 @@ export default function Navigation() {
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Signup" component={SignupScreen} />
+            <Stack.Screen name="GuestMain" component={GuestTabNavigator} />
+            <Stack.Screen
+              name="Search"
+              component={SearchScreen}
+              initialParams={{ disableHeaderOffset: true, guestBrowse: true }}
+              options={{
+                headerShown: true,
+                title: 'Browse Services',
+                ...TransitionPresets.SlideFromRightIOS,
+              }}
+            />
+            <Stack.Screen
+              name="ProviderPortfolio"
+              component={ProviderPortfolioScreen}
+              options={{
+                headerShown: true,
+                title: 'Portfolio',
+                ...TransitionPresets.ModalSlideFromBottomIOS,
+              }}
+            />
+            <Stack.Screen
+              name="ProviderReviews"
+              component={ProviderReviewsScreen}
+              options={{ headerShown: true, title: 'Reviews' }}
+            />
+            <Stack.Screen
+              name="Booking"
+              component={GuestPromptScreen}
+              initialParams={{
+                title: 'Create an account to book services',
+                description: 'You can browse services and providers as a guest. Sign in to complete bookings.',
+              }}
+              options={{ headerShown: true, title: 'Sign In Required' }}
+            />
             <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
             <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
             <Stack.Screen name="Personalization" component={PersonalizationScreen} />
@@ -210,25 +284,14 @@ export default function Navigation() {
               options={{ headerShown: false, gestureEnabled: false }}
             />
           </>
-        ) : user && !userRole && loading ? (
-          // A session exists but role hydration is still in progress.
-          // Show Splash (which does nothing when user is set and just waits for
-          // the navigator to switch) so the user never sees RoleSelection while
-          // the DB query or offline cache-load is in flight.
+        ) : user && !userRole ? (
+          // A session exists but role hydration is unresolved.
+          // Keep users on Splash so they never see RoleSelection flashes while
+          // role/cache/network checks are still settling.
           <>
             <Stack.Screen name="Splash" component={SplashScreen} />
             <Stack.Screen name="CustomerMain" component={CustomerTabNavigator} />
             <Stack.Screen name="ProviderMain" component={ProviderTabNavigator} />
-            <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
-            <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-            <Stack.Screen name="Welcome" component={WelcomeScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
-            <Stack.Screen name="Signup" component={SignupScreen} />
-          </>
-        ) : user && !userRole ? (
-          // If role resolution failed, recover to the unauthenticated flow instead of
-          // leaving the navigator with no active screen.
-          <>
             <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
             <Stack.Screen name="Welcome" component={WelcomeScreen} />
@@ -284,6 +347,7 @@ export default function Navigation() {
         ) : user && needsOnboarding && userRole === 'customer' ? (
           // Customer needs onboarding
           <>
+            <Stack.Screen name="CustomerMain" component={CustomerTabNavigator} />
             <Stack.Screen
               name="Personalization"
               component={PersonalizationScreen}
@@ -298,6 +362,7 @@ export default function Navigation() {
         ) : user && needsOnboarding && userRole === 'provider' ? (
           // Provider needs onboarding
           <>
+            <Stack.Screen name="ProviderMain" component={ProviderTabNavigator} />
             <Stack.Screen
               name="ProviderOnboarding"
               component={ProviderOnboardingScreen}
@@ -571,6 +636,11 @@ export default function Navigation() {
               options={{ headerShown: true, title: 'Complete Your Profile' }}
             />
             <Stack.Screen
+              name="AppRating"
+              component={AppRatingScreen}
+              options={{ headerShown: false, gestureEnabled: false }}
+            />
+            <Stack.Screen
               name="SecuritySettings"
               component={SecuritySettingsScreen}
               options={{ headerShown: true, title: 'Security Settings' }}
@@ -697,6 +767,46 @@ export default function Navigation() {
               options={{
                 headerShown: true,
                 title: 'Provider Approvals',
+                headerStyle: { backgroundColor: colors.white },
+                headerTintColor: colors.text,
+              }}
+            />
+            <Stack.Screen
+              name="CustomServiceReview"
+              component={CustomServiceReviewScreen}
+              options={{
+                headerShown: true,
+                title: 'Custom Service Review',
+                headerStyle: { backgroundColor: colors.white },
+                headerTintColor: colors.text,
+              }}
+            />
+            <Stack.Screen
+              name="AdminUsers"
+              component={AdminUsersScreen}
+              options={{
+                headerShown: true,
+                title: 'Manage Users',
+                headerStyle: { backgroundColor: colors.white },
+                headerTintColor: colors.text,
+              }}
+            />
+            <Stack.Screen
+              name="AdminAnalytics"
+              component={AdminAnalyticsScreen}
+              options={{
+                headerShown: true,
+                title: 'Analytics',
+                headerStyle: { backgroundColor: colors.white },
+                headerTintColor: colors.text,
+              }}
+            />
+            <Stack.Screen
+              name="AdminProfile"
+              component={AdminProfileScreen}
+              options={{
+                headerShown: true,
+                title: 'Admin Profile',
                 headerStyle: { backgroundColor: colors.white },
                 headerTintColor: colors.text,
               }}

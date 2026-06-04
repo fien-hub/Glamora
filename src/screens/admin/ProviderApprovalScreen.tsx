@@ -157,6 +157,14 @@ export default function ProviderApprovalScreen() {
 
   const onRefresh = () => { setRefreshing(true); fetchProviders(); };
 
+  const isPendingProvider = (p: ProviderItem) => {
+    const hasPendingDoc = p.docs.some(d => d.status === 'pending' || d.status === 'under_review');
+    const isRejected = p.identity_verification_status === 'rejected';
+
+    // Treat newly created, unverified providers as pending unless they were explicitly rejected.
+    return hasPendingDoc || (!p.is_verified && !isRejected);
+  };
+
   // ── Approve a document ────────────────────────────────────────────────────
   const approveDoc = async (docId: string, providerId: string) => {
     Alert.alert('Approve Document', 'Mark this document as approved and verify the provider?', [
@@ -265,9 +273,7 @@ export default function ProviderApprovalScreen() {
   const filtered = providers.filter(p => {
     if (filter === 'all') return true;
     if (filter === 'pending') {
-      // Has docs pending/under_review OR not verified and has docs OR has no docs but onboarded
-      const hasPendingDoc = p.docs.some(d => d.status === 'pending' || d.status === 'under_review');
-      return hasPendingDoc || (!p.is_verified && p.docs.length === 0 && p.onboarding_completed);
+      return isPendingProvider(p);
     }
     if (filter === 'approved') return p.is_verified;
     if (filter === 'rejected') return p.identity_verification_status === 'rejected';
@@ -276,7 +282,7 @@ export default function ProviderApprovalScreen() {
 
   const counts = {
     all: providers.length,
-    pending: providers.filter(p => p.docs.some(d => d.status === 'pending' || d.status === 'under_review') || (!p.is_verified && p.docs.length === 0 && p.onboarding_completed)).length,
+    pending: providers.filter(isPendingProvider).length,
     approved: providers.filter(p => p.is_verified).length,
     rejected: providers.filter(p => p.identity_verification_status === 'rejected').length,
   };

@@ -113,6 +113,16 @@ try {
 } catch (e) { console.warn('[AppRuntime] AnalyticsContext load failed:', e); }
 
 // ---------------------------------------------------------------------------
+// NotificationsContext
+// ---------------------------------------------------------------------------
+let NotificationsProvider: AnyFC = Passthrough;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const nc = require('./contexts/NotificationsContext') as { NotificationsProvider: AnyFC };
+  if (nc?.NotificationsProvider) NotificationsProvider = nc.NotificationsProvider;
+} catch (e) { console.warn('[AppRuntime] NotificationsContext load failed:', e); }
+
+// ---------------------------------------------------------------------------
 // react-native-gesture-handler
 // ---------------------------------------------------------------------------
 let GestureHandlerRootView: AnyFC = ({ children, style }: any) =>
@@ -416,10 +426,12 @@ export default function AppRuntime() {
             <QueryClientProvider client={queryClient}>
               <AuthProvider>
                 <AnalyticsProvider enabled={deferredStartupEnabled}>
-                  <Suspense fallback={<NavigationLoadingFallback />}>
-                    <Navigation />
-                  </Suspense>
-                  <StatusBar style="auto" />
+                  <NotificationsProvider>
+                    <Suspense fallback={<NavigationLoadingFallback />}>
+                      <Navigation />
+                    </Suspense>
+                    <StatusBar style="auto" />
+                  </NotificationsProvider>
                 </AnalyticsProvider>
               </AuthProvider>
             </QueryClientProvider>

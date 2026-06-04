@@ -5,6 +5,9 @@ try {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   Notifications = require('expo-notifications');
 } catch (e) { console.warn('[NotificationsContext] expo-notifications unavailable:', e); }
+type ExpoNotification = any;
+type ExpoSubscription = any;
+type ExpoNotificationResponse = any;
 import { useAuth } from './AuthContext';
 import {
   getExpoPushToken,
@@ -20,7 +23,7 @@ import { supabase } from '../services/supabase';
 
 interface NotificationsContextType {
   expoPushToken: string | null;
-  notification: Notifications.Notification | null;
+  notification: ExpoNotification | null;
   isRegistered: boolean;
 }
 
@@ -37,14 +40,14 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   const { user, userRole } = useAuth();
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
-  const [notification, setNotification] = useState<Notifications.Notification | null>(
+  const [notification, setNotification] = useState<ExpoNotification | null>(
     null
   );
   const [isRegistered, setIsRegistered] = useState(false);
   const lastRegisteredRef = useRef<{ userId: string; token: string } | null>(null);
   // Initialize refs with null to satisfy React 19 types
-  const notificationListener = useRef<Notifications.Subscription | null>(null);
-  const responseListener = useRef<Notifications.Subscription | null>(null);
+  const notificationListener = useRef<ExpoSubscription | null>(null);
+  const responseListener = useRef<ExpoSubscription | null>(null);
   const handledNotificationIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -100,7 +103,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
         responseListener.current = null;
       }
     };
-  }, [user]);
+  }, [user, userRole]);
 
   const registerForPushNotifications = async () => {
     try {
@@ -196,6 +199,24 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const routeAdminNotification = (data: NotificationData) => {
+    if (userRole !== 'admin' || !isNavigationReady()) return;
+
+    const eventType = (data.event_type as string | undefined) || (data.type as string | undefined);
+
+    if (eventType === 'provider_signup') {
+      navigate('ProviderApproval');
+      return;
+    }
+
+    if (eventType === 'service_added') {
+      navigate('CustomServiceReview');
+      return;
+    }
+
+    navigate('AdminMain');
+  };
+
   const routeToMessage = async (data: NotificationData) => {
     if (!isNavigationReady()) return;
 
@@ -220,7 +241,7 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     });
   };
 
-  const handleNotificationResponse = async (response: Notifications.NotificationResponse) => {
+  const handleNotificationResponse = async (response: ExpoNotificationResponse) => {
     const notificationId = response.notification.request.identifier;
     if (handledNotificationIdsRef.current.has(notificationId)) {
       return;
@@ -228,9 +249,10 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
     handledNotificationIdsRef.current.add(notificationId);
 
     const data = response.notification.request.content.data as NotificationData;
+    const notificationType = data.type as string | undefined;
 
     // Handle different notification types
-    switch (data.type) {
+    switch (notificationType) {
       case 'booking':
       case 'reminder':
       case 'payment':
@@ -244,8 +266,15 @@ export const NotificationsProvider: React.FC<{ children: React.ReactNode }> = ({
           navigate('Reviews');
         }
         break;
+      case 'admin':
+        routeAdminNotification(data);
+        break;
       default:
-        console.log('Unknown notification type:', data.type);
+        if (userRole === 'admin' && data.event_type) {
+          routeAdminNotification(data);
+        } else {
+          console.log('Unknown notification type:', notificationType);
+        }
     }
   };
 

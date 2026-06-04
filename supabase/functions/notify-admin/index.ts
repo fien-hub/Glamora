@@ -110,7 +110,7 @@ serve(async (req) => {
       sound: 'default',
       title: payload.title,
       body: payload.body,
-      data: { ...payload.data, event_type: payload.event_type },
+      data: { ...payload.data, type: 'admin', event_type: payload.event_type },
       priority: 'high',
       channelId: 'default',
     }));

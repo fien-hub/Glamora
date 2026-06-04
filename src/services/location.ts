@@ -6,17 +6,80 @@
 import { Alert, Linking } from 'react-native';
 
 let _Location: typeof import('expo-location') | null = null;
+let _LocationLoadPromise: Promise<typeof import('expo-location') | null> | null = null;
+const _locationDiagnostics: string[] = [];
+const MAX_DIAGNOSTIC_LINES = 40;
 
-function getExpoLocation(): typeof import('expo-location') | null {
+function addLocationDiagnostic(message: string): void {
+  const timestamp = new Date().toISOString();
+  _locationDiagnostics.push(`${timestamp} ${message}`);
+  if (_locationDiagnostics.length > MAX_DIAGNOSTIC_LINES) {
+    _locationDiagnostics.splice(0, _locationDiagnostics.length - MAX_DIAGNOSTIC_LINES);
+  }
+}
+
+export function clearLocationDiagnostics(): void {
+  _locationDiagnostics.length = 0;
+}
+
+export function getLocationDiagnostics(): string {
+  return _locationDiagnostics.join('\n');
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getExpoLocationSync(): typeof import('expo-location') | null {
   if (_Location !== null) return _Location;
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     _Location = require('expo-location') as typeof import('expo-location');
+    addLocationDiagnostic('[location] expo-location loaded via require()');
     return _Location;
   } catch (e) {
     console.warn('[location.ts] expo-location failed to load:', e);
+    addLocationDiagnostic('[location] require(expo-location) failed');
     return null;
   }
+}
+
+async function getExpoLocation(): Promise<typeof import('expo-location') | null> {
+  if (_Location) return _Location;
+  if (_LocationLoadPromise) return _LocationLoadPromise;
+
+  _LocationLoadPromise = (async () => {
+    const maxAttempts = 3;
+    let lastError: unknown = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const syncLocation = getExpoLocationSync();
+      if (syncLocation) return syncLocation;
+
+      try {
+        const dynamicLocation = (await import('expo-location')) as typeof import('expo-location');
+        _Location = dynamicLocation;
+        addLocationDiagnostic('[location] expo-location loaded via dynamic import()');
+        return _Location;
+      } catch (error) {
+        lastError = error;
+        addLocationDiagnostic(`[location] dynamic import attempt ${attempt} failed`);
+      }
+
+      if (attempt < maxAttempts) {
+        // Give native module registration a moment to finish on cold starts.
+        await wait(250 * attempt);
+      }
+    }
+
+    console.warn('[location.ts] expo-location unavailable after retries:', lastError);
+    addLocationDiagnostic('[location] expo-location unavailable after retries');
+    return null;
+  })();
+
+  const loaded = await _LocationLoadPromise;
+  _LocationLoadPromise = null;
+  return loaded;
 }
 
 export interface LocationCoords {
@@ -39,15 +102,17 @@ const KM_TO_MILES = 0.621371;
  * @param silentDenial - if true, suppresses all Alerts on denial (for background auto-fetches)
  */
 export async function requestLocationPermission(silentDenial = false): Promise<boolean> {
-  const Location = getExpoLocation();
+  const Location = await getExpoLocation();
   if (!Location) {
     console.warn('[location.ts] expo-location module unavailable during permission request.');
+    addLocationDiagnostic('[permission] module unavailable');
     return false;
   }
 
   try {
     // Check current status before requesting to detect permanent denial.
     const { status: currentStatus, canAskAgain } = await Location.getForegroundPermissionsAsync();
+    addLocationDiagnostic(`[permission] current status=${currentStatus} canAskAgain=${canAskAgain}`);
 
     if (currentStatus === 'granted') return true;
 
@@ -63,11 +128,13 @@ export async function requestLocationPermission(silentDenial = false): Promise<b
           ]
         );
       }
+      addLocationDiagnostic('[permission] permanently denied (cannot ask again)');
       return false;
     }
 
     // Ask the system (will show the native permission dialog).
     const { status } = await Location.requestForegroundPermissionsAsync();
+    addLocationDiagnostic(`[permission] request result status=${status}`);
 
     if (status !== 'granted') {
       if (!silentDenial) {
@@ -76,12 +143,14 @@ export async function requestLocationPermission(silentDenial = false): Promise<b
           'Location permission is required to find beauty professionals near you.'
         );
       }
+      addLocationDiagnostic('[permission] denied by user');
       return false;
     }
 
     return true;
   } catch (error) {
     console.error('Error requesting location permission:', error);
+    addLocationDiagnostic(`[permission] exception: ${error instanceof Error ? error.message : 'unknown error'}`);
     return false;
   }
 }
@@ -91,13 +160,15 @@ export async function requestLocationPermission(silentDenial = false): Promise<b
  * @param silent - if true, suppresses permission alerts (use for background auto-fetches)
  */
 export async function getCurrentLocation(silent = false): Promise<LocationCoords | null> {
-  const Location = getExpoLocation();
+  addLocationDiagnostic('[location] getCurrentLocation started');
+  const Location = await getExpoLocation();
   if (!Location) {
     console.warn('[location.ts] expo-location module unavailable during getCurrentLocation.');
+    addLocationDiagnostic('[location] module unavailable in getCurrentLocation');
     if (!silent) {
       Alert.alert(
         'Location Unavailable',
-        'Location services are currently unavailable in this build. Please enter your address manually.'
+        'Location services are temporarily unavailable. Please try again in a moment or enter your address manually.'
       );
     }
     return null;
@@ -105,9 +176,13 @@ export async function getCurrentLocation(silent = false): Promise<LocationCoords
 
   try {
     const hasPermission = await requestLocationPermission(silent);
-    if (!hasPermission) return null;
+    if (!hasPermission) {
+      addLocationDiagnostic('[location] aborted due to missing permission');
+      return null;
+    }
 
     const servicesEnabled = await Location.hasServicesEnabledAsync();
+    addLocationDiagnostic(`[location] servicesEnabled=${servicesEnabled}`);
     if (!servicesEnabled) {
       if (!silent) {
         Alert.alert(
@@ -119,6 +194,7 @@ export async function getCurrentLocation(silent = false): Promise<LocationCoords
           ]
         );
       }
+      addLocationDiagnostic('[location] device location services are off');
       return null;
     }
 
@@ -127,6 +203,7 @@ export async function getCurrentLocation(silent = false): Promise<LocationCoords
       maxAge: 24 * 60 * 60 * 1000,
       requiredAccuracy: 1000,
     });
+    addLocationDiagnostic(`[location] lastKnownPosition=${position ? 'available' : 'none'}`);
 
     if (!position) {
       try {
@@ -139,6 +216,7 @@ export async function getCurrentLocation(silent = false): Promise<LocationCoords
         ]);
       } catch (firstError) {
         console.warn('[location.ts] Balanced accuracy location attempt failed:', firstError);
+        addLocationDiagnostic(`[location] balanced accuracy failed: ${firstError instanceof Error ? firstError.message : 'unknown error'}`);
 
         // Second attempt: lower accuracy fallback often succeeds indoors.
         position = await Promise.race([
@@ -147,15 +225,18 @@ export async function getCurrentLocation(silent = false): Promise<LocationCoords
             setTimeout(() => reject(new Error('Location timeout after 20s (low)')), 20_000)
           ),
         ]);
+        addLocationDiagnostic('[location] low accuracy attempt succeeded');
       }
     }
 
+    addLocationDiagnostic('[location] location resolved successfully');
     return {
       latitude: position.coords.latitude,
       longitude: position.coords.longitude,
     };
   } catch (error) {
     console.error('Error getting current location:', error);
+    addLocationDiagnostic(`[location] exception: ${error instanceof Error ? error.message : 'unknown error'}`);
     if (!silent) {
       Alert.alert(
         'Could Not Get Location',
@@ -170,9 +251,10 @@ export async function getCurrentLocation(silent = false): Promise<LocationCoords
  * Geocode an address to coordinates
  */
 export async function geocodeAddress(address: string): Promise<LocationCoords | null> {
-  const Location = getExpoLocation();
+  const Location = await getExpoLocation();
   if (!Location) {
     console.warn('[location.ts] expo-location module unavailable during geocodeAddress.');
+    addLocationDiagnostic('[geocode] module unavailable');
     return null;
   }
 
@@ -197,9 +279,10 @@ export async function geocodeAddress(address: string): Promise<LocationCoords | 
  * Reverse geocode coordinates to an address
  */
 export async function reverseGeocode(coords: LocationCoords): Promise<Address | null> {
-  const Location = getExpoLocation();
+  const Location = await getExpoLocation();
   if (!Location) {
     console.warn('[location.ts] expo-location module unavailable during reverseGeocode.');
+    addLocationDiagnostic('[reverseGeocode] module unavailable');
     return null;
   }
 

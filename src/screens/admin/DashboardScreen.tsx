@@ -11,6 +11,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../../constants/theme';
 import { supabase } from '../../services/supabase';
+import { FLOATING_TAB_BAR_TOTAL_HEIGHT } from '../../components/FloatingTabBar';
 
 interface Stats {
   totalUsers: number;
@@ -47,21 +48,30 @@ export default function AdminDashboardScreen() {
         .from('users')
         .select('*', { count: 'exact', head: true });
 
-      // Fetch providers
-      const { count: totalProviders } = await supabase
-        .from('provider_profiles')
-        .select('*', { count: 'exact', head: true });
+      // Fetch provider accounts (signup-level source of truth)
+      const { data: providerUsers } = await supabase
+        .from('users')
+        .select('id')
+        .eq('role', 'provider');
+
+      const totalProviders = providerUsers?.length || 0;
 
       // Fetch customers
       const { count: totalCustomers } = await supabase
         .from('customer_profiles')
         .select('*', { count: 'exact', head: true });
 
-      // Fetch pending verifications
-      const { count: pendingVerifications } = await supabase
+      // Count pending verifications: all provider accounts minus verified ones
+      // This includes newly signed-up providers that haven't created profiles yet
+      let pendingVerifications = totalProviders;
+
+      // Subtract verified providers from the count
+      const { count: verifiedCount } = await supabase
         .from('provider_profiles')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_verified', false);
+        .select('id', { count: 'exact', head: true })
+        .eq('is_verified', true);
+
+      pendingVerifications = Math.max(0, pendingVerifications - (verifiedCount || 0));
 
       // Fetch total bookings
       const { count: totalBookings } = await supabase
@@ -86,7 +96,7 @@ export default function AdminDashboardScreen() {
         totalUsers: totalUsers || 0,
         totalProviders: totalProviders || 0,
         totalCustomers: totalCustomers || 0,
-        pendingVerifications: pendingVerifications || 0,
+        pendingVerifications,
         totalBookings: totalBookings || 0,
         totalRevenue,
         activeBookings: activeBookings || 0,
@@ -115,6 +125,8 @@ export default function AdminDashboardScreen() {
   return (
     <ScrollView
       style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      bounces={false}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
@@ -181,6 +193,13 @@ export default function AdminDashboardScreen() {
 
         <TouchableOpacity
           style={styles.actionButton}
+          onPress={() => navigation.navigate('CustomServiceReview')}
+        >
+          <Text style={styles.actionButtonText}>🧾 Review Custom Services</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
           onPress={() => navigation.navigate('ProviderApproval')}
         >
           <Text style={styles.actionButtonText}>
@@ -188,15 +207,24 @@ export default function AdminDashboardScreen() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('AdminUsers')}
+        >
           <Text style={styles.actionButtonText}>👥 Manage Users</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('AdminAnalytics')}
+        >
           <Text style={styles.actionButtonText}>📊 View Analytics</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => navigation.navigate('AdminProfile')}
+        >
           <Text style={styles.actionButtonText}>⚙️ Platform Settings</Text>
         </TouchableOpacity>
       </View>
@@ -208,6 +236,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.backgroundGray,
+  },
+  contentContainer: {
+    paddingBottom: FLOATING_TAB_BAR_TOTAL_HEIGHT + spacing.lg,
   },
   loadingContainer: {
     flex: 1,

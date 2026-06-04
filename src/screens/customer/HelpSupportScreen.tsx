@@ -14,6 +14,8 @@ import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '..
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 
+const PRIVACY_POLICY_URL = `${process.env.EXPO_PUBLIC_API_URL || 'https://glamora-backend-production.up.railway.app'}/privacy-policy`;
+
 interface FAQItem {
   question: string;
   answer: string;
@@ -121,7 +123,7 @@ export default function HelpSupportScreen({ navigation }: any) {
   };
 
   const handlePrivacy = () => {
-    Linking.openURL('https://www.freeprivacypolicy.com/live/b955f068-3a35-49fa-a6de-46a938bf6b71').catch(() =>
+    Linking.openURL(PRIVACY_POLICY_URL).catch(() =>
       Alert.alert('Error', 'Could not open Privacy Policy')
     );
   };

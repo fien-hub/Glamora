@@ -41,6 +41,26 @@ interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const authContextFallback: AuthContextType = {
+  session: null,
+  user: null,
+  userRole: null,
+  needsOnboarding: false,
+  needsVerification: false,
+  loading: true,
+  signIn: async () => {},
+  signUp: async () => ({ user: null, session: null }),
+  signInWithGoogle: async () => {},
+  signInWithApple: async () => {},
+  signOut: async () => {},
+  switchRole: async () => {},
+  markOnboardingComplete: () => {},
+  refreshOnboardingStatus: async () => {},
+  refreshVerificationStatus: async () => {},
+  resetPassword: async () => {},
+  updatePassword: async () => {},
+};
+
 const getWelcomeMessageKey = (userId: string) => `glamora_show_welcome_${userId}`;
 
 const loadSocialAuth = () => require('../utils/socialAuth') as typeof import('../utils/socialAuth');
@@ -275,6 +295,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchUserRole = async (userId: string, retryCount = 0) => {
     // Kick off reactivation immediately in the background — never awaited.
     if (retryCount === 0) reactivateUserAsync(userId);
+
+    // Slow/intermittent networks can delay role hydration long enough to trigger
+    // startup routing flicker. Use the last known role immediately if available,
+    // then continue resolving the authoritative role from the backend.
+    if (retryCount === 0) {
+      const cachedRole = await AsyncStorage.getItem(`glamora_role_cache_${userId}`).catch(() => null);
+      if (cachedRole === 'customer' || cachedRole === 'provider') {
+        console.log('[AuthContext] Bootstrapping with cached role:', cachedRole);
+        setUserRole(cachedRole as UserRole);
+        setNeedsOnboarding(false);
+        setNeedsVerification(false);
+        setLoading(false);
+      }
+    }
 
     try {
       recordStartupCheckpoint('AuthProvider.fetchUserRole.start', 'start', {
@@ -527,6 +561,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.log('[AuthContext] markOnboardingComplete: email_verified set to true in DB');
           }
         });
+
+      if (userRole) {
+        void (async () => {
+          try {
+            let { data: profileData, error: profileError } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('user_id', user.id)
+              .single();
+
+            if (profileError?.code === 'PGRST116') {
+              const { data: newProfile, error: createError } = await supabase
+                .from('profiles')
+                .upsert({ user_id: user.id }, { onConflict: 'user_id' })
+                .select('id')
+                .single();
+
+              if (createError) throw createError;
+              profileData = newProfile;
+              profileError = null;
+            }
+
+            if (profileError) throw profileError;
+            if (!profileData?.id) return;
+
+            if (userRole === 'customer') {
+              const { error } = await supabase
+                .from('customer_profiles')
+                .upsert({ id: profileData.id, onboarding_completed: true }, { onConflict: 'id' });
+              if (error) throw error;
+            }
+
+            if (userRole === 'provider') {
+              const { error } = await supabase
+                .from('provider_profiles')
+                .upsert({ id: profileData.id, onboarding_completed: true }, { onConflict: 'id' });
+              if (error) throw error;
+            }
+          } catch (error: any) {
+            console.warn('[AuthContext] markOnboardingComplete: failed to persist onboarding_completed:', error?.message || error);
+          }
+        })();
+      }
     }
   };
 
@@ -974,7 +1051,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    console.warn('[AuthContext] useAuth called without AuthProvider; returning fallback context');
+    return authContextFallback;
   }
   return context;
 };

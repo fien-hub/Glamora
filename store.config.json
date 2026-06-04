@@ -24,7 +24,7 @@
         "promoText": "Book top beauty pros for nails, hair, makeup & spa at home. Verified providers, easy payments, and flexible scheduling.",
         "title": "Glamora",
         "subtitle": "Beauty Services at Home",
-        "privacyPolicyUrl": "https://www.freeprivacypolicy.com/live/b955f068-3a35-49fa-a6de-46a938bf6b71"
+        "privacyPolicyUrl": "https://glamora-backend-production.up.railway.app/privacy-policy"
       }
     },
     "categories": [

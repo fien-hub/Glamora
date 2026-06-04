@@ -48,12 +48,12 @@ export default function CustomServiceReviewScreen() {
           base_price,
           duration_minutes,
           created_at,
-          profiles!provider_id (
-            full_name,
-            email
-          ),
           provider_profiles!provider_id (
-            business_name
+            business_name,
+            profiles!inner (
+              first_name,
+              last_name
+            )
           )
         `)
         .not('custom_service_name', 'is', null)
@@ -70,8 +70,13 @@ export default function CustomServiceReviewScreen() {
         base_price: item.base_price,
         duration_minutes: item.duration_minutes,
         created_at: item.created_at,
-        provider_name: item.profiles?.full_name || 'Unknown',
-        provider_email: item.profiles?.email || 'Unknown',
+        provider_name: [
+          item.provider_profiles?.profiles?.first_name,
+          item.provider_profiles?.profiles?.last_name,
+        ]
+          .filter(Boolean)
+          .join(' ') || 'Unknown',
+        provider_email: 'Unknown',
         business_name: item.provider_profiles?.business_name || 'Unknown',
       })) || [];
 

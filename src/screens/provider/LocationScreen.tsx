@@ -16,7 +16,12 @@ import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '..
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { Ionicons } from '../../utils/icons';
-import { getCurrentLocation, reverseGeocode } from '../../services/location';
+import {
+  clearLocationDiagnostics,
+  getCurrentLocation,
+  getLocationDiagnostics,
+  reverseGeocode,
+} from '../../services/location';
 
 export default function LocationScreen() {
   const { user } = useAuth();
@@ -33,6 +38,7 @@ export default function LocationScreen() {
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [serviceRadius, setServiceRadius] = useState('10');
+  const [locationDebugText, setLocationDebugText] = useState('');
 
   useEffect(() => {
     if (user?.id) {
@@ -52,7 +58,9 @@ export default function LocationScreen() {
         .from('profiles')
         .select('id')
         .eq('user_id', user?.id)
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (profileError && profileError.code !== 'PGRST116') throw profileError;
       if (!profile) return;
@@ -63,7 +71,7 @@ export default function LocationScreen() {
         .from('provider_profiles')
         .select('*')
         .eq('id', profile.id)
-        .single();
+        .maybeSingle();
 
       // PGRST116 = no row yet — that's fine, just show empty fields
       if (error && error.code !== 'PGRST116') throw error;
@@ -177,9 +185,16 @@ export default function LocationScreen() {
   const handleUseCurrentLocation = async () => {
     try {
       setLocating(true);
+      clearLocationDiagnostics();
+      setLocationDebugText('');
+
       const coords = await getCurrentLocation();
       if (!coords) {
         // getCurrentLocation handles permission / settings alerts.
+        const diagnostics = getLocationDiagnostics();
+        if (diagnostics) {
+          setLocationDebugText(diagnostics);
+        }
         return;
       }
 
@@ -194,8 +209,20 @@ export default function LocationScreen() {
         if (addressData.state) setState(addressData.state);
         if (addressData.zipCode) setZipCode(addressData.zipCode);
       }
+
+      const diagnostics = getLocationDiagnostics();
+      if (diagnostics) {
+        setLocationDebugText(diagnostics);
+      }
     } catch (err) {
       console.error('[LocationScreen] useCurrentLocation error:', err);
+      const diagnostics = getLocationDiagnostics();
+      const errorText = err instanceof Error ? err.message : 'Unknown error';
+      setLocationDebugText(
+        diagnostics
+          ? `${diagnostics}\n${new Date().toISOString()} [LocationScreen] exception: ${errorText}`
+          : `${new Date().toISOString()} [LocationScreen] exception: ${errorText}`
+      );
       Alert.alert('Error', 'Could not retrieve your location. Please try again.');
     } finally {
       setLocating(false);
@@ -241,6 +268,13 @@ export default function LocationScreen() {
             {locating ? 'Getting location…' : 'Use Current Location'}
           </Text>
         </TouchableOpacity>
+
+        {!!locationDebugText && (
+          <View style={styles.debugPanel}>
+            <Text style={styles.debugTitle}>Location Debug Log</Text>
+            <Text style={styles.debugText}>{locationDebugText}</Text>
+          </View>
+        )}
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Street Address *</Text>
@@ -424,6 +458,25 @@ const styles = StyleSheet.create({
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold,
     color: colors.white,
+  },
+  debugPanel: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    backgroundColor: colors.background,
+    marginBottom: spacing.lg,
+  },
+  debugTitle: {
+    fontSize: fontSize.sm,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  debugText: {
+    fontSize: fontSize.xs,
+    color: colors.textSecondary,
+    lineHeight: 16,
   },
   inputGroup: {
     marginBottom: spacing.md,

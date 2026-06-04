@@ -208,7 +208,9 @@ export const dbService = {
         .from('profiles')
         .select('id')
         .eq('user_id', userId)
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (!profileData) {
         // No profile row yet (e.g. seeding incomplete) — return empty list, not an error.

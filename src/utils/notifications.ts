@@ -33,10 +33,11 @@ export const initializeNotificationHandler = () => {
 };
 
 export interface NotificationData {
-  type: 'booking' | 'message' | 'review' | 'payment' | 'reminder';
+  type: 'booking' | 'message' | 'review' | 'payment' | 'reminder' | 'admin';
   bookingId?: string;
   messageId?: string;
   reviewId?: string;
+  event_type?: string;
   [key: string]: any;
 }
 
@@ -149,8 +150,54 @@ export const registerDeviceToken = async (
       );
 
     if (error) {
-      console.error('Error registering device token:', error);
-      return false;
+      // Some environments differ on unique constraints for device_tokens.
+      // Fallback to update-or-insert by token to avoid silent registration loss.
+      const { data: existing, error: existingError } = await supabase
+        .from('device_tokens')
+        .select('id')
+        .eq('token', token)
+        .maybeSingle();
+
+      if (existingError) {
+        console.error('Error registering device token:', error);
+        return false;
+      }
+
+      if (existing?.id) {
+        const { error: updateError } = await supabase
+          .from('device_tokens')
+          .update({
+            user_id: userId,
+            platform: Platform.OS,
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id);
+
+        if (updateError) {
+          console.error('Error updating existing device token:', updateError);
+          return false;
+        }
+
+        return true;
+      }
+
+      const { error: insertError } = await supabase
+        .from('device_tokens')
+        .insert({
+          user_id: userId,
+          token,
+          platform: Platform.OS,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (insertError) {
+        console.error('Error inserting fallback device token row:', insertError);
+        return false;
+      }
+
+      return true;
     }
 
     return true;
@@ -196,27 +243,38 @@ export const sendRemotePushNotification = async ({
   data,
   type = 'system',
 }: RemotePushPayload): Promise<boolean> => {
-  try {
-    const { error } = await supabase.functions.invoke('send-push-notification', {
-      body: {
-        target_user_id: targetUserId,
-        title,
-        body,
-        data: data || {},
-        type,
-      },
-    });
+  const payload = {
+    target_user_id: targetUserId,
+    title,
+    body,
+    data: data || {},
+    type,
+  };
 
-    if (error) {
-      console.error('Error invoking send-push-notification:', error);
-      return false;
+  // Retry transient failures once; network and token refresh races are common on mobile.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const { error } = await supabase.functions.invoke('send-push-notification', {
+        body: payload,
+      });
+
+      if (!error) {
+        return true;
+      }
+
+      console.error(`[Push] send-push-notification attempt ${attempt} failed:`, error);
+      if (attempt === 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    } catch (error) {
+      console.error(`[Push] invoke exception attempt ${attempt}:`, error);
+      if (attempt === 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
     }
-
-    return true;
-  } catch (error) {
-    console.error('Error sending remote push notification:', error);
-    return false;
   }
+
+  return false;
 };
 
 /**
@@ -230,19 +288,22 @@ export const sendRemotePushToProfile = async (
   type: 'booking' | 'message' | 'review' | 'payment' | 'system' = 'system'
 ): Promise<boolean> => {
   try {
-    const { data: profile, error } = await supabase
+    const { data: profileById, error: profileByIdError } = await supabase
       .from('profiles')
       .select('user_id')
       .eq('id', profileId)
-      .single();
+      .maybeSingle();
 
-    if (error || !profile?.user_id) {
-      console.error('Error resolving profile -> user_id for push:', error);
+    if (profileByIdError) {
+      console.error('Error resolving profile by id for push:', profileByIdError);
       return false;
     }
 
+    // Some call sites may pass auth user IDs instead of profile IDs.
+    const resolvedUserId = profileById?.user_id || profileId;
+
     return sendRemotePushNotification({
-      targetUserId: profile.user_id,
+      targetUserId: resolvedUserId,
       title,
       body,
       data,
@@ -457,20 +518,43 @@ export const notifyAdmin = async (
   eventType: 'provider_signup' | 'service_added',
   data?: Record<string, any>
 ): Promise<void> => {
-  try {
-    const { error } = await supabase.functions.invoke('notify-admin', {
-      body: {
-        title,
-        body,
-        event_type: eventType,
-        data: data || {},
-      },
-    });
-    if (error) {
-      console.warn('[notifyAdmin] Edge function returned an error:', error);
+  const payload = {
+    title,
+    body,
+    event_type: eventType,
+    data: data || {},
+  };
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+
+      // If session is not hydrated yet (common right after signup), retry briefly.
+      if (!sessionData?.session?.access_token) {
+        if (attempt < 3) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+          continue;
+        }
+      }
+
+      const { error } = await supabase.functions.invoke('notify-admin', {
+        body: payload,
+      });
+
+      if (!error) {
+        return;
+      }
+
+      console.warn(`[notifyAdmin] invoke attempt ${attempt} failed:`, error);
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+    } catch (err) {
+      console.warn(`[notifyAdmin] invoke exception attempt ${attempt}:`, err);
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
     }
-  } catch (err) {
-    console.warn('[notifyAdmin] Failed to reach notify-admin function:', err);
   }
 };
 

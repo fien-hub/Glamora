@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   TextInputProps,
   ViewStyle,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '../utils/icons';
 import { colors, spacing, fontSize, fontWeight, borderRadius } from '../constants/theme';
@@ -16,8 +17,8 @@ interface ModernInputProps extends TextInputProps {
   label: string;
   value: string;
   onChangeText: (text: string) => void;
-  icon?: keyof typeof Ionicons.glyphMap;
-  rightIcon?: keyof typeof Ionicons.glyphMap;
+  icon?: string;
+  rightIcon?: string;
   onRightIconPress?: () => void;
   error?: string;
   hint?: string;
@@ -41,6 +42,10 @@ const ModernInput = React.forwardRef<TextInput, ModernInputProps>(({
   const [isFocused, setIsFocused] = useState(false);
   const animatedValue = useRef(new Animated.Value(value ? 1 : 0)).current;
   const borderColorAnim = useRef(new Animated.Value(0)).current;
+  const isSecureInput = Boolean(textInputProps.secureTextEntry);
+  const resolvedAutoComplete = textInputProps.autoComplete ?? (isSecureInput ? undefined : 'off');
+  const resolvedTextContentType = textInputProps.textContentType
+    ?? (Platform.OS === 'ios' && !isSecureInput ? 'oneTimeCode' : undefined);
 
   useEffect(() => {
     Animated.timing(animatedValue, {
@@ -88,7 +93,7 @@ const ModernInput = React.forwardRef<TextInput, ModernInputProps>(({
         {icon && (
           <View style={styles.iconContainer}>
             <Ionicons
-              name={icon}
+              name={icon as any}
               size={20}
               color={isFocused ? colors.primary : colors.textSecondary}
             />
@@ -101,12 +106,14 @@ const ModernInput = React.forwardRef<TextInput, ModernInputProps>(({
           </Animated.Text>
           <TextInput
             ref={ref}
-            style={[styles.input, icon && styles.inputWithIcon]}
+            style={[styles.input, !!icon && styles.inputWithIcon]}
             value={value}
             onChangeText={onChangeText}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             placeholderTextColor="transparent"
+            autoComplete={resolvedAutoComplete}
+            textContentType={resolvedTextContentType}
             {...textInputProps}
           />
         </View>
@@ -114,7 +121,7 @@ const ModernInput = React.forwardRef<TextInput, ModernInputProps>(({
         {rightIcon && (
           <TouchableOpacity onPress={onRightIconPress} style={styles.rightIconContainer}>
             <Ionicons
-              name={rightIcon}
+              name={rightIcon as any}
               size={20}
               color={colors.textSecondary}
             />

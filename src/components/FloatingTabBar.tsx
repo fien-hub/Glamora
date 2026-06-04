@@ -10,6 +10,17 @@ import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '../utils/icons';
 import { borderRadius, spacing } from '../constants/theme';
 
+const FLOATING_TAB_TOP_PADDING = spacing.sm;
+const FLOATING_TAB_BOTTOM_PADDING = Platform.OS === 'ios' ? 28 : 12;
+const FLOATING_TAB_VERTICAL_PADDING = 10;
+const FLOATING_TAB_ICON_SIZE = 46;
+
+export const FLOATING_TAB_BAR_TOTAL_HEIGHT =
+  FLOATING_TAB_TOP_PADDING +
+  FLOATING_TAB_BOTTOM_PADDING +
+  FLOATING_TAB_VERTICAL_PADDING * 2 +
+  FLOATING_TAB_ICON_SIZE;
+
 // Icon map per route name
 const ROUTE_ICONS: Record<string, { active: any; inactive: any }> = {
   Home:     { active: 'home',       inactive: 'home-outline' },
@@ -104,8 +115,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: 'center',
-    paddingBottom: Platform.OS === 'ios' ? 28 : 12,
-    paddingTop: spacing.sm,
+    paddingBottom: FLOATING_TAB_BOTTOM_PADDING,
+    paddingTop: FLOATING_TAB_TOP_PADDING,
     backgroundColor: 'transparent',
   },
   tabBar: {
@@ -114,7 +125,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: NAV_BG,
     borderRadius: borderRadius.round,
-    paddingVertical: 10,
+    paddingVertical: FLOATING_TAB_VERTICAL_PADDING,
     paddingHorizontal: spacing.lg,
     width: '84%',
     shadowColor: '#000',
@@ -130,8 +141,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconWrapper: {
-    width: 46,
-    height: 46,
+    width: FLOATING_TAB_ICON_SIZE,
+    height: FLOATING_TAB_ICON_SIZE,
     borderRadius: 23,
     alignItems: 'center',
     justifyContent: 'center',

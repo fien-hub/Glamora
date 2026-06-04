@@ -267,7 +267,7 @@ export default function SearchScreen() {
           custom_service_name,
           custom_service_status,
           service:services!inner(id, name, description, base_duration_minutes, category_id),
-          provider:provider_profiles!inner(id, business_name, avatar_url, rating, total_reviews, is_verified, identity_verification_status, city, state, location_city, location_state, latitude, longitude, current_latitude, current_longitude, profiles!inner(user_id))
+          provider:provider_profiles!inner(id, business_name, avatar_url, rating, total_reviews, is_verified, identity_verification_status, city, state, latitude, longitude, current_latitude, current_longitude, profiles!inner(user_id))
         `)
         .eq('is_active', true)
         .eq('provider.identity_verification_status', 'approved')

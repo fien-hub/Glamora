@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -21,6 +22,8 @@ import { validateEmail, validateName } from '../../utils/validation';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 import ModernInput from '../../components/ModernInput';
+
+const PRIVACY_POLICY_URL = `${process.env.EXPO_PUBLIC_API_URL || 'https://glamora-backend-production.up.railway.app'}/privacy-policy`;
 
 export default function SignupScreen() {
   const navigation = useNavigation<any>();
@@ -122,12 +125,27 @@ export default function SignupScreen() {
     setLoading(true);
     try {
       await signUp(email, password, role, firstName, lastName);
+      // Clear iOS keychain autofill context from password fields before routing.
+      passwordRef.current?.blur();
+      confirmPasswordRef.current?.blur();
+      Keyboard.dismiss();
+      setPassword('');
+      setConfirmPassword('');
+      setShowPassword(false);
+      setShowConfirmPassword(false);
+
       // Explicitly navigate to onboarding to avoid the brief RoleSelection flash
       // that occurs while auth state propagates through context.
       if (role === 'provider') {
-        navigation.navigate('ProviderOnboarding');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'ProviderOnboarding' }],
+        });
       } else {
-        navigation.navigate('Personalization');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Personalization' }],
+        });
       }
     } catch (error: any) {
       Alert.alert('Signup Failed', error.message || 'Could not create account');
@@ -143,8 +161,7 @@ export default function SignupScreen() {
   };
 
   const handleOpenPrivacy = () => {
-    const privacyUrl = 'https://www.freeprivacypolicy.com/live/b955f068-3a35-49fa-a6de-46a938bf6b71';
-    Linking.openURL(privacyUrl).catch(err => 
+    Linking.openURL(PRIVACY_POLICY_URL).catch(err => 
       Alert.alert('Error', 'Unable to open Privacy Policy')
     );
   };

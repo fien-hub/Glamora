@@ -58,7 +58,9 @@ export default function EditProfileScreen() {
         .from('profiles')
         .select('id, first_name, last_name, phone, bio')
         .eq('user_id', user.id)
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (profileError && profileError.code !== 'PGRST116') throw profileError;
       if (!profileData) { setLoading(false); return; }
@@ -68,7 +70,7 @@ export default function EditProfileScreen() {
         .from('provider_profiles')
         .select('business_name, years_experience, certifications, service_radius_km')
         .eq('id', profileData.id)
-        .single();
+        .maybeSingle();
 
       // PGRST116 = no provider_profiles row yet — proceed with empty fields
       if (providerError && providerError.code !== 'PGRST116') throw providerError;
@@ -112,7 +114,9 @@ export default function EditProfileScreen() {
         .from('profiles')
         .select('id')
         .eq('user_id', user.id)
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (profileIdError && profileIdError.code !== 'PGRST116') throw profileIdError;
       if (!profile) throw new Error('Profile not found');

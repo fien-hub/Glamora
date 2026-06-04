@@ -71,6 +71,15 @@ export default function WelcomeScreen() {
           <View style={styles.buttonContainer}>
             <SlideUpView delay={400}>
               <TouchableOpacity
+                style={styles.browseButton}
+                onPress={() => navigation.navigate('GuestMain')}
+              >
+                <Text style={styles.browseButtonText}>Browse Services</Text>
+              </TouchableOpacity>
+            </SlideUpView>
+
+            <SlideUpView delay={450}>
+              <TouchableOpacity
                 style={styles.primaryButton}
                 onPress={() => navigation.navigate('RoleSelection')}
               >
@@ -78,7 +87,7 @@ export default function WelcomeScreen() {
               </TouchableOpacity>
             </SlideUpView>
 
-            <SlideUpView delay={500}>
+            <SlideUpView delay={550}>
               <TouchableOpacity
                 style={styles.secondaryButton}
                 onPress={() => navigation.navigate('Login')}
@@ -95,7 +104,7 @@ export default function WelcomeScreen() {
   );
 }
 
-const FeatureItem = ({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) => (
+const FeatureItem = ({ icon, text }: { icon: string; text: string }) => (
   <View style={styles.featureItem}>
     <Ionicons name={icon} size={20} color={colors.primary} />
     <Text style={styles.featureText}>{text}</Text>
@@ -169,6 +178,19 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: colors.black,
+    fontSize: fontSize.lg,
+    fontWeight: fontWeight.bold,
+  },
+  browseButton: {
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    paddingVertical: spacing.lg,
+    borderRadius: borderRadius.xl,
+    alignItems: 'center',
+  },
+  browseButtonText: {
+    color: colors.white,
     fontSize: fontSize.lg,
     fontWeight: fontWeight.bold,
   },

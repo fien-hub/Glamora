@@ -85,6 +85,11 @@ export default function ProfileScreen() {
   );
 
   const fetchVerificationStatus = async () => {
+    if (!user) {
+      setVerificationStatus(null);
+      return;
+    }
+
     try {
       const status = await getUserVerificationStatus();
       setVerificationStatus(status);
@@ -248,7 +253,7 @@ export default function ProfileScreen() {
       }
     } catch (error: any) {
       console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to pick image');
+      Alert.alert('Error', error?.message || 'Could not open photo library. Please try again.');
     }
   };
 

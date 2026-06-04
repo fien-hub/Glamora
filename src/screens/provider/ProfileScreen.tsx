@@ -171,6 +171,11 @@ export default function ProfileScreen() {
   };
 
   const fetchVerificationStatus = async () => {
+    if (!user) {
+      setVerificationStatus('pending');
+      return;
+    }
+
     try {
       const status = await getVerificationStatus();
       setVerificationStatus(status.status);

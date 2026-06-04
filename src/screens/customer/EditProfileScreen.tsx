@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,11 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
@@ -52,6 +53,20 @@ export default function EditProfileScreen() {
   useEffect(() => {
     fetchProfileData();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS !== 'ios') return undefined;
+
+      const resetAutofillContext = setTimeout(() => {
+        Keyboard.dismiss();
+        const focusedInput = TextInput.State.currentlyFocusedInput?.();
+        focusedInput?.blur?.();
+      }, 0);
+
+      return () => clearTimeout(resetAutofillContext);
+    }, [])
+  );
 
   const fetchProfileData = async () => {
     if (!user) return;
@@ -228,6 +243,9 @@ export default function EditProfileScreen() {
               onChangeText={(text) => setProfileData({ ...profileData, firstName: text })}
               placeholder="Enter your first name"
               placeholderTextColor={colors.textSecondary}
+              autoComplete="given-name"
+              textContentType="givenName"
+              autoCapitalize="words"
             />
           </View>
 
@@ -239,6 +257,9 @@ export default function EditProfileScreen() {
               onChangeText={(text) => setProfileData({ ...profileData, lastName: text })}
               placeholder="Enter your last name"
               placeholderTextColor={colors.textSecondary}
+              autoComplete="family-name"
+              textContentType="familyName"
+              autoCapitalize="words"
             />
           </View>
 
@@ -251,6 +272,8 @@ export default function EditProfileScreen() {
               placeholder="Enter your phone number"
               placeholderTextColor={colors.textSecondary}
               keyboardType="phone-pad"
+              autoComplete="tel"
+              textContentType="telephoneNumber"
             />
           </View>
 
@@ -265,6 +288,8 @@ export default function EditProfileScreen() {
               multiline
               numberOfLines={4}
               maxLength={500}
+              autoComplete="off"
+              textContentType="none"
             />
             <Text style={styles.charCount}>{profileData.bio.length}/500</Text>
           </View>
@@ -302,6 +327,12 @@ export default function EditProfileScreen() {
               onChangeText={(text) => setProfileData({ ...profileData, locationAddress: text })}
               placeholder="Enter your street address"
               placeholderTextColor={colors.textSecondary}
+              autoComplete="off"
+              textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : 'none'}
+              autoCapitalize="words"
+              autoCorrect={false}
+              secureTextEntry={false}
+              importantForAutofill="no"
             />
           </View>
 
@@ -313,6 +344,12 @@ export default function EditProfileScreen() {
               onChangeText={(text) => setProfileData({ ...profileData, locationCity: text })}
               placeholder="Enter your city"
               placeholderTextColor={colors.textSecondary}
+              autoComplete="off"
+              textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : 'none'}
+              autoCapitalize="words"
+              autoCorrect={false}
+              secureTextEntry={false}
+              importantForAutofill="no"
             />
           </View>
 
@@ -327,6 +364,11 @@ export default function EditProfileScreen() {
                 placeholderTextColor={colors.textSecondary}
                 maxLength={2}
                 autoCapitalize="characters"
+                autoComplete="off"
+                textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : 'none'}
+                autoCorrect={false}
+                secureTextEntry={false}
+                importantForAutofill="no"
               />
             </View>
 
@@ -340,6 +382,10 @@ export default function EditProfileScreen() {
                 placeholderTextColor={colors.textSecondary}
                 keyboardType="number-pad"
                 maxLength={5}
+                autoComplete="off"
+                textContentType={Platform.OS === 'ios' ? 'oneTimeCode' : 'none'}
+                secureTextEntry={false}
+                importantForAutofill="no"
               />
             </View>
           </View>

@@ -1,13 +1,13 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '../utils/icons';
-import { colors } from '../constants/theme';
-import CurvedHeader from '../components/CurvedHeader';
-import FloatingTabBar from '../components/FloatingTabBar';
+import { colors, spacing } from '../constants/theme';
+import CurvedHeader, { TOTAL_HEADER_HEIGHT } from '../components/CurvedHeader';
+import FloatingTabBar, { FLOATING_TAB_BAR_TOTAL_HEIGHT } from '../components/FloatingTabBar';
 
 // Screens
 import AdminDashboardScreen from '../screens/admin/DashboardScreen';
-import ProfileScreen from '../screens/customer/ProfileScreen';
+import AdminProfileScreen from '../screens/admin/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -30,9 +30,12 @@ export default function AdminTabNavigator() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
         headerShown: true,
+        sceneStyle: {
+          paddingBottom: FLOATING_TAB_BAR_TOTAL_HEIGHT + spacing.sm,
+        },
         header: () => {
           let title = 'Dashboard';
-          if (route.name === 'Profile') title = 'My Profile';
+          if (route.name === 'Profile') title = 'Admin Profile';
 
           return <CurvedHeader title={title} />;
         },
@@ -49,7 +52,7 @@ export default function AdminTabNavigator() {
       />
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={AdminProfileScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="person" size={size} color={color} />

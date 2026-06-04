@@ -6,7 +6,11 @@ import { supabase } from './supabase';
 import { getCurrentLocation, LocationCoords } from './location';
 
 let _Location: typeof import('expo-location') | null = null;
-function getLocation(): typeof import('expo-location') | null {
+let _LocationLoadPromise: Promise<typeof import('expo-location') | null> | null = null;
+
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+function getLocationSync(): typeof import('expo-location') | null {
   if (_Location !== null) return _Location;
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -16,6 +20,40 @@ function getLocation(): typeof import('expo-location') | null {
     console.warn('[locationTracking] expo-location failed to load:', e);
     return null;
   }
+}
+
+async function getLocation(): Promise<typeof import('expo-location') | null> {
+  if (_Location) return _Location;
+  if (_LocationLoadPromise) return _LocationLoadPromise;
+
+  _LocationLoadPromise = (async () => {
+    const maxAttempts = 3;
+    let lastError: unknown = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const syncLocation = getLocationSync();
+      if (syncLocation) return syncLocation;
+
+      try {
+        const dynamicLocation = (await import('expo-location')) as typeof import('expo-location');
+        _Location = dynamicLocation;
+        return _Location;
+      } catch (error) {
+        lastError = error;
+      }
+
+      if (attempt < maxAttempts) {
+        await wait(250 * attempt);
+      }
+    }
+
+    console.warn('[locationTracking] expo-location unavailable after retries:', lastError);
+    return null;
+  })();
+
+  const loaded = await _LocationLoadPromise;
+  _LocationLoadPromise = null;
+  return loaded;
 }
 
 class LocationTrackingService {
@@ -59,7 +97,7 @@ class LocationTrackingService {
   private async requestPermissions(): Promise<boolean> {
     try {
       // Request foreground permissions
-      const Loc = getLocation();
+      const Loc = await getLocation();
       if (!Loc) return false;
 
       const { status: foregroundStatus } = await Loc.requestForegroundPermissionsAsync();
@@ -68,14 +106,8 @@ class LocationTrackingService {
         return false;
       }
 
-      // For providers, also request background permissions for continuous tracking
-      if (this.userRole === 'provider') {
-        const { status: backgroundStatus } = await Loc.requestBackgroundPermissionsAsync();
-        if (backgroundStatus !== 'granted') {
-          console.warn('[LocationTracking] Background permission denied for provider');
-          // Still return true for foreground tracking
-        }
-      }
+      // Foreground permission is enough for in-app tracking and location buttons.
+      // Avoid background permission prompts in production unless explicitly needed.
 
       return true;
     } catch (error) {
@@ -91,7 +123,7 @@ class LocationTrackingService {
     if (this.isTracking) return;
 
     try {
-      const Loc = getLocation();
+      const Loc = await getLocation();
       if (!Loc) return;
       // Start watching location with appropriate settings
       this.locationSubscription = await Loc.watchPositionAsync(
@@ -158,7 +190,9 @@ class LocationTrackingService {
         .from('profiles')
         .select('id')
         .eq('user_id', this.userId)
-        .single();
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
       if (profileError || !profile) {
         throw profileError || new Error('Profile not found for current user');
