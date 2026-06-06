@@ -22,7 +22,7 @@
         "NSPhotoLibraryUsageDescription": "We need access to your photo library to upload images.",
         "NSCalendarsUsageDescription": "We need access to your calendar to add booking reminders."
       },
-      "buildNumber": "5"
+      "buildNumber": "4"
     },
     "android": {
       "package": "com.fien.glamoraapp",
