@@ -3,7 +3,7 @@ import type { ExpoConfig } from 'expo/config';
 const baseConfig: ExpoConfig = {
   name: 'Glamora',
   slug: 'glamora-app',
-  version: '1.1.0',
+  version: '1.2.0',
   sdkVersion: '54.0.0',
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
