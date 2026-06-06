@@ -17,7 +17,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../services/supabase';
 import { colors, spacing, fontSize, fontWeight, borderRadius, shadows } from '../../constants/theme';
 import { trackProfileEdited } from '../../utils/analytics';
-import { geocodeAddress } from '../../services/location';
+import { geocodeAddress, getCurrentLocation } from '../../services/location';
+import { Ionicons } from '../../utils/icons';
 import FadeInView from '../../components/animations/FadeInView';
 import SlideUpView from '../../components/animations/SlideUpView';
 
@@ -37,6 +38,7 @@ export default function EditProfileScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadingLocation, setLoadingLocation] = useState(false);
   const [profileData, setProfileData] = useState<ProfileData>({
     firstName: '',
     lastName: '',
@@ -84,7 +86,7 @@ export default function EditProfileScreen() {
       // Get customer profile
       const { data: customerProfile, error: customerError } = await supabase
         .from('customer_profiles')
-        .select('location_address, location_city, location_state, location_zip_code')
+        .select('address, city, state, zip_code')
         .eq('id', profile.id)
         .single();
 
@@ -95,16 +97,43 @@ export default function EditProfileScreen() {
         lastName: profile.last_name || '',
         phone: profile.phone || '',
         bio: profile.bio || '',
-        locationAddress: customerProfile.location_address || '',
-        locationCity: customerProfile.location_city || '',
-        locationState: customerProfile.location_state || '',
-        locationZipCode: customerProfile.location_zip_code || '',
+        locationAddress: (customerProfile as any).address || '',
+        locationCity: (customerProfile as any).city || '',
+        locationState: (customerProfile as any).state || '',
+        locationZipCode: (customerProfile as any).zip_code || '',
       });
     } catch (error: any) {
       console.error('Error fetching profile:', error);
       Alert.alert('Error', error.message || 'Failed to load profile');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUseCurrentLocation = async () => {
+    setLoadingLocation(true);
+    try {
+      const location = await getCurrentLocation();
+      if (!location) {
+        // getCurrentLocation handles permission / settings alerts.
+        return;
+      }
+      const { reverseGeocode } = await import('../../services/location');
+      const addressData = await reverseGeocode(location);
+      if (addressData) {
+        setProfileData((prev) => ({
+          ...prev,
+          locationAddress: addressData.street,
+          locationCity: addressData.city,
+          locationState: addressData.state,
+          locationZipCode: addressData.zipCode,
+        }));
+        Alert.alert('Success', 'Location filled from your current position');
+      }
+    } catch (error) {
+      console.error('Error using current location:', error);
+    } finally {
+      setLoadingLocation(false);
     }
   };
 
@@ -144,10 +173,10 @@ export default function EditProfileScreen() {
       const { error: customerError } = await supabase
         .from('customer_profiles')
         .update({
-          location_address: profileData.locationAddress.trim() || null,
-          location_city: profileData.locationCity.trim() || null,
-          location_state: profileData.locationState.trim() || null,
-          location_zip_code: profileData.locationZipCode.trim() || null,
+          address: profileData.locationAddress.trim() || null,
+          city: profileData.locationCity.trim() || null,
+          state: profileData.locationState.trim() || null,
+          zip_code: profileData.locationZipCode.trim() || null,
         })
         .eq('id', profile.id);
 
@@ -217,9 +246,6 @@ export default function EditProfileScreen() {
               autoComplete="given-name"
               textContentType="givenName"
               autoCapitalize="words"
-              autoCorrect={false}
-              secureTextEntry={false}
-              importantForAutofill="no"
             />
           </View>
 
@@ -234,9 +260,6 @@ export default function EditProfileScreen() {
               autoComplete="family-name"
               textContentType="familyName"
               autoCapitalize="words"
-              autoCorrect={false}
-              secureTextEntry={false}
-              importantForAutofill="no"
             />
           </View>
 
@@ -251,8 +274,6 @@ export default function EditProfileScreen() {
               keyboardType="phone-pad"
               autoComplete="tel"
               textContentType="telephoneNumber"
-              secureTextEntry={false}
-              importantForAutofill="no"
             />
           </View>
 
@@ -269,8 +290,6 @@ export default function EditProfileScreen() {
               maxLength={500}
               autoComplete="off"
               textContentType="none"
-              secureTextEntry={false}
-              importantForAutofill="no"
             />
             <Text style={styles.charCount}>{profileData.bio.length}/500</Text>
           </View>
@@ -279,6 +298,26 @@ export default function EditProfileScreen() {
         {/* Location Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Location</Text>
+
+          <TouchableOpacity
+            style={[styles.locationButton, loadingLocation && styles.locationButtonDisabled]}
+            onPress={handleUseCurrentLocation}
+            disabled={loadingLocation}
+          >
+            {loadingLocation ? (
+              <>
+                <ActivityIndicator color={colors.white} size="small" style={{ marginRight: 8 }} />
+                <Text style={styles.locationButtonText}>Locating...</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="locate" size={18} color={colors.white} style={{ marginRight: 8 }} />
+                <Text style={styles.locationButtonText}>Use Current Location</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          <Text style={styles.orText}>Or enter manually</Text>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Address</Text>
@@ -448,5 +487,28 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: fontSize.md,
     fontWeight: fontWeight.bold,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.sm,
+  },
+  locationButtonDisabled: {
+    opacity: 0.6,
+  },
+  locationButtonText: {
+    color: colors.white,
+    fontSize: fontSize.md,
+    fontWeight: fontWeight.semibold,
+  },
+  orText: {
+    textAlign: 'center',
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    marginBottom: spacing.md,
   },
 });

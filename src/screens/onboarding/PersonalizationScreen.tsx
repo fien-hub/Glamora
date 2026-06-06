@@ -32,7 +32,7 @@ interface ServiceCategory {
   icon: string;
 }
 
-const getCategoryIcon = (categoryName: string): keyof typeof Ionicons.glyphMap => {
+const getCategoryIcon = (categoryName: string): string => {
   const normalized = categoryName.toLowerCase();
 
   if (normalized.includes('hair') || normalized.includes('braid') || normalized.includes('wig')) {
@@ -210,11 +210,29 @@ export default function PersonalizationScreen() {
       console.log('[Personalization] Starting to save preferences...');
 
       // Get profile id first
-      const { data: profileData, error: profileError } = await supabase
+      let { data: profileData, error: profileError } = await supabase
         .from('profiles')
         .select('id')
         .eq('user_id', user?.id)
         .single();
+
+      if (profileError?.code === 'PGRST116') {
+        // Profile row missing — can happen after a partial social sign-in failure.
+        // Create it now so onboarding can complete.
+        console.warn('[Personalization] No profile row found — attempting to create one');
+        const { data: newProfile, error: createError } = await supabase
+          .from('profiles')
+          .upsert({ user_id: user!.id }, { onConflict: 'user_id' })
+          .select('id')
+          .single();
+        if (createError || !newProfile) {
+          Alert.alert('Profile Error', 'Unable to set up your profile. Please sign out and sign back in.');
+          setLoading(false);
+          return;
+        }
+        profileData = newProfile;
+        profileError = null;
+      }
 
       if (profileError) throw profileError;
       if (!profileData) throw new Error('Profile not found');
@@ -261,8 +279,6 @@ export default function PersonalizationScreen() {
           console.warn('[Personalization] Non-blocking geocode save failed:', e);
         }
       })();
-
-      // markOnboardingComplete() sets needsOnboarding=false in the auth context
       // immediately, which causes the navigator to switch to CustomerMain.
       // Do NOT call refreshOnboardingStatus() here — it re-queries the DB and
       // its internal catch blocks can set needsOnboarding=true or
@@ -274,7 +290,7 @@ export default function PersonalizationScreen() {
       navigation.navigate('AppRating' as never);
     } catch (error: any) {
       console.error('[Personalization] Error saving preferences:', error);
-      Alert.alert('Error', error.message || 'Failed to save preferences');
+      Alert.alert('Error', 'Failed to save preferences. Please try again.');
       setLoading(false);
     }
   };
@@ -371,7 +387,7 @@ export default function PersonalizationScreen() {
                         ]}
                       >
                         <Ionicons
-                          name={getCategoryIcon(category.name)}
+                          name={getCategoryIcon(category.name) as any}
                           size={28}
                           color={selectedCategories.includes(category.id) ? colors.white : colors.primaryDarker}
                         />

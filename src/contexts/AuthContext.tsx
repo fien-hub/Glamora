@@ -6,6 +6,7 @@ import { supabase, authService, dbService } from '../services/supabase';
 import type { UserRole } from '../types';
 
 import { trackSignUp, trackSignIn, trackSignOut, trackLoginAttempt, trackSessionTimeout } from '../utils/analytics';
+import { notifyAdmin } from '../utils/notifications';
 import sessionManager from '../utils/sessionManager';
 import { setSentryUser, clearSentryUser, setSentryTag } from '../services/sentry';
 import { locationTrackingService } from '../services/locationTracking';
@@ -39,6 +40,26 @@ interface AuthContextType {
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const authContextFallback: AuthContextType = {
+  session: null,
+  user: null,
+  userRole: null,
+  needsOnboarding: false,
+  needsVerification: false,
+  loading: true,
+  signIn: async () => {},
+  signUp: async () => ({ user: null, session: null }),
+  signInWithGoogle: async () => {},
+  signInWithApple: async () => {},
+  signOut: async () => {},
+  switchRole: async () => {},
+  markOnboardingComplete: () => {},
+  refreshOnboardingStatus: async () => {},
+  refreshVerificationStatus: async () => {},
+  resetPassword: async () => {},
+  updatePassword: async () => {},
+};
 
 const getWelcomeMessageKey = (userId: string) => `glamora_show_welcome_${userId}`;
 
@@ -275,6 +296,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Kick off reactivation immediately in the background — never awaited.
     if (retryCount === 0) reactivateUserAsync(userId);
 
+    // Slow/intermittent networks can delay role hydration long enough to trigger
+    // startup routing flicker. Use the last known role immediately if available,
+    // then continue resolving the authoritative role from the backend.
+    if (retryCount === 0) {
+      const cachedRole = await AsyncStorage.getItem(`glamora_role_cache_${userId}`).catch(() => null);
+      if (cachedRole === 'customer' || cachedRole === 'provider') {
+        console.log('[AuthContext] Bootstrapping with cached role:', cachedRole);
+        setUserRole(cachedRole as UserRole);
+        setNeedsOnboarding(false);
+        setNeedsVerification(false);
+        setLoading(false);
+      }
+    }
+
     try {
       recordStartupCheckpoint('AuthProvider.fetchUserRole.start', 'start', {
         retryCount,
@@ -304,9 +339,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return fetchUserRole(userId, retryCount + 1);
         }
 
-        // After all retries, user might be in onboarding - this is expected for new signups
-        console.log('[AuthContext] No user record found after retries - user may be completing onboarding');
+        // After all retries, try the locally cached role so the user can reach
+        // their home screen when offline or when the network is too slow.
+        console.log('[AuthContext] No user record found after retries — checking local cache');
         recordStartupCheckpoint('AuthProvider.fetchUserRole.noRecordAfterRetries', 'warn');
+        const cachedRoleA = await AsyncStorage.getItem(`glamora_role_cache_${userId}`).catch(() => null);
+        if (cachedRoleA) {
+          console.log('[AuthContext] Network unavailable — using cached role:', cachedRoleA);
+          setUserRole(cachedRoleA as UserRole);
+          setNeedsOnboarding(false);
+          setNeedsVerification(false);
+        }
         setLoading(false);
         return;
       }
@@ -318,6 +361,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         console.log('[AuthContext] User role fetched from users table:', data.role);
         setUserRole(data.role as UserRole);
+        // Cache role locally so the user can reach their home screen while offline.
+        AsyncStorage.setItem(`glamora_role_cache_${userId}`, data.role).catch(() => undefined);
         setSentryTag('user_role', data.role);
 
         // Start location tracking (best-effort — do not block loading on this)
@@ -340,15 +385,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return fetchUserRole(userId, retryCount + 1);
       }
 
-      // After all retries, user might be in onboarding - this is expected for new signups
-      console.log('[AuthContext] No role found after retries - user may be completing onboarding');
+      // After all retries, try the locally cached role as an offline fallback.
+      console.log('[AuthContext] No role found after retries — checking local cache');
       recordStartupCheckpoint('AuthProvider.fetchUserRole.noRoleAfterRetries', 'warn');
+      const cachedRoleB = await AsyncStorage.getItem(`glamora_role_cache_${userId}`).catch(() => null);
+      if (cachedRoleB) {
+        console.log('[AuthContext] No role in DB — using cached role:', cachedRoleB);
+        setUserRole(cachedRoleB as UserRole);
+        setNeedsOnboarding(false);
+        setNeedsVerification(false);
+      }
       setLoading(false);
     } catch (error) {
       recordStartupCheckpoint('AuthProvider.fetchUserRole.exception', 'error', {
         reason: error instanceof Error ? error.message : 'unknown error',
       });
       console.error('[AuthContext] Exception fetching user role:', error);
+      // Try cache before giving up — covers offline / network-timeout scenarios.
+      const cachedRoleC = await AsyncStorage.getItem(`glamora_role_cache_${userId}`).catch(() => null);
+      if (cachedRoleC) {
+        console.log('[AuthContext] Exception path — using cached role:', cachedRoleC);
+        setUserRole(cachedRoleC as UserRole);
+        setNeedsOnboarding(false);
+        setNeedsVerification(false);
+      }
       setLoading(false);
     }
   };
@@ -420,9 +480,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (customerError) {
           console.error('[AuthContext] Error fetching customer profile:', customerError);
-          // Cannot determine onboarding status — preserve the current value rather
-          // than incorrectly resetting needsOnboarding to true and bouncing the user
-          // back to PersonalizationScreen right after they complete it.
+          // PGRST116 = no rows found → customer_profiles hasn't been created yet
+          // (user left before completing onboarding). Force them back to onboarding.
+          if (customerError.code === 'PGRST116') {
+            console.log('[AuthContext] No customer_profiles row → needs onboarding');
+            setNeedsOnboarding(true);
+            return;
+          }
+          // For genuine read / network errors — preserve the current needsOnboarding
+          // value so we don't incorrectly bounce the user back to onboarding right
+          // after they've completed it.
           return;
         }
 
@@ -439,7 +506,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (providerError) {
           console.error('[AuthContext] Error fetching provider profile:', providerError);
-          // Same guard as customer — don't revert navigation on a read error.
+          // PGRST116 = no rows found → provider_profiles hasn't been created yet
+          // (user left before completing onboarding). Force them back to onboarding.
+          if (providerError.code === 'PGRST116') {
+            console.log('[AuthContext] No provider_profiles row → needs onboarding');
+            setNeedsOnboarding(true);
+            return;
+          }
+          // Same guard as customer — don't revert navigation on a real read error.
           return;
         }
 
@@ -470,6 +544,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Also clear needsVerification so the navigator moves out of the
     // verification branch and into the customer/provider main branch.
     setNeedsVerification(false);
+
+    // Persist verification in DB so that subsequent checkVerificationStatus()
+    // calls (triggered by auth events / token refresh) do NOT re-set
+    // needsVerification=true and trap the user back in the needsVerification
+    // branch where PostDetail/Favorites/Booking etc. are not registered.
+    if (user) {
+      supabase
+        .from('profiles')
+        .update({ email_verified: true })
+        .eq('user_id', user.id)
+        .then(({ error }) => {
+          if (error) {
+            console.warn('[AuthContext] markOnboardingComplete: failed to set email_verified=true:', error.message);
+          } else {
+            console.log('[AuthContext] markOnboardingComplete: email_verified set to true in DB');
+          }
+        });
+
+      if (userRole) {
+        void (async () => {
+          try {
+            let { data: profileData, error: profileError } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('user_id', user.id)
+              .single();
+
+            if (profileError?.code === 'PGRST116') {
+              const { data: newProfile, error: createError } = await supabase
+                .from('profiles')
+                .upsert({ user_id: user.id }, { onConflict: 'user_id' })
+                .select('id')
+                .single();
+
+              if (createError) throw createError;
+              profileData = newProfile;
+              profileError = null;
+            }
+
+            if (profileError) throw profileError;
+            if (!profileData?.id) return;
+
+            if (userRole === 'customer') {
+              const { error } = await supabase
+                .from('customer_profiles')
+                .upsert({ id: profileData.id, onboarding_completed: true }, { onConflict: 'id' });
+              if (error) throw error;
+            }
+
+            if (userRole === 'provider') {
+              const { error } = await supabase
+                .from('provider_profiles')
+                .upsert({ id: profileData.id, onboarding_completed: true }, { onConflict: 'id' });
+              if (error) throw error;
+            }
+          } catch (error: any) {
+            console.warn('[AuthContext] markOnboardingComplete: failed to persist onboarding_completed:', error?.message || error);
+          }
+        })();
+      }
+    }
   };
 
   const refreshVerificationStatus = async () => {
@@ -635,6 +770,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Track sign up event
       trackSignUp('email', role);
 
+      // Notify admin immediately when a provider signs up
+      if (role === 'provider') {
+        void notifyAdmin(
+          '🆕 New Provider Signup',
+          `${firstName} ${lastName} just signed up as a provider (${data.user.email})`,
+          'provider_signup',
+          { userId: data.user.id, email: data.user.email, firstName, lastName }
+        );
+      }
+
       await queueWelcomeMessage(data.user.id);
 
       return data;
@@ -674,25 +819,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role,
       });
 
-      // Create profile
-      await supabase.from('profiles').insert({
-        user_id: result.user.id,
-        full_name: result.user.user_metadata?.full_name || result.user.email?.split('@')[0] || 'User',
-      });
+      // Parse display name into first/last (profiles table uses first_name/last_name, not full_name)
+      const googleFullName = result.user.user_metadata?.full_name || result.user.email?.split('@')[0] || 'User';
+      const googleNameParts = googleFullName.split(' ');
+      const googleFirstName = googleNameParts[0] || 'User';
+      const googleLastName = googleNameParts.slice(1).join(' ') || 'User';
 
-      // Create role-specific profile
+      // Create profile and retrieve the auto-generated id
+      const { data: googleProfile, error: googleProfileError } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: result.user.id,
+          first_name: googleFirstName,
+          last_name: googleLastName,
+        })
+        .select('id')
+        .single();
+
+      if (googleProfileError || !googleProfile) {
+        console.error('[AuthContext] Failed to create Google user profile:', googleProfileError);
+        throw new Error('Failed to create your profile. Please try again.');
+      }
+
+      // Create role-specific profile using profiles.id (NOT the auth user id)
       if (role === 'customer') {
-        await supabase.from('customer_profiles').insert({
-          id: result.user.id,
+        const { error: gcpError } = await supabase.from('customer_profiles').insert({
+          id: googleProfile.id,
+          onboarding_completed: false,
         });
+        if (gcpError) console.error('[AuthContext] Failed to create Google customer profile:', gcpError);
       } else {
-        await supabase.from('provider_profiles').insert({
-          id: result.user.id,
+        const { error: gppError } = await supabase.from('provider_profiles').insert({
+          id: googleProfile.id,
+          onboarding_completed: false,
+          is_verified: false,
         });
+        if (gppError) console.error('[AuthContext] Failed to create Google provider profile:', gppError);
       }
 
       // Track sign up event for new user
       trackSignUp('google', role);
+
+      // Notify admin immediately when a provider signs up via Google
+      if (role === 'provider') {
+        void notifyAdmin(
+          '🆕 New Provider Signup (Google)',
+          `${googleFirstName} ${googleLastName} signed up as a provider via Google (${result.user.email})`,
+          'provider_signup',
+          { userId: result.user.id, email: result.user.email }
+        );
+      }
+
       await queueWelcomeMessage(result.user.id);
     } else {
       // Track sign in event for existing user
@@ -721,29 +898,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         role,
       });
 
-      // Create profile with name from Apple if available
-      const fullName = result.user.fullName
-        ? `${result.user.fullName.firstName} ${result.user.fullName.lastName}`.trim()
-        : result.user.email?.split('@')[0] || 'User';
+      // Parse name from Apple (profiles table uses first_name/last_name, not full_name)
+      const appleFirstName = result.user.fullName?.firstName || result.user.email?.split('@')[0] || 'User';
+      const appleLastName = result.user.fullName?.lastName || 'User';
 
-      await supabase.from('profiles').insert({
-        user_id: result.user.id,
-        full_name: fullName,
-      });
+      // Create profile and retrieve the auto-generated id
+      const { data: appleProfile, error: appleProfileError } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: result.user.id,
+          first_name: appleFirstName,
+          last_name: appleLastName,
+        })
+        .select('id')
+        .single();
 
-      // Create role-specific profile
+      if (appleProfileError || !appleProfile) {
+        console.error('[AuthContext] Failed to create Apple user profile:', appleProfileError);
+        throw new Error('Failed to create your profile. Please try again.');
+      }
+
+      // Create role-specific profile using profiles.id (NOT the auth user id)
       if (role === 'customer') {
-        await supabase.from('customer_profiles').insert({
-          id: result.user.id,
+        const { error: acpError } = await supabase.from('customer_profiles').insert({
+          id: appleProfile.id,
+          onboarding_completed: false,
         });
+        if (acpError) console.error('[AuthContext] Failed to create Apple customer profile:', acpError);
       } else {
-        await supabase.from('provider_profiles').insert({
-          id: result.user.id,
+        const { error: appError } = await supabase.from('provider_profiles').insert({
+          id: appleProfile.id,
+          onboarding_completed: false,
+          is_verified: false,
         });
+        if (appError) console.error('[AuthContext] Failed to create Apple provider profile:', appError);
       }
 
       // Track sign up event for new user
       trackSignUp('apple', role);
+
+      // Notify admin immediately when a provider signs up via Apple
+      if (role === 'provider') {
+        void notifyAdmin(
+          '🆕 New Provider Signup (Apple)',
+          `${appleFirstName} ${appleLastName} signed up as a provider via Apple (${result.user.email})`,
+          'provider_signup',
+          { userId: result.user.id, email: result.user.email }
+        );
+      }
+
       await queueWelcomeMessage(result.user.id);
     } else {
       // Track sign in event for existing user
@@ -848,7 +1051,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    console.warn('[AuthContext] useAuth called without AuthProvider; returning fallback context');
+    return authContextFallback;
   }
   return context;
 };
