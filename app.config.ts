@@ -21,7 +21,7 @@ const baseConfig: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.glamora.app',
-    buildNumber: '2',
+    buildNumber: '4',
     icon: './assets/icon.png',
     backgroundColor: '#FFFFFF',
     infoPlist: {
