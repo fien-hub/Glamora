@@ -1,9 +1,9 @@
 import type { ExpoConfig } from 'expo/config';
 
 const baseConfig: ExpoConfig = {
-  name: 'Eve Beauty',
+  name: 'Glamora',
   slug: 'glamora-app',
-  version: '1.0.0',
+  version: '1.1.0',
   sdkVersion: '54.0.0',
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
@@ -21,7 +21,7 @@ const baseConfig: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'com.glamora.app',
-    buildNumber: '1',
+    buildNumber: '2',
     icon: './assets/icon.png',
     backgroundColor: '#FFFFFF',
     infoPlist: {
